@@ -1,0 +1,63 @@
+name: DCO
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Sign-off present on every commit
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # The DCO check needs the whole range of the pull request, so the
+          # default shallow clone is not enough.
+          fetch-depth: 0
+
+      # Nephos requires a Developer Certificate of Origin sign-off and has no
+      # CLA (ADR-0011). Every commit must carry a Signed-off-by line whose
+      # address matches the commit author.
+      - name: Check sign-offs
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          failed=0
+          commits=$(git rev-list "${BASE_SHA}..${HEAD_SHA}")
+          if [ -z "$commits" ]; then
+            echo "No commits to check."
+            exit 0
+          fi
+          for sha in $commits; do
+            subject=$(git log -1 --format='%s' "$sha")
+            author=$(git log -1 --format='%ae' "$sha")
+            # Merge commits are created by GitHub and carry no sign-off.
+            if [ "$(git rev-list --parents -n 1 "$sha" | wc -w)" -gt 2 ]; then
+              echo "skip   $sha (merge commit) $subject"
+              continue
+            fi
+            if git log -1 --format='%B' "$sha" | grep -qiF "Signed-off-by: "; then
+              if git log -1 --format='%B' "$sha" | grep -qiF "<${author}>"; then
+                echo "ok     $sha $subject"
+              else
+                echo "FAIL   $sha sign-off does not match the author <${author}>: $subject"
+                failed=1
+              fi
+            else
+              echo "FAIL   $sha is missing a Signed-off-by line: $subject"
+              failed=1
+            fi
+          done
+          if [ "$failed" -ne 0 ]; then
+            echo
+            echo "Every commit needs a DCO sign-off. Commit with 'git commit -s',"
+            echo "or repair this branch with:"
+            echo "  git rebase --signoff ${BASE_SHA}"
+            echo "See CONTRIBUTING.md and https://developercertificate.org/."
+            exit 1
+          fi
