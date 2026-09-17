@@ -1,0 +1,110 @@
+# SP1/SP4 spike AMI: Ubuntu 24.04 as a system container (ADR-0004).
+#
+# THROWAWAY. The real AMI pipeline lands in M2 under images/amis/ubuntu-24.04/.
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV container=podman
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        systemd \
+        systemd-sysv \
+        dbus \
+        openssh-server \
+        sudo \
+        cloud-init \
+        iproute2 \
+        iputils-ping \
+        nftables \
+        ufw \
+        curl \
+        ca-certificates \
+        less \
+        vim-tiny \
+        nginx \
+    && systemctl disable nginx \
+    && rm -rf /var/lib/apt/lists/*
+
+# ADR-0004 validation 2 asks whether `systemctl start nginx` works inside a
+# system container. nginx is installed here, at build time, so the check itself
+# runs OFFLINE: every SP1 instance has --network none, because giving an
+# instance a network is SP2's job and Nephos never uses a Podman network to
+# model one. Keeping a cached .deb lets the apt path be exercised offline too.
+RUN apt-get update \
+ && mkdir -p /opt/nephos-spike \
+ && cd /opt/nephos-spike \
+ && apt-get download hello 2>/dev/null || true \
+ && rm -rf /var/lib/apt/lists/*
+
+# RISKS T2: units that expect real hardware fail in a container and slow the
+# boot. Mask them rather than letting them fail, so that a genuinely failed unit
+# in the SP1 report means something.
+RUN systemctl mask \
+        systemd-udevd.service \
+        systemd-udev-trigger.service \
+        systemd-udevd-kernel.socket \
+        systemd-udevd-control.socket \
+        systemd-modules-load.service \
+        systemd-timesyncd.service \
+        systemd-random-seed.service \
+        systemd-firstboot.service \
+        sys-kernel-debug.mount \
+        sys-kernel-config.mount \
+        sys-kernel-tracing.mount \
+        dev-hugepages.mount \
+        e2scrub_reap.service \
+ && rm -f /lib/systemd/system/multi-user.target.wants/systemd-resolved.service
+
+# cloud-init reads its metadata from the Nephos IMDS at 169.254.169.254
+# (ARCHITECTURE section 5.1). strict_id is off because Nephos is not EC2 and
+# carries no EC2 instance identity document.
+RUN printf '%s\n' \
+    'datasource_list: [ Ec2, None ]' \
+    'datasource:' \
+    '  Ec2:' \
+    '    metadata_urls: [ "http://169.254.169.254" ]' \
+    '    strict_id: false' \
+    '    timeout: 2' \
+    '    max_wait: 10' \
+    > /etc/cloud/cloud.cfg.d/90-nephos.cfg
+
+# apt drops privileges to the _apt user, which needs setgroups. Inside a user
+# namespace that call returns EINVAL and every apt operation fails with
+# "setgroups 65534 failed". Instances run with userns=auto by design
+# (ADR-0004 R2), so the sandbox has to be turned off for apt to work at all.
+RUN printf 'APT::Sandbox::User "root";\n' > /etc/apt/apt.conf.d/99-nephos-userns
+
+# Key-only SSH, no default passwords (RISKS S4).
+RUN mkdir -p /etc/ssh/sshd_config.d \
+ && printf '%s\n' \
+    'PasswordAuthentication no' \
+    'PermitRootLogin no' \
+    'UseDNS no' \
+    > /etc/ssh/sshd_config.d/10-nephos.conf \
+ && systemctl enable ssh
+
+# sshd needs host keys before its first start. Baking them into the image would
+# give every instance identical keys, so they are generated on first boot by an
+# ExecStartPre (ssh-keygen -A is idempotent and only writes what is missing).
+#
+# Socket activation is deliberately turned off in favour of a plain long-running
+# sshd. Under ssh.socket, systemd binds :22 immediately and starts ssh.service
+# only when a connection arrives — so the port is open within milliseconds even
+# if sshd later fails outright. A real EC2 instance runs sshd as a daemon, and
+# Nephos should not invent a readiness signal that can lie.
+RUN rm -f /etc/ssh/ssh_host_* \
+ && mkdir -p /etc/systemd/system/ssh.service.d \
+    && printf '%s\n' \
+    '[Service]' \
+    '# Ubuntu ships ExecStartPre=/usr/sbin/sshd -t. Drop-ins APPEND, so without' \
+    '# the empty assignment that validity check runs first and fails with' \
+    '# "no hostkeys available" before the keys have been generated.' \
+    'ExecStartPre=' \
+    'ExecStartPre=/usr/bin/ssh-keygen -A' \
+    'ExecStartPre=/usr/sbin/sshd -t' \
+    > /etc/systemd/system/ssh.service.d/10-nephos-hostkeys.conf \
+ && systemctl disable ssh.socket \
+ && systemctl enable ssh.service
+
+STOPSIGNAL SIGRTMIN+3
+CMD ["/sbin/init"]

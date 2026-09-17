@@ -22,3 +22,6 @@ coverage.*
 *.pem
 /nephos.db
 /nephos.db-*
+
+# Spike run artifacts (the reports in docs/spikes/ are the deliverable)
+spikes/*/results/

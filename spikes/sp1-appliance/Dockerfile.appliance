@@ -1,0 +1,46 @@
+# SP1 spike appliance: Debian stable plus rootful Podman and the networking
+# userspace Nephos needs (ADR-0003).
+#
+# THROWAWAY. This exists to answer one question — does a nested system container
+# boot inside a privileged appliance container? — not to become the real
+# appliance image, which lands in M1 under images/appliance/.
+FROM debian:trixie-slim
+
+# Pin the userspace here rather than relying on the host, which is the whole
+# point of shipping an appliance image (ADR-0003).
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        podman \
+        crun \
+        conmon \
+        containers-storage \
+        fuse-overlayfs \
+        uidmap \
+        slirp4netns \
+        nftables \
+        iproute2 \
+        iputils-ping \
+        procps \
+        ca-certificates \
+        curl \
+        jq \
+        catatonit \
+    && rm -rf /var/lib/apt/lists/*
+
+# Instances get their own user namespace (ADR-0004 R2, RISKS S2). userns=auto
+# allocates from this range, so instance root is never appliance root.
+RUN echo "containers:200000:1048576" > /etc/subuid \
+ && echo "containers:200000:1048576" > /etc/subgid
+
+# Storage lives on the nephos-data volume: no overlay on overlay (ADR-0003).
+RUN mkdir -p /var/lib/nephos/containers /var/lib/nephos/runroot /run/nephos
+COPY storage.conf     /etc/containers/storage.conf
+COPY containers.conf  /etc/containers/containers.conf
+COPY entrypoint.sh    /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+VOLUME /var/lib/nephos
+
+# catatonit reaps the zombies conmon leaves behind; the appliance has its own
+# PID namespace, so PID 1 here matters.
+ENTRYPOINT ["/usr/bin/catatonit", "--", "/usr/local/bin/entrypoint.sh"]
+CMD ["sleep", "infinity"]

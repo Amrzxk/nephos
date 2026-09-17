@@ -1,0 +1,58 @@
+name: Spikes
+
+# M0's spikes must pass on Ubuntu 24.04 with native Docker as well as on
+# Windows with WSL2 and Docker Desktop (ROADMAP M0 acceptance criteria). The
+# maintainer's machine covers the WSL2 leg; this workflow is the native-Linux
+# leg. It is manual because the spikes are slow and throwaway by design.
+on:
+  workflow_dispatch:
+    inputs:
+      spike:
+        description: Which spike to run
+        required: true
+        default: all
+        type: choice
+        options: [all, sp1, sp2, sp3, sp4]
+
+permissions:
+  contents: read
+
+env:
+  CGO_ENABLED: "0"
+
+jobs:
+  spike:
+    name: Run ${{ inputs.spike }} on native Docker
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Record the host's capabilities
+        run: |
+          set -euo pipefail
+          uname -a
+          docker version
+          docker info --format 'cgroup={{.CgroupVersion}} driver={{.CgroupDriver}} storage={{.Driver}}'
+          # A cgroup v2 host is a hard prerequisite (ADR-0003).
+          test -f /sys/fs/cgroup/cgroup.controllers
+
+      - name: Run the spikes
+        run: ./spikes/run.sh "${{ inputs.spike }}"
+
+      # The reports are what M0 actually delivers, so keep them even when a
+      # spike fails: a failure is a result, and it feeds a superseding ADR.
+      - name: Upload the spike reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: spike-reports-${{ inputs.spike }}
+          path: |
+            spikes/**/results/
+            docs/spikes/
+          if-no-files-found: warn
