@@ -63,8 +63,7 @@ flowchart LR
 
 - **Repository scaffold:**
   - Go module, `Makefile`, `golangci-lint`, `.editorconfig`, `.gitattributes` (LF line endings).
-  - `LICENSE` (Apache-2.0 text from apache.org), `NOTICE`.
-  - `CONTRIBUTING.md` (with DCO sign-off), `SECURITY.md`, `CODE_OF_CONDUCT.md`, issue templates.
+  - `CONTRIBUTING.md` (with DCO sign-off), `SECURITY.md`, `CODE_OF_CONDUCT.md`, issue templates. (`LICENSE` and `NOTICE` are already in place.)
 - **CI skeleton:** lint, unit tests, CGO-disabled cross-builds (linux, darwin, and windows on amd64 and arm64), DCO check.
 - **Development guide:** WSL2 + Docker Desktop, with the repository on the WSL ext4 filesystem; also native Linux.
 - **Spikes.** Throwaway code on `spike/*` branches; reports in `docs/spikes/`:

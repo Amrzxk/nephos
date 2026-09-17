@@ -49,6 +49,6 @@ nephos lab start nat-troubleshooting
 
 ## License
 
-Apache-2.0 (the `LICENSE` file lands with M0). Contributions will require a [DCO](https://developercertificate.org/) sign-off, and there is no CLA. See [ADR-0011](docs/adr/0011-apache-2-license-with-dco.md).
+[Apache-2.0](LICENSE). Contributions require a [DCO](https://developercertificate.org/) sign-off, and there is no CLA. See [ADR-0011](docs/adr/0011-apache-2-license-with-dco.md).
 
 Nephos is not affiliated with, endorsed by, or sponsored by Amazon Web Services. AWS service names are used only to describe the concepts Nephos simulates.

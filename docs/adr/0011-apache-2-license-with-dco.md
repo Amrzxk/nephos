@@ -29,7 +29,7 @@ Nephos is a serious open source and portfolio project. We want universities, boo
 
 ## Decision
 
-- License all Nephos code, documentation, and built-in labs under **Apache-2.0**. The `LICENSE` and `NOTICE` files are added in M0.
+- License all Nephos code, documentation, and built-in labs under **Apache-2.0**. The `LICENSE` and `NOTICE` files sit in the repository root.
 - Require **DCO sign-off** on every commit, enforced by a CI check. No CLA.
 - Prefer permissive dependencies. GPL-licensed programs shipped in the appliance image (for example nftables, iproute2, crun) run as separate programs installed from Debian packages, whose sources are publicly available. AGPL components are avoided unless an ADR justifies them.
 - Generate an SBOM and third-party license report for the appliance image and the web bundle (M8).
