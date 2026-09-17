@@ -1,0 +1,41 @@
+name: "Feature request"
+description: "Suggest something Nephos should do"
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Every feature in Nephos must serve a **learning scenario**. Before proposing, please check:
+        - [docs/ROADMAP.md](docs/ROADMAP.md) — planned milestones and current scope
+        - [docs/VISION.md](docs/VISION.md#non-goals) — explicit non-goals (no IAM, no managed DBs, no multi-host, no billing, no AWS API emulation)
+  - type: textarea
+    id: learning-scenario
+    attributes:
+      label: "The learning scenario"
+      description: "What should a learner be able to understand or practise that they cannot today?"
+      placeholder: "e.g., Learners should be able to practise configuring a NAT gateway and verifying that private subnet instances can reach the internet but not be reached from it."
+    validations:
+      required: true
+  - type: textarea
+    id: what-you-want
+    attributes:
+      label: "What you want Nephos to do"
+      description: "Describe the feature or capability you are requesting."
+      placeholder: "e.g., Add `nephos nat create` command that provisions a NAT gateway in a public subnet and updates the private subnet's route table."
+    validations:
+      required: true
+  - type: textarea
+    id: aws-concept
+    attributes:
+      label: "The AWS concept this maps to"
+      description: "Which AWS resource or concept does this correspond to?"
+      placeholder: "e.g., NAT Gateway, VPC Endpoint, Transit Gateway..."
+    validations:
+      required: false
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: "Checks"
+      options:
+        - label: "I have read the non-goals in docs/VISION.md"
+          required: false
