@@ -71,6 +71,8 @@ These outrank convenience, cleverness, and speed.
 - The maintainer works on **Windows with WSL2 (Ubuntu) and Docker Desktop**. Run every build and test **inside WSL**, not in PowerShell.
 - Keep the working copy on the **WSL ext4 filesystem** (for example `~/src/nephos`), not under `/mnt/f`. The Windows mount is slow and mangles permissions and line endings.
 - Native Linux with Docker Engine behaves the same and is the primary CI target.
+- **Driving WSL from a Windows-side session:** the default WSL distro on this machine is `docker-desktop`, so always target Ubuntu explicitly with `wsl -d Ubuntu-24.04`. PowerShell mangles quotes when it passes an inline script to `bash -lc`, which silently corrupts commands; write the script to a file and run `wsl -d Ubuntu-24.04 -- bash /mnt/c/.../script.sh` instead.
+- **Git identity and pushing:** the repository has a local `user.name` and `user.email` (not global). `gh` is installed and authenticated on the Windows side, not inside WSL, and WSL git has no credential helper yet. To push from WSL, either install `gh` there and run `gh auth login`, or point WSL git at the Windows Git Credential Manager.
 - Commands (from M0 onward): `make build`, `make test`, `make lint`, `make generate`, `make web`, `make appliance`, `make e2e`.
 - Integration and e2e tests need Docker and a privileged container.
 
