@@ -1,7 +1,7 @@
 # ADR-0004: Instances are system containers run by Podman
 
-- **Status:** Accepted; the engine choice is validated in M0 (spikes SP1, SP2)
-- **Date:** 2026-09-17
+- **Status:** Accepted; **validated in M0** by [SP1](../spikes/SP1-appliance-nested-containers.md) and [SP2](../spikes/SP2-eni-plumbing-hook.md)
+- **Date:** 2026-09-17 (capability wording amended 2026-09-18; see Validation)
 
 ## Context
 
@@ -60,8 +60,11 @@ Run instances as **system containers created by rootful Podman inside the applia
 
 **Container settings**
 - `systemd=always` and `userns=auto` (a unique 65,536-ID range per instance).
-- Default capabilities and default seccomp profile; no devices. `sudo` must keep working.
+- Default capabilities **plus `CAP_NET_ADMIN`**, and the default seccomp profile; no devices. `sudo` must keep working.
+  - `CAP_NET_ADMIN` applies only inside the instance's own network namespace, and it is what satisfies R3: without it instance root cannot run `ufw` or `nft`, and the lockout-and-recover lessons are impossible. The kernel attack surface this opens is accepted and tracked in [RISKS S3](../RISKS.md#s3-kernel-attack-surface-through-instance-owned-network-namespaces), which also defines the "hardened instances" setting that drops it again.
+  - *Amended 2026-09-18 after [spike SP1](../spikes/SP1-appliance-nested-containers.md).* The original wording said "default capabilities", which contradicted R3 and validation 4 of this same ADR: Podman's default set omits `CAP_NET_ADMIN`, and instance root could not add a firewall rule. This is a correction of the text, not a change of decision — R3, validation 4, and RISKS S3 all already assumed the capability.
 - cgroup limits (CPU quota, memory, pids) derived from the instance type.
+  - The appliance must delegate the cgroup v2 `memory`, `pids`, and `cpu` controllers to nested containers, and **refuse to start if it cannot**. SP1 found that without delegation Podman cannot apply limits at all, which would leave Nephos reporting instance-type limits it was not enforcing.
 
 **Networking** ([ADR-0005](0005-nephos-owned-routed-network-plane.md))
 - The netns is created together with the instance's user namespace.
@@ -115,5 +118,20 @@ type Runtime interface {
 4. Instance root can add a firewall rule (`ufw` or `nft`) in its own netns.
 5. `eth0` exists before systemd starts (no boot race).
 6. Stop/start keeps files and the private IP. Twenty idle instances fit in 2 GiB of appliance memory.
+
+**Result (2026-09-18):** all six pass on Windows 10 with WSL2 and Docker Desktop.
+[SP1](../spikes/SP1-appliance-nested-containers.md) records 19 of 19 assertions,
+with median boot-to-sshd of 3 977 ms against the 5 s target, first boot of
+3 743 ms against 10 s, and 20 idle instances in 450 MB — on a host with 1.9 GiB
+of RAM. SP1 runs instances without a network, so cloud-init sits out its
+metadata wait; with a reachable IMDS, SP4 measures 2 735 ms. [SP2](../spikes/SP2-eni-plumbing-hook.md) records 18 of 18, including
+`eth0` present before PID 1 and an unplumbable instance refusing to start. The
+containerd fallback below is therefore **not** being taken.
+
+Three corrections came out of those spikes and are reflected above and in the
+AMI: `CAP_NET_ADMIN` must be added explicitly, the cgroup v2 controllers must be
+delegated (and the appliance must fail closed if they cannot be), and
+`APT::Sandbox::User "root"` is required or every `apt` command fails inside a
+user namespace.
 
 **Revisit** if any point fails with no workaround, or when the microVM backend lands.

@@ -78,10 +78,10 @@ flowchart LR
 
 **Acceptance criteria:**
 
-- [ ] CI is green on a real (small) Go module: lint, unit tests, cross-builds for all six targets.
-- [ ] Reports for SP1–SP4 in `docs/spikes/`, each marking pass or fail against the validation criteria in ADR-0003, ADR-0004, and ADR-0005.
-- [ ] All spikes pass on Ubuntu 24.04 (native Docker) **and** on Windows 10 with WSL2 and Docker Desktop, or superseding ADRs record the fallbacks.
-- [ ] SP1 records median boot-to-sshd time and idle memory per instance.
+- [x] CI is green on a real (small) Go module: lint, unit tests, cross-builds for all six targets. *Verified locally: `make ci` passes, `golangci-lint` reports 0 issues, and all six targets build with `CGO_ENABLED=0`. The workflows are committed; the GitHub run is pending the first pull request.*
+- [x] Reports for SP1–SP4 in `docs/spikes/`, each marking pass or fail against the validation criteria in ADR-0003, ADR-0004, and ADR-0005. *All four pass: [SP1](spikes/SP1-appliance-nested-containers.md) 19/19, [SP2](spikes/SP2-eni-plumbing-hook.md) 18/18, [SP3](spikes/SP3-routed-vpc-plane.md) 21/21, [SP4](spikes/SP4-cloud-init-imds.md) 16/16.*
+- [ ] All spikes pass on Ubuntu 24.04 (native Docker) **and** on Windows 10 with WSL2 and Docker Desktop, or superseding ADRs record the fallbacks. *WSL2 + Docker Desktop: done, all four. **Native Docker: not yet run** — the `Spikes` workflow (`workflow_dispatch`) runs SP1–SP4 on a `ubuntu-24.04` runner and needs dispatching. No superseding ADR was needed; ADR-0004's capability wording was amended in place.*
+- [x] SP1 records median boot-to-sshd time and idle memory per instance. *Median 3 977 ms (target 5 s), first boot 3 743 ms (target 10 s), ~21 MiB per instance and 450 MB for 20 — measured on a host with 1.9 GiB of RAM. SP1 instances have no network, so cloud-init waits out its metadata timeout; with a reachable IMDS, SP4 measures 2 735 ms.*
 
 **Effort:** 30–40 h
 

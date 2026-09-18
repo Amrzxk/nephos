@@ -1,0 +1,55 @@
+name: "Fidelity bug"
+description: "Nephos behaves differently from real AWS"
+labels: ["fidelity"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **This is the most serious class of bug** because Nephos teaches a mental model of AWS networking.
+        If Nephos behaves differently from real AWS, learners build an incorrect mental model that will
+        fail them in production. Please report any deviation, no matter how small.
+  - type: textarea
+    id: aws-behaviour
+    attributes:
+      label: "The AWS behaviour"
+      description: "What does real AWS do? Include a link to AWS documentation if possible."
+      placeholder: "e.g., Security groups are stateful: return traffic is allowed regardless of outbound rules. https://docs.aws.amazon.com/vpc/latest/userguide/VPC_SecurityGroups.html"
+    validations:
+      required: true
+  - type: textarea
+    id: nephos-behaviour
+    attributes:
+      label: "The Nephos behaviour"
+      description: "What does Nephos do differently?"
+      placeholder: "e.g., Nephos drops return traffic when outbound rule is missing"
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: "How to reproduce in Nephos"
+      description: "Minimal nephos commands to demonstrate the deviation."
+      placeholder: |
+        nephos vpc create ...
+        nephos sg create ...
+        nephos instance run ...
+        nephos probe --from ... --to ... --port tcp/...
+    validations:
+      required: true
+  - type: input
+    id: aws-doc-link
+    attributes:
+      label: "AWS documentation link"
+      description: "Link to the AWS documentation describing the correct behavior"
+      placeholder: "https://docs.aws.amazon.com/..."
+    validations:
+      required: false
+  - type: textarea
+    id: explain
+    attributes:
+      label: "Output of nephos explain"
+      description: "Paste the output of `nephos explain` for the affected flow"
+      render: shell
+      placeholder: "$ nephos explain ...\n..."
+    validations:
+      required: false

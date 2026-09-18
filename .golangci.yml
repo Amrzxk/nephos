@@ -1,0 +1,141 @@
+# golangci-lint configuration (schema v2).
+#
+# Several rules here exist to mechanise conventions from CLAUDE.md, so that a
+# reviewer never has to catch them by eye.
+
+version: "2"
+
+run:
+  timeout: 5m
+  build-tags:
+    - integration
+    - e2e
+
+linters:
+  default: standard # errcheck, govet, ineffassign, staticcheck, unused
+  enable:
+    - bodyclose
+    - copyloopvar
+    - errorlint # wrapping with %w, and correct error comparison
+    - forbidigo
+    - gocritic
+    - misspell
+    - nilerr
+    - noctx
+    - revive
+    - unconvert
+    - wastedassign
+    - whitespace
+
+  settings:
+    errcheck:
+      check-type-assertions: true
+
+    errorlint:
+      errorf: true
+      asserts: true
+      comparison: true
+
+    forbidigo:
+      analyze-types: true
+      forbid:
+        # Library code logs with log/slog, never to stdout (CLAUDE.md).
+        - pattern: '^fmt\.Print.*$'
+          msg: "Use log/slog in library code. fmt.Print* is allowed only under cmd/ and in tests."
+        - pattern: '^println$'
+          msg: "Use log/slog."
+        - pattern: '^panic$'
+          msg: "No panics outside main and genuinely impossible states; return a wrapped error."
+        # context.Background() belongs only in main and tests (CLAUDE.md).
+        - pattern: '^context\.Background$'
+          msg: "Accept a context.Context as the first parameter. context.Background() belongs in main and tests only."
+        - pattern: '^context\.TODO$'
+          msg: "Accept a context.Context as the first parameter."
+
+    revive:
+      rules:
+        - name: exported
+        - name: context-as-argument # context.Context must be the first parameter
+        - name: context-keys-type
+        - name: error-return
+        - name: error-strings
+        - name: error-naming
+        - name: indent-error-flow
+        - name: var-naming
+        - name: package-comments
+
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - style
+        - performance
+      disabled-checks:
+        - whyNoLint
+        # Nephos passes sizeable value types on purpose. The pure packages take
+        # whole snapshots by value so that a caller cannot mutate what an
+        # analysis already read (ARCHITECTURE §8, §13), and fmt.Stringer needs a
+        # value receiver to work through an interface. Neither is a hot path.
+        - hugeParam
+
+    depguard:
+      rules:
+        # ARCHITECTURE §13: the engines never import the layers above them.
+        engines:
+          files:
+            - "**/internal/network/**"
+            - "**/internal/compute/**"
+          deny:
+            - pkg: "github.com/Amrzxk/nephos/internal/service"
+              desc: "Engines must not import service (ARCHITECTURE §13)."
+            - pkg: "github.com/Amrzxk/nephos/internal/apiserver"
+              desc: "Engines must not import apiserver (ARCHITECTURE §13)."
+        # explain and the firewall renderer are pure: no I/O, no clock, no randomness.
+        pure:
+          files:
+            - "**/internal/explain/**"
+            - "**/internal/semantics/**"
+            - "**/internal/network/firewall/render*.go"
+          deny:
+            - pkg: "os/exec"
+              desc: "This package is pure: no I/O (ARCHITECTURE §13)."
+            - pkg: "net/http"
+              desc: "This package is pure: no I/O (ARCHITECTURE §13)."
+            - pkg: "math/rand"
+              desc: "This package is pure: no randomness (ARCHITECTURE §13)."
+            - pkg: "math/rand/v2"
+              desc: "This package is pure: no randomness (ARCHITECTURE §13)."
+
+  exclusions:
+    generated: lax
+    rules:
+      # Entry points are allowed to print and to create the root context.
+      # errcheck is off for cmd/ too: these are fmt.Fprint* calls writing usage
+      # and errors to stdout/stderr, and a failed write to a closed stream
+      # cannot be reported anywhere useful. Library code keeps errcheck on.
+      - path: 'cmd/'
+        linters:
+          - forbidigo
+          - errcheck
+      # Tests may print, panic, and use context.Background().
+      - path: '_test\.go'
+        linters:
+          - forbidigo
+          - errcheck
+          - noctx
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/Amrzxk/nephos
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+# TODO(M1): forbid setns outside internal/network/netns (ADR-0002, RISKS T8).
+# depguard cannot express "this symbol, in these files only", so this lands as a
+# custom go/analysis plugin once internal/network exists.

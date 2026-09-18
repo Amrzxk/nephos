@@ -1,0 +1,27 @@
+# Build output
+/bin/
+/dist/
+
+# Go
+*.test
+*.out
+coverage.*
+
+# Web console (M6)
+/web/node_modules/
+/web/dist/
+
+# Local state and editor noise
+.DS_Store
+*.swp
+.idea/
+.vscode/
+!.vscode/extensions.json
+
+# Never commit keys or appliance state
+*.pem
+/nephos.db
+/nephos.db-*
+
+# Spike run artifacts (the reports in docs/spikes/ are the deliverable)
+spikes/*/results/

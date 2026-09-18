@@ -1,0 +1,73 @@
+name: "Bug report"
+description: "Something does not work"
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Please fill out the sections below so we can reproduce and fix it.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: "What happened"
+      description: "Describe the incorrect behavior you observed."
+      placeholder: "e.g., instance fails to start, traffic is dropped unexpectedly, command crashes..."
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: "What you expected"
+      description: "Describe the correct behavior you expected."
+      placeholder: "e.g., instance should start, traffic should flow, command should succeed..."
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: "Steps to reproduce"
+      description: "Minimal, step-by-step commands to reproduce the issue."
+      placeholder: |
+        nephos vpc create ...
+        nephos subnet create ...
+        nephos instance run ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: "Nephos version"
+      description: "Output of `nephos version`"
+      placeholder: "e.g., nephos v0.1.0-abc123"
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: "Host platform"
+      options:
+        - "Linux (Docker Engine)"
+        - "Windows (WSL2 + Docker Desktop)"
+        - "macOS (Docker Desktop)"
+        - "macOS (OrbStack)"
+        - "Other"
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: "Output of nephos doctor"
+      description: "Paste the full output of `nephos doctor`"
+      render: shell
+      placeholder: "$ nephos doctor\n..."
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: "Relevant logs"
+      description: "Any relevant logs or error messages"
+      render: shell
+      placeholder: "Paste logs here..."
+    validations:
+      required: false
