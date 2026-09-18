@@ -40,6 +40,12 @@ spike::metric() {
 # The command runs under `eval` so that callers can pass pipelines and
 # negations. A non-zero exit is a FAIL, never a script abort: the point of a
 # spike is to finish and report everything it learned.
+#
+# NEVER interpolate fetched or user-supplied content into <command>. It is
+# eval'd, so a response body containing `>` or `;` executes as shell. SP4 hit
+# exactly this: user data containing a redirect ran against the harness's own
+# filesystem and the assertion failed for reasons unrelated to the product.
+# Use spike::assert_file_contains for anything that came off the wire.
 spike::assert() {
     local desc="$1" cmd="$2" evidence="${3:-}"
     local out rc
@@ -56,6 +62,27 @@ spike::assert() {
         printf '  \033[31mFAIL\033[0m    %s\n' "$desc"
         [ -n "$evidence" ] && printf '          %s\n' "$evidence"
         [ -n "$out" ] && printf '          output: %s\n' "$(printf '%s' "$out" | head -3 | tr '\n' ' ')"
+        SPIKE_FAIL_COUNT=$(( SPIKE_FAIL_COUNT + 1 ))
+        SPIKE_VERDICTS+=( "FAIL	$desc	$evidence" )
+    fi
+    return 0
+}
+
+# spike::assert_file_contains <description> <file> <fixed-string> [evidence]
+#
+# The safe form for anything that came off the wire: the content stays in a
+# file and is matched with grep -F, so it is never eval'd.
+spike::assert_file_contains() {
+    local desc="$1" file="$2" needle="$3" evidence="${4:-}"
+    if [ -f "$file" ] && grep -qF -- "$needle" "$file"; then
+        printf '  \033[32mPASS\033[0m    %s\n' "$desc"
+        [ -n "$evidence" ] && printf '          %s\n' "$evidence"
+        SPIKE_PASS_COUNT=$(( SPIKE_PASS_COUNT + 1 ))
+        SPIKE_VERDICTS+=( "PASS	$desc	$evidence" )
+    else
+        printf '  \033[31mFAIL\033[0m    %s\n' "$desc"
+        printf '          expected %q in %s\n' "$needle" "$file"
+        [ -n "$evidence" ] && printf '          %s\n' "$evidence"
         SPIKE_FAIL_COUNT=$(( SPIKE_FAIL_COUNT + 1 ))
         SPIKE_VERDICTS+=( "FAIL	$desc	$evidence" )
     fi

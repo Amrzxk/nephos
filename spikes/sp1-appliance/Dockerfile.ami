@@ -64,9 +64,51 @@ RUN printf '%s\n' \
     '  Ec2:' \
     '    metadata_urls: [ "http://169.254.169.254" ]' \
     '    strict_id: false' \
-    '    timeout: 2' \
-    '    max_wait: 10' \
+    '    timeout: 1' \
+    '    max_wait: 3' \
     > /etc/cloud/cloud.cfg.d/90-nephos.cfg
+# cloud-init's stock timeouts (max_wait 120) are sized for a real cloud. Nephos
+# serves IMDS from the instance's own VPC router, so a reachable service answers
+# in well under a millisecond and an unreachable one should cost seconds, not
+# minutes. SP1 measured boot-to-sshd rising from 1.2 s to 10.9 s purely because
+# instances there have no network and cloud-init sat out its metadata wait.
+
+# ds-identify runs before cloud-init and decides whether to run it at all. In a
+# container it finds no recognised platform and reports "disabled", so
+# cloud-init never even looks at the datasource above and `cloud-init status`
+# answers "disabled". Nephos instances ARE containers by design (ADR-0004), so
+# this would disable user data and key injection on every instance.
+#
+# Forcing the policy to enabled is the documented escape hatch. RISKS T2 in
+# concrete form.
+RUN printf 'policy: enabled,found=all,maybe=all,notfound=enabled\n' \
+      > /etc/cloud/ds-identify.cfg \
+ && rm -f /etc/cloud/cloud-init.disabled \
+ && systemctl enable cloud-init-local.service cloud-init.service \
+                     cloud-config.service cloud-final.service
+
+# cc_install_hotplug runs `udevadm control --reload-rules`, which fails because
+# udev is masked above — and one failing module makes `cloud-init status` report
+# `error` even though user data ran and the SSH key was installed. Device
+# hotplug is meaningless in a container, so the module is dropped.
+#
+# The module list is edited in /etc/cloud/cloud.cfg itself, NOT added as a
+# cloud.cfg.d overlay: cloud-init merges lists by appending, so an overlay
+# leaves the original entry in place and the module still runs.
+# install_hotplug lives in cloud_final_modules on Ubuntu 24.04, not
+# cloud_config_modules, so every module list is filtered rather than a guessed
+# one. The grep at the end makes the build fail if it is still there.
+RUN python3 -c "\
+import yaml;\
+path = '/etc/cloud/cloud.cfg';\
+cfg = yaml.safe_load(open(path));\
+name = lambda m: m if isinstance(m, str) else (m[0] if isinstance(m, list) else m.get('name'));\
+drop = {'install_hotplug'};\
+keys = ['cloud_init_modules', 'cloud_config_modules', 'cloud_final_modules'];\
+[cfg.__setitem__(k, [m for m in cfg.get(k, []) if name(m) not in drop]) for k in keys if k in cfg];\
+open(path, 'w').write(yaml.safe_dump(cfg, default_flow_style=False))" \
+ && rm -f /etc/cloud/cloud.cfg.d/92-nephos-container.cfg \
+ && ! grep -q install_hotplug /etc/cloud/cloud.cfg
 
 # apt drops privileges to the _apt user, which needs setgroups. Inside a user
 # namespace that call returns EINVAL and every apt operation fails with

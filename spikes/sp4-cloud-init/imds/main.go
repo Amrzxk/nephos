@@ -126,6 +126,42 @@ func main() {
 	}
 }
 
+// apiVersions is the list served at "/". cloud-init fetches this first and
+// then addresses metadata under a DATED version, not under /latest — it asks
+// for /2009-04-04/meta-data/instance-id. An IMDS that only answers /latest
+// looks healthy to curl and makes cloud-init fall back to DataSourceNone,
+// which is exactly what SP4 caught.
+var apiVersions = []string{
+	"1.0",
+	"2007-01-19",
+	"2007-03-01",
+	"2007-08-29",
+	"2007-10-10",
+	"2007-12-15",
+	"2008-02-01",
+	"2008-09-01",
+	"2009-04-04",
+	"2011-01-01",
+	"2011-05-01",
+	"2012-01-12",
+	"2014-02-25",
+	"2016-09-02",
+	"latest",
+}
+
+// splitVersion strips a leading API version segment from the path, returning
+// the remainder and whether the version was recognised.
+func splitVersion(path string) (rest string, ok bool) {
+	trimmed := strings.TrimPrefix(path, "/")
+	head, tail, _ := strings.Cut(trimmed, "/")
+	for _, v := range apiVersions {
+		if head == v {
+			return "/" + tail, true
+		}
+	}
+	return path, false
+}
+
 func newHandler(inst instance, logger *slog.Logger) http.Handler {
 	tokens := newTokenStore()
 	mux := http.NewServeMux()
@@ -161,8 +197,13 @@ func newHandler(inst instance, logger *slog.Logger) http.Handler {
 	}
 
 	// Directory listings matter: cloud-init walks them.
-	mux.HandleFunc("/latest/meta-data/", func(w http.ResponseWriter, r *http.Request) {
-		path := strings.TrimPrefix(r.URL.Path, "/latest/meta-data/")
+	metaData := func(w http.ResponseWriter, r *http.Request) {
+		rest, _ := splitVersion(r.URL.Path)
+		path := strings.TrimPrefix(rest, "/meta-data/")
+		path = strings.TrimPrefix(path, "meta-data/")
+		if path == "/meta-data" || path == "meta-data" {
+			path = ""
+		}
 		switch path {
 		case "":
 			serve(w, r, strings.Join([]string{
@@ -199,15 +240,15 @@ func newHandler(inst instance, logger *slog.Logger) http.Handler {
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
-	})
+	}
 
-	mux.HandleFunc("/latest/user-data", func(w http.ResponseWriter, r *http.Request) {
+	userData := func(w http.ResponseWriter, r *http.Request) {
 		serve(w, r, inst.UserData)
-	})
+	}
 
 	// The Ec2 datasource probes this. Returning something well-formed with
 	// strict_id disabled is what lets stock cloud-init accept Nephos.
-	mux.HandleFunc("/latest/dynamic/instance-identity/document", func(w http.ResponseWriter, r *http.Request) {
+	identityDoc := func(w http.ResponseWriter, r *http.Request) {
 		doc, _ := json.Marshal(map[string]any{
 			"instanceId":         inst.InstanceID,
 			"instanceType":       inst.InstanceType,
@@ -223,15 +264,42 @@ func newHandler(inst instance, logger *slog.Logger) http.Handler {
 			"devpayProductCodes": nil,
 		})
 		serve(w, r, string(doc))
-	})
+	}
 
+	// One catch-all router, because every metadata path is version-prefixed and
+	// http.ServeMux cannot pattern-match a variable first segment.
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/" || r.URL.Path == "/latest" || r.URL.Path == "/latest/" {
-			serve(w, r, "meta-data\nuser-data\ndynamic")
+		// The version index. cloud-init reads this before anything else and
+		// picks the newest version it understands.
+		if r.URL.Path == "/" || r.URL.Path == "" {
+			serve(w, r, strings.Join(apiVersions, "\n"))
 			return
 		}
-		logger.Info("unhandled metadata path", slog.String("path", r.URL.Path))
-		w.WriteHeader(http.StatusNotFound)
+
+		rest, versioned := splitVersion(r.URL.Path)
+		if !versioned {
+			logger.Info("unversioned metadata path", slog.String("path", r.URL.Path))
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+
+		switch {
+		case rest == "/" || rest == "":
+			serve(w, r, "meta-data\nuser-data\ndynamic")
+		case rest == "/user-data":
+			userData(w, r)
+		case rest == "/dynamic" || rest == "/dynamic/":
+			serve(w, r, "instance-identity/")
+		case rest == "/dynamic/instance-identity" || rest == "/dynamic/instance-identity/":
+			serve(w, r, "document")
+		case rest == "/dynamic/instance-identity/document":
+			identityDoc(w, r)
+		case rest == "/meta-data" || strings.HasPrefix(rest, "/meta-data/"):
+			metaData(w, r)
+		default:
+			logger.Info("unhandled metadata path", slog.String("path", r.URL.Path))
+			w.WriteHeader(http.StatusNotFound)
+		}
 	})
 
 	return mux

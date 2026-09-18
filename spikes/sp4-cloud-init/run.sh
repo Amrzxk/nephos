@@ -94,27 +94,38 @@ echo "nephos-sp4-user-data-ran" > /var/log/nephos-sp4-marker
 hostname > /var/log/nephos-sp4-hostname
 USERDATA
 
-    spike::appliance_exec sh -c "
-        mkdir -p /run/netns /opt/sp4
+    # Stop any IMDS left in the namespace BEFORE recreating it. A process still
+    # bound inside keeps the old namespace alive, and the rebuild then races
+    # against it.
+    spike::appliance_exec sh -c 'pkill -x imds 2>/dev/null; exit 0' || true
+    sleep 1
+
+    local setup_out setup_rc=0
+    setup_out="$(spike::appliance_exec sh -c "
+        mkdir -p /run/netns /opt/sp4 || exit 1
         ip netns delete $VPC_NS 2>/dev/null
-        ip netns add $VPC_NS
-        ip netns exec $VPC_NS sysctl -qw net.ipv4.ip_forward=1
-        ip netns exec $VPC_NS ip link add $ROUTER_IF type dummy
-        ip netns exec $VPC_NS ip link set $ROUTER_IF up
-        ip netns exec $VPC_NS ip addr add $GATEWAY/32 dev $ROUTER_IF
-        ip netns exec $VPC_NS ip addr add 169.254.169.254/32 dev $ROUTER_IF
-        ip netns exec $VPC_NS ip link set lo up
+        ip netns add $VPC_NS || exit 2
+        ip netns exec $VPC_NS sysctl -qw net.ipv4.ip_forward=1 || exit 3
+        ip netns exec $VPC_NS ip link add $ROUTER_IF type dummy || exit 4
+        ip netns exec $VPC_NS ip link set $ROUTER_IF up || exit 5
+        ip netns exec $VPC_NS ip addr add $GATEWAY/32 dev $ROUTER_IF || exit 6
+        ip netns exec $VPC_NS ip addr add 169.254.169.254/32 dev $ROUTER_IF || exit 7
+        ip netns exec $VPC_NS ip link set lo up || exit 8
         echo prepared
-    " >/dev/null 2>&1 || true
+    " 2>&1)" || setup_rc=$?
+    spike::log "  setup: ${setup_out:-no output} (rc=$setup_rc)"
 
     docker cp "$RESULTS/imds" "$SPIKE_APPLIANCE_NAME:/opt/sp4/imds"
     docker cp "$RESULTS/user-data.sh" "$SPIKE_APPLIANCE_NAME:/opt/sp4/user-data.sh"
     docker cp "$RESULTS/sp4-key.pub" "$SPIKE_APPLIANCE_NAME:/opt/sp4/key.pub"
 
-    start_imds ""
+    local addrs
+    addrs="$(spike::appliance_exec ip netns exec "$VPC_NS" ip -o addr show "$ROUTER_IF" 2>&1 | tr -d '\r' | tr '\n' ' ' || true)"
     spike::assert "the VPC namespace holds the metadata address 169.254.169.254" \
-        "spike::appliance_exec ip netns exec $VPC_NS ip -o addr show $ROUTER_IF | grep -q 169.254.169.254" \
-        "169.254.169.254 on $ROUTER_IF in $VPC_NS"
+        "echo '$addrs' | grep -q '169.254.169.254'" \
+        "${addrs:-no addresses found}"
+
+    start_imds ""
 }
 
 # start_imds <extra-flags>
@@ -161,10 +172,11 @@ check_metadata_endpoints() {
         "echo '$key' | grep -q 'ssh-ed25519'" \
         "public-keys/0/openssh-key"
 
-    local ud
-    ud="$(imds_curl http://169.254.169.254/latest/user-data)"
-    spike::assert "user data is served" \
-        "echo '$ud' | grep -q 'nephos-sp4-user-data-ran'" \
+    # User data is a shell script, so it must never reach an eval'd assertion:
+    # its own redirects would execute against the harness. Keep it in a file.
+    imds_curl http://169.254.169.254/latest/user-data > "$RESULTS/served-user-data.txt"
+    spike::assert_file_contains "user data is served" \
+        "$RESULTS/served-user-data.txt" "nephos-sp4-user-data-ran" \
         "/latest/user-data"
 }
 
@@ -232,6 +244,8 @@ boot_instance_with_user_data() {
     sleep 2
 
     spike::appliance_exec podman rm -f sp4-instance >/dev/null 2>&1 || true
+    local boot_start_ms
+    boot_start_ms="$(spike::now_ms)"
     spike::appliance_exec podman run -d --name sp4-instance \
         --systemd=always --userns=auto --network none --cap-add NET_ADMIN \
         --memory 1g --pids-limit 512 \
@@ -241,6 +255,23 @@ boot_instance_with_user_data() {
     spike::assert "the instance started and reached the metadata service" \
         "spike::appliance_exec podman exec sp4-instance ip -o addr show eth0 | grep -q $INSTANCE_IP" \
         "eth0 holds $INSTANCE_IP"
+
+    # SP1 measures boot with no network at all, where cloud-init sits out its
+    # metadata wait and the number says more about the timeout than the runtime.
+    # This is the realistic figure: a full instance, cloud-init enabled, IMDS
+    # reachable on the VPC router — the configuration Nephos actually ships.
+    local ready_ms
+    if spike::wait_for_sshd sp4-instance 90; then
+        ready_ms=$(( $(spike::now_ms) - boot_start_ms ))
+        spike::metric "boot_to_sshd_with_cloud_init_ms" "$ready_ms"
+        spike::assert "boot-to-sshd stays under 5 s with cloud-init enabled (ADR-0004 validation 1)" \
+            "[ $ready_ms -lt 5000 ]" \
+            "measured ${ready_ms} ms with a reachable IMDS"
+    else
+        spike::assert "boot-to-sshd stays under 5 s with cloud-init enabled (ADR-0004 validation 1)" \
+            "false" \
+            "no SSH banner within 90 s"
+    fi
 
     spike::log "  waiting for cloud-init (up to 120 s)"
     local i
@@ -257,7 +288,9 @@ check_cloud_init_result() {
     spike::section "cloud-init results"
     local status marker key_installed
 
-    status="$(spike::appliance_exec podman exec sp4-instance cloud-init status 2>&1 | tr -d '\r\n')"
+    # `cloud-init status` exits 2 while still running and 1 on error, so under
+    # `set -e` this assignment would abort the spike before it could report.
+    status="$(spike::appliance_exec podman exec sp4-instance cloud-init status 2>&1 | tr -d '\r\n' || true)"
     spike::metric "cloud_init_status" "${status:-unknown}"
     spike::assert "cloud-init completed without error (RISKS T2)" \
         "echo '$status' | grep -q 'done'" \
@@ -265,26 +298,26 @@ check_cloud_init_result() {
 
     local ds
     ds="$(spike::appliance_exec podman exec sp4-instance \
-        sh -c 'grep -o "DataSourceEc2[A-Za-z]*" /run/cloud-init/cloud-init-generator.log /var/log/cloud-init.log 2>/dev/null | head -1' | tr -d '\r\n')"
+        sh -c 'grep -ho "DataSourceEc2[A-Za-z]*" /var/log/cloud-init.log /run/cloud-init/ds-identify.log 2>/dev/null | head -1' | tr -d '\r\n' || true)"
     spike::metric "cloud_init_datasource" "${ds:-unknown}"
     spike::assert "cloud-init selected the Ec2 datasource" \
         "echo '${ds:-}' | grep -q 'DataSourceEc2'" \
         "datasource: ${ds:-not detected}"
 
     marker="$(spike::appliance_exec podman exec sp4-instance \
-        cat /var/log/nephos-sp4-marker 2>/dev/null | tr -d '\r\n')"
+        cat /var/log/nephos-sp4-marker 2>/dev/null | tr -d '\r\n' || true)"
     spike::assert "user data ran on first boot" \
         "[ '$marker' = 'nephos-sp4-user-data-ran' ]" \
         "marker: ${marker:-missing}"
 
     key_installed="$(spike::appliance_exec podman exec sp4-instance \
-        sh -c 'cat /home/ubuntu/.ssh/authorized_keys 2>/dev/null' | tr -d '\r\n')"
+        sh -c 'cat /home/ubuntu/.ssh/authorized_keys 2>/dev/null' | tr -d '\r\n' || true)"
     spike::assert "the SSH public key was installed for the default user" \
         "echo '$key_installed' | grep -q 'ssh-ed25519'" \
         "authorized_keys for ubuntu: ${key_installed:0:48}..."
 
     local hostname
-    hostname="$(spike::appliance_exec podman exec sp4-instance hostname 2>/dev/null | tr -d '\r\n')"
+    hostname="$(spike::appliance_exec podman exec sp4-instance hostname 2>/dev/null | tr -d '\r\n' || true)"
     spike::metric "instance_hostname" "${hostname:-unknown}"
 
     spike::appliance_exec podman exec sp4-instance \

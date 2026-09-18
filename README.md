@@ -2,7 +2,7 @@
 
 **A local cloud you can break, fix, and understand.** Nephos (Greek *νέφος*, "cloud") is an open source cloud simulator for **learning** infrastructure: real instances you can SSH into, and VPC networking that fails the way a real cloud fails.
 
-> **Status: planning.** This repository currently holds the design. No code yet. The first milestone is [M0](docs/ROADMAP.md#m0-foundations-and-spikes).
+> **Status: early development.** [M0](docs/ROADMAP.md#m0-foundations-and-spikes) is done — the repository scaffold, CI, and four spikes that prove the design works on real kernels ([reports](docs/spikes/), [demo](docs/demos/M0.md)). There is no usable product yet: `nephos` prints its version and nothing else. [M1](docs/ROADMAP.md#m1-thinnest-end-to-end-slice-two-instances-ping) is the first milestone that does something.
 
 ## What it will do
 

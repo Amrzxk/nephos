@@ -7,14 +7,14 @@
 //
 // The six things ADR-0005 says this spike has to show:
 //
-//	1. Two VPCs using 10.0.0.0/16 at the same time, with no crosstalk.
-//	2. Same-subnet and cross-subnet traffic both hit security group counters.
-//	3. A NACL without an ephemeral-port rule breaks return traffic, and adding
-//	   the rule fixes it.
-//	4. 100 consecutive ruleset replacements, during a continuous TCP probe,
-//	   never briefly allow traffic that should be denied.
-//	5. Go opens DNS and metadata sockets inside a VPC namespace.
-//	6. The appliance's root namespace shows nothing but the edge uplink.
+//  1. Two VPCs using 10.0.0.0/16 at the same time, with no crosstalk.
+//  2. Same-subnet and cross-subnet traffic both hit security group counters.
+//  3. A NACL without an ephemeral-port rule breaks return traffic, and adding
+//     the rule fixes it.
+//  4. 100 consecutive ruleset replacements, during a continuous TCP probe,
+//     never briefly allow traffic that should be denied.
+//  5. Go opens DNS and metadata sockets inside a VPC namespace.
+//  6. The appliance's root namespace shows nothing but the edge uplink.
 package main
 
 import (

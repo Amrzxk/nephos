@@ -1,6 +1,6 @@
 # ADR-0005: A Nephos-owned, routed network plane
 
-- **Status:** Accepted; validated in M0 (spike SP3)
+- **Status:** Accepted; **validated in M0** by [SP3](../spikes/SP3-routed-vpc-plane.md)
 - **Date:** 2026-09-17
 
 ## Context
@@ -111,5 +111,26 @@ Nephos owns a **routed network plane** (Option C) inside the appliance.
 4. 100 consecutive ruleset replacements, run during a continuous TCP probe, never briefly allow traffic that should be denied.
 5. Go code opens DNS and metadata sockets inside a VPC namespace.
 6. The appliance's root namespace shows nothing but the edge uplink.
+
+**Result (2026-09-18):** all six pass on Windows 10 with WSL2 and Docker Desktop
+([SP3](../spikes/SP3-routed-vpc-plane.md), 21 of 21 assertions). Two VPCs held
+10.0.0.0/16 simultaneously with no crosstalk; same-subnet traffic was blocked by
+a security group while cross-subnet traffic it allowed got through; a network
+ACL missing an ephemeral-port rule made the connection hang, and adding the rule
+fixed it; 100 ruleset replacements during 84 concurrent probe attempts allowed
+**zero** packets that should have been denied; Go opened DNS and IMDS sockets
+inside a VPC namespace; and the appliance root namespace held nothing but `lo`
+and its uplink. The namespace stress test is race-clean, which is
+[RISKS T8](../RISKS.md#t8-go-and-network-namespace-pitfalls).
+
+Proxy ARP and policy routing behaved correctly on the WSL2 kernel, so no
+superseding ADR is needed and `internal/network` can be written against this
+shape.
+
+Two details the spike showed are load-bearing rather than incidental:
+`send_redirects=0` on each router-side interface (without it the router can tell
+an instance to bypass it, bypassing enforcement), and the gateway needing an
+explicit on-link `/32` route inside the instance before it can be a default
+gateway.
 
 **Revisit** if proxy-ARP routing proves unreliable on Docker Desktop or WSL2 kernels.

@@ -35,25 +35,39 @@ If not, ADR-0004's containerd fallback has to be taken before M1 starts.
 
 | Measurement | Result | Target | Verdict |
 |---|---|---|---|
-| First boot from a cached image | **1 726 ms** | < 10 s | PASS |
-| Boot to sshd, median of 10 | **1 192 ms** | < 5 s | PASS |
-| Boot to sshd, range | 761–1 710 ms | — | — |
+| First boot from a cached image | **3 743 ms** | < 10 s | PASS |
+| Boot to sshd, median of 10 | **3 977 ms** | < 5 s | PASS |
+| Boot to sshd, range | 3 666 – 4 744 ms | — | — |
 
-Samples (ms): 853, 1222, 1239, 886, 761, 1250, 1710, 1227, 1163, 788.
+Samples (ms): 3783, 3677, 4123, 4196, 3832, 3679, 4213, 3666, 4149, 4744.
+
+**Read these with the caveat below.** SP1 instances run with `--network none`,
+because giving an instance a network is [SP2](SP2-eni-plumbing-hook.md)'s job and
+Nephos never uses a Podman network to model a VPC. cloud-init therefore cannot
+reach a metadata service and sits out its `max_wait`, which dominates the
+measurement — roughly 2.7 s of the ~4 s above is that timeout.
+
+The realistic figure is [SP4](SP4-cloud-init-imds.md)'s **2 735 ms**, measured on
+a full instance with cloud-init enabled *and* an IMDS reachable on its VPC
+router. That is the configuration Nephos actually ships.
+
+For reference, an earlier revision of this spike measured a median of 1 192 ms —
+but that was with `ssh.service` failing and cloud-init disabled, so it was
+timing a broken instance. See [finding 4](#4-sshd-needs-host-keys-and-socket-activation-makes-readiness-lie).
 
 The first-boot figure is what [RISKS T10](../RISKS.md#t10-user-namespace-id-mapping-costs)
 is about: the cost of ID-mapping image layers for a per-instance user namespace.
-On this 6.6 kernel it is negligible — first boot is within noise of steady-state
-boot, so ID-mapped mounts are clearly being used rather than layers being copied.
+On this 6.6 kernel it is negligible — first boot is *faster* than the steady-state
+median, so ID-mapped mounts are clearly being used rather than layers copied.
 
 ### Footprint (RISKS T5)
 
 | Measurement | Result | Target | Verdict |
 |---|---|---|---|
 | 20 concurrent instances started | **20 of 20** | 20 | PASS |
-| Total memory, 20 idle instances | **362 MB** (345 MiB) | < 2 GiB | PASS |
-| Per instance | **~17 MiB** | < 60 MB (RISKS T5 warning line) | PASS |
-| Storage after one instance | 577 MB total graph root | — | — |
+| Total memory, 20 idle instances | **450 MB** (429 MiB) | < 2 GiB | PASS |
+| Per instance | **~21 MiB** | < 60 MB (RISKS T5 warning line) | PASS |
+| Storage after one instance | 579 MB total graph root | — | — |
 
 Measured from each container's cgroup `memory.current`. `podman stats` reports
 ~6.3 MB per instance because it excludes inactive page cache; the 17 MiB figure
@@ -181,10 +195,31 @@ Two fixes:
 
 The harness now waits for an actual `SSH-2.0-…` banner rather than an open port.
 
+**This invalidated the spike's own first set of numbers.** The 1 192 ms median
+reported before the fix was the time for systemd to open a socket on behalf of a
+service that then failed. Every timing figure in this report was re-measured
+afterwards.
+
 **Carry into M2:** the AMI must generate host keys on first boot, and
 instance-status checks (post-MVP) must test the protocol, not the port. This is
 the same class of error as "stored but not enforced" — a green signal that means
 nothing.
+
+### 5. cloud-init's metadata wait dominates boot when IMDS is unreachable
+
+Turning cloud-init on (a [SP4](SP4-cloud-init-imds.md) change) pushed this
+spike's boot-to-sshd from 1.2 s to **10.9 s**, and the run failed its own target.
+Nothing had regressed in the runtime: SP1 instances have no network, so
+cloud-init waited out its `max_wait` of 10 s before giving up.
+
+The AMI now uses `max_wait: 3` and `timeout: 1`. cloud-init's stock values are
+sized for a real cloud; Nephos serves IMDS from the instance's own VPC router,
+where a reachable service answers in well under a millisecond and an unreachable
+one should cost seconds rather than minutes.
+
+**Carry into M2:** keep the short timeouts, and measure boot-to-sshd against a
+*reachable* IMDS. A benchmark run with the metadata service missing measures the
+timeout, not the product.
 
 ## Platform notes
 
@@ -209,8 +244,11 @@ fully-qualified local references.
 **ADR-0003 and ADR-0004 are validated on WSL2 + Docker Desktop.** No fallback
 ADR is needed; the containerd path in ADR-0004 stays unused.
 
-Boot times beat their targets by roughly 4×, and memory by roughly 6×, on a host
-with a quarter of the recommended RAM.
+Boot-to-sshd comes in under the 5 s target even in this spike's deliberately
+pessimistic no-network configuration, and at **2 735 ms** in the realistic one
+([SP4](SP4-cloud-init-imds.md)). Twenty idle instances use 450 MB against a 2 GiB
+budget — on a host with 1.9 GiB of RAM, a quarter of what
+[ARCHITECTURE §12](../ARCHITECTURE.md#12-platform-support) recommends.
 
 ## Outstanding
 
