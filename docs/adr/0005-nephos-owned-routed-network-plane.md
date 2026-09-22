@@ -127,6 +127,17 @@ Proxy ARP and policy routing behaved correctly on the WSL2 kernel, so no
 superseding ADR is needed and `internal/network` can be written against this
 shape.
 
+**Native result (2026-09-22):** SP3 also passes 21 of 21 assertions on Ubuntu
+24.04 with Docker 28.0.4 in
+[`Spikes` run 35698867324](https://github.com/Amrzxk/nephos/actions/runs/35698867324).
+The atomic-replacement check completed 189 replacements and 56 probe attempts
+with zero incorrectly allowed packets; the namespace helpers also passed the
+race detector. An earlier native run undersampled the replacement window (36
+attempts, all correctly denied), so the harness now requires both 100
+replacements and 50 completed probes, bounded at 1,000 replacements. That was a
+test-timing correction, not a failed platform assumption, and no superseding
+ADR is required.
+
 Two details the spike showed are load-bearing rather than incidental:
 `send_redirects=0` on each router-side interface (without it the router can tell
 an instance to bypass it, bypassing enforcement), and the gateway needing an

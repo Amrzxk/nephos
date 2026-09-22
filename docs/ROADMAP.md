@@ -78,10 +78,10 @@ flowchart LR
 
 **Acceptance criteria:**
 
-- [x] CI is green on a real (small) Go module: lint, unit tests, cross-builds for all six targets. *Verified locally: `make ci` passes, `golangci-lint` reports 0 issues, and all six targets build with `CGO_ENABLED=0`. The workflows are committed; the GitHub run is pending the first pull request.*
+- [x] CI is green on a real (small) Go module: lint, unit tests, cross-builds for all six targets. *Verified locally and on GitHub: [CI run 35696916102](https://github.com/Amrzxk/nephos/actions/runs/35696916102) passed lint, unit and race tests, generated-code freshness, vulnerability scanning, and all six `CGO_ENABLED=0` cross-build targets.*
 - [x] Reports for SP1–SP4 in `docs/spikes/`, each marking pass or fail against the validation criteria in ADR-0003, ADR-0004, and ADR-0005. *All four pass: [SP1](spikes/SP1-appliance-nested-containers.md) 19/19, [SP2](spikes/SP2-eni-plumbing-hook.md) 18/18, [SP3](spikes/SP3-routed-vpc-plane.md) 21/21, [SP4](spikes/SP4-cloud-init-imds.md) 16/16.*
-- [ ] All spikes pass on Ubuntu 24.04 (native Docker) **and** on Windows 10 with WSL2 and Docker Desktop, or superseding ADRs record the fallbacks. *WSL2 + Docker Desktop: done, all four. **Native Docker: not yet run** — the `Spikes` workflow (`workflow_dispatch`) runs SP1–SP4 on a `ubuntu-24.04` runner and needs dispatching. No superseding ADR was needed; ADR-0004's capability wording was amended in place.*
-- [x] SP1 records median boot-to-sshd time and idle memory per instance. *Median 3 977 ms (target 5 s), first boot 3 743 ms (target 10 s), ~21 MiB per instance and 450 MB for 20 — measured on a host with 1.9 GiB of RAM. SP1 instances have no network, so cloud-init waits out its metadata timeout; with a reachable IMDS, SP4 measures 2 735 ms.*
+- [x] All spikes pass on Ubuntu 24.04 (native Docker) **and** on Windows 10 with WSL2 and Docker Desktop, or superseding ADRs record the fallbacks. *All four pass on both platforms. Native Ubuntu validation is recorded in [Spikes run 35698867324](https://github.com/Amrzxk/nephos/actions/runs/35698867324): SP1 19/19, SP2 18/18, SP3 21/21, and SP4 16/16. No fallback or superseding ADR was needed; ADR-0004's capability wording was amended in place.*
+- [x] SP1 records median boot-to-sshd time and idle memory per instance. *WSL2: median 3 977 ms (target 5 s), first boot 3 743 ms (target 10 s), ~21 MiB per instance and 450 MB for 20 on a 1.9 GiB host. Native Ubuntu: median 4 278 ms, first boot 5 614 ms, ~21 MiB per instance and 443,744,256 bytes for 20. SP1 instances have no network, so cloud-init waits out its metadata timeout; with a reachable IMDS, SP4 measures 2 735 ms on WSL2 and 3 100 ms on native Ubuntu.*
 
 **Effort:** 30–40 h
 

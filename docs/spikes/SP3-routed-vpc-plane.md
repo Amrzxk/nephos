@@ -1,7 +1,7 @@
 # SP3: The routed VPC network plane
 
-- **Status:** **PASS** (21 of 21 assertions)
-- **Date:** 2026-09-18
+- **Status:** **PASS** (21 of 21 assertions on WSL2 and native Ubuntu)
+- **Date:** 2026-09-18; native Ubuntu validation 2026-09-22
 - **Validates:** [ADR-0005](../adr/0005-nephos-owned-routed-network-plane.md) (a Nephos-owned, routed network plane), [ADR-0002](../adr/0002-go-for-control-plane-and-cli.md) (Go, and the namespace rules)
 - **Mitigates:** [RISKS](../RISKS.md) T3, T8
 - **Reproduce:** `./spikes/run.sh sp3`
@@ -25,6 +25,10 @@ Same appliance as [SP1](SP1-appliance-nested-containers.md): Debian 13, kernel
 6.6.87.2-microsoft-standard-WSL2, nftables, iproute2. The spike is a Go program
 built `CGO_ENABLED=0` and run inside the appliance.
 
+The native leg used Ubuntu 24.04.5, kernel 6.17.0-1022-azure, Docker 28.0.4,
+cgroup v2, and overlay2. Its authenticated log and artifacts are in
+[`Spikes` run 35698867324](https://github.com/Amrzxk/nephos/actions/runs/35698867324).
+
 "Instances" here are plain network namespaces holding the far end of each veth,
 rather than full containers. SP1 and SP2 cover real containers; SP3 only needs
 something that owns an address and can open sockets, and this keeps 12 instances
@@ -39,7 +43,7 @@ cheap.
 | 1 | Two VPCs using 10.0.0.0/16 at once, no crosstalk | **PASS** | `nx-vpc-a` and `nx-vpc-b` both serve `10.0.0.0/16`; a dial to `10.0.1.4` from VPC b returns b's banner, never a's |
 | 2 | Same-subnet and cross-subnet traffic both hit SG counters | **PASS** | 6 packets counted across `sg_*` chains; see below |
 | 3 | A NACL without an ephemeral-port rule breaks return traffic | **PASS** | times out before the rule, reachable after |
-| 4 | 100 ruleset replacements never briefly allow a denied flow | **PASS** | 0 of 84 probe attempts allowed |
+| 4 | At least 100 ruleset replacements never briefly allow a denied flow | **PASS** | Post-fix WSL2: 0 of 88 attempts allowed during 100 replacements; native Ubuntu: 0 of 56 during 189 replacements |
 | 5 | Go opens DNS and metadata sockets inside a VPC namespace | **PASS** | `udp 10.40.0.2:53` and `tcp 169.254.169.254:80`, reachable from an instance |
 | 6 | The appliance root namespace shows nothing but the uplink | **PASS** | links are exactly `lo, eth0` |
 
@@ -79,24 +83,32 @@ not refusal — is the whole point of enforcing on real packets.
 
 ### Atomic replacement holds under churn
 
-100 consecutive full-ruleset replacements with `nft -f`, while four concurrent
-probers hammered a flow that must stay denied:
+Full-ruleset replacements with `nft -f`, while four concurrent probers hammered
+a flow that must stay denied:
 
-| | |
-|---|---|
-| Replacements | 100 |
-| Probe attempts | 84 |
-| **Allowed** | **0** |
-| Denied | 84 |
+| Platform | Replacements | Probe attempts | Allowed | Denied |
+|---|---:|---:|---:|---:|
+| WSL2 + Docker Desktop, original | 100 | 84 | **0** | 84 |
+| WSL2 + Docker Desktop, post-fix | 100 | 88 | **0** | 88 |
+| Native Ubuntu + Docker, post-fix | 189 | 56 | **0** | 56 |
 
 Zero leaks. This matters beyond security: a window in which no rules applied
 would make Nephos intermittently teach the wrong thing.
 
-> The first run of this check managed only 8 attempts, because a denied flow
-> costs the full dial timeout and one prober with a 300 ms timeout barely
-> samples the window. Eight attempts would have been weak evidence for a
-> "never" claim. Four probers at a 100 ms timeout give 84, which is worth
-> asserting on. The check now fails if fewer than 50 attempts land.
+The first native workflow run
+([35290287254](https://github.com/Amrzxk/nephos/actions/runs/35290287254))
+completed 100 replacements so quickly that only 36 probes finished. All 36
+were denied, so atomic replacement held, but the assertion required more than
+50 attempts and SP3 reported 20 passes and 1 failure. This was a harness timing
+failure, not a failed platform assumption.
+
+The check now continues until it has both at least 100 replacements and at
+least 50 completed probes. A 1,000-replacement cap makes a stalled or
+pathologically slow probe fail instead of looping forever. A deterministic unit
+test pins the minimum and cap boundaries. The passing native rerun reached 56
+attempts after 189 replacements and allowed none. The patched check also passed
+locally inside the privileged WSL2 appliance with 88 attempts during 100
+replacements and no allowed packet.
 
 ### Namespace thread safety (RISKS T8)
 
@@ -173,18 +185,16 @@ cheaply.
 
 ## Verdict
 
-**ADR-0005 is validated.** The routed design reproduces same-subnet security
-groups, stateless NACL returns, overlapping CIDRs, and atomic rule replacement
-on a WSL2 kernel, and Go drives it race-free without leaking threads between
-namespaces.
+**ADR-0005 is validated on WSL2 and native Ubuntu.** The routed design
+reproduces same-subnet security groups, stateless NACL returns, overlapping
+CIDRs, and atomic rule replacement on both kernels, and Go drives it race-free
+without leaking threads between namespaces.
 
 No superseding ADR is needed. `internal/network` can be written against this
 shape in M1.
 
 ## Outstanding
 
-- [ ] **Native Linux leg** — as for SP1, the `Spikes` workflow covers it but
-      needs the branch pushed.
 - [ ] Internet gateway 1:1 NAT is **rendered and unit-tested but not yet
       exercised on live packets**: SP3 builds no `nx-edge` namespace. M3 is where
       that becomes real, and the connectivity matrix should cover it.

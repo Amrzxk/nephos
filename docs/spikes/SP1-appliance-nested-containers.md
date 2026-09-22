@@ -1,7 +1,7 @@
 # SP1: Appliance and nested system containers
 
-- **Status:** **PASS** (19 of 19 assertions)
-- **Date:** 2026-09-18
+- **Status:** **PASS** (19 of 19 assertions on WSL2 and native Ubuntu)
+- **Date:** 2026-09-18; native Ubuntu validation 2026-09-22
 - **Validates:** [ADR-0003](../adr/0003-appliance-container-packaging.md) (appliance container packaging), [ADR-0004](../adr/0004-instances-as-system-containers.md) (instances as system containers)
 - **Mitigates:** [RISKS](../RISKS.md) T1, T2, T5, T10, S2
 - **Reproduce:** `./spikes/run.sh sp1`
@@ -25,9 +25,12 @@ If not, ADR-0004's containerd fallback has to be taken before M1 starts.
 | Appliance | Debian 13 (trixie), Podman 5.4.2, crun 1.21 |
 | AMI | Ubuntu 24.04, systemd + openssh-server + cloud-init, 223 MB |
 
-> The native-Linux leg of the M0 acceptance criterion has **not** run yet. The
-> `Spikes` workflow (`workflow_dispatch`) exists for it but needs the branch
-> pushed. See [Outstanding](#outstanding).
+The native-Linux leg ran on an Ubuntu 24.04.5 GitHub-hosted runner with kernel
+6.17.0-1022-azure, Docker 28.0.4, cgroup v2, and overlay2. It passed all 19
+assertions in [`Spikes` run 35698867324](https://github.com/Amrzxk/nephos/actions/runs/35698867324).
+The native measurements were 5 614 ms for first boot, a 4 278 ms median over
+10 boots, and 443,744,256 bytes total for 20 instances (~21 MiB each). All stay
+inside the ADR-0004 limits.
 
 ## Results
 
@@ -241,8 +244,9 @@ fully-qualified local references.
 
 ## Verdict
 
-**ADR-0003 and ADR-0004 are validated on WSL2 + Docker Desktop.** No fallback
-ADR is needed; the containerd path in ADR-0004 stays unused.
+**ADR-0003 and ADR-0004 are validated on WSL2 + Docker Desktop and native
+Ubuntu 24.04 with Docker.** No fallback ADR is needed; the containerd path in
+ADR-0004 stays unused.
 
 Boot-to-sshd comes in under the 5 s target even in this spike's deliberately
 pessimistic no-network configuration, and at **2 735 ms** in the realistic one
@@ -252,9 +256,5 @@ budget — on a host with 1.9 GiB of RAM, a quarter of what
 
 ## Outstanding
 
-- [ ] **Native Linux leg.** ROADMAP M0 requires these results on Ubuntu 24.04
-      with native Docker as well. The `Spikes` workflow runs SP1–SP4 on a
-      `ubuntu-24.04` runner, but it needs the branch pushed.
-- [ ] Amend ADR-0004's capability wording (finding 2).
 - [ ] Carry findings 1, 3, and 4 into the M1 appliance image and the M2 AMI
       pipeline.

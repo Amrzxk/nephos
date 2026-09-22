@@ -47,6 +47,13 @@ Each entry names the milestone it belongs to; see [docs/ROADMAP.md](docs/ROADMAP
 
 ### Changed
 
+- **M0 — native-Docker validation complete.** All four spikes pass on the
+  Ubuntu 24.04 native-Docker runner as well as on WSL2 with Docker Desktop
+  ([run 35698867324](https://github.com/Amrzxk/nephos/actions/runs/35698867324)).
+  SP3's atomic-replacement check now runs until it has both 100 replacements
+  and 50 completed probe attempts (bounded at 1,000 replacements), so fast
+  hosts cannot fail solely because they undersample the replacement window.
+  The threshold behavior has a deterministic unit test.
 - **ADR-0004** now reads "default capabilities **plus `CAP_NET_ADMIN`**". The
   original wording contradicted the same ADR's R3 and validation 4, which
   require instance root to be able to run `ufw` in its own network namespace.

@@ -85,7 +85,8 @@ The appliance image uses a Debian stable base. It contains `nephosd`, `nephos-ho
 ## Validation
 
 - **M0 spike SP1:** the appliance starts, runs nested instances, and applies nftables rules on Ubuntu 24.04 (native Docker) and on Windows 10 with WSL2 and Docker Desktop.
-  - **Result (2026-09-18):** passes on Windows 10 with WSL2 and Docker Desktop ([SP1](../spikes/SP1-appliance-nested-containers.md), [SP3](../spikes/SP3-routed-vpc-plane.md)). The appliance keeps its own network and PID namespaces, has no host bind mounts, and its root namespace holds nothing but `lo` and its uplink. The native-Docker leg runs through the `Spikes` workflow on a `ubuntu-24.04` runner.
+  - **Result (2026-09-18):** passes on Windows 10 with WSL2 and Docker Desktop ([SP1](../spikes/SP1-appliance-nested-containers.md), [SP3](../spikes/SP3-routed-vpc-plane.md)). The appliance keeps its own network and PID namespaces, has no host bind mounts, and its root namespace holds nothing but `lo` and its uplink.
+  - **Native result (2026-09-22):** passes on Ubuntu 24.04 with Docker 28.0.4 in [`Spikes` run 35698867324](https://github.com/Amrzxk/nephos/actions/runs/35698867324). The same namespace, mount, cgroup-delegation, and host-hygiene assertions pass there.
   - One requirement the spike added: the appliance entrypoint must delegate the cgroup v2 controllers to a leaf cgroup, because cgroup v2 forbids a cgroup from both holding processes and enabling controllers for its children. Without it, nested Podman cannot apply any limit. The entrypoint refuses to start unless `memory`, `pids`, and `cpu` all delegate.
 - **M8 install matrix:** also covers macOS with Docker Desktop and with OrbStack.
 - **Revisit** if privileged containers are blocked for a large share of target users, or if a kernel-global side effect reaches the host.
