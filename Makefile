@@ -113,14 +113,18 @@ cross: ## Cross-build every release target with CGO disabled
 
 .PHONY: generate
 generate: ## Regenerate code from api/openapi.yaml
-	@echo "generate: nothing to do until M1 adds api/openapi.yaml (ADR-0008)."
+	$(GO) tool oapi-codegen -config api/server.cfg.yaml api/openapi.yaml
+	$(GO) tool oapi-codegen -config api/client.cfg.yaml api/openapi.yaml
 
 .PHONY: generate-check
-generate-check: generate ## Fail if generated code is stale (CI)
-	@if ! git diff --quiet; then \
-		echo "Generated code is stale. Run 'make generate' and commit the result."; \
-		git --no-pager diff --stat; exit 1; \
-	fi
+generate-check: ## Fail if generated code is stale (CI)
+	@tmpdir=$$(mktemp -d); trap 'rm -rf "$$tmpdir"' EXIT; \
+		cp internal/apiserver/generated/server.gen.go "$$tmpdir/server.gen.go"; \
+		cp pkg/client/client.gen.go "$$tmpdir/client.gen.go"; \
+		$(MAKE) generate; \
+		cmp -s "$$tmpdir/server.gen.go" internal/apiserver/generated/server.gen.go \
+			&& cmp -s "$$tmpdir/client.gen.go" pkg/client/client.gen.go \
+			|| { echo "Generated code is stale. Run 'make generate' and commit the result."; exit 1; }
 
 .PHONY: web
 web: ## Build the web console
