@@ -603,7 +603,7 @@ After the MVP (M11): VPC flow logs (nftables log group → NFLOG → `nephosd`, 
 
 ```text
 nephos/
-├── CLAUDE.md                    # conventions for AI coding sessions
+├── AGENTS.md                    # repository guidance for Codex and contributors
 ├── README.md
 ├── LICENSE, NOTICE              # Apache-2.0 (added in M0)
 ├── CONTRIBUTING.md, SECURITY.md, CODE_OF_CONDUCT.md   # added in M0

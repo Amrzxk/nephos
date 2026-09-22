@@ -1,6 +1,6 @@
 # golangci-lint configuration (schema v2).
 #
-# Several rules here exist to mechanise conventions from CLAUDE.md, so that a
+# Several rules here exist to mechanise conventions from AGENTS.md, so that a
 # reviewer never has to catch them by eye.
 
 version: "2"
@@ -39,14 +39,14 @@ linters:
     forbidigo:
       analyze-types: true
       forbid:
-        # Library code logs with log/slog, never to stdout (CLAUDE.md).
+        # Library code logs with log/slog, never to stdout (AGENTS.md).
         - pattern: '^fmt\.Print.*$'
           msg: "Use log/slog in library code. fmt.Print* is allowed only under cmd/ and in tests."
         - pattern: '^println$'
           msg: "Use log/slog."
         - pattern: '^panic$'
           msg: "No panics outside main and genuinely impossible states; return a wrapped error."
-        # context.Background() belongs only in main and tests (CLAUDE.md).
+        # context.Background() belongs only in main and tests (AGENTS.md).
         - pattern: '^context\.Background$'
           msg: "Accept a context.Context as the first parameter. context.Background() belongs in main and tests only."
         - pattern: '^context\.TODO$'

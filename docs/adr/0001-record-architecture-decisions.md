@@ -29,7 +29,7 @@ Keep Architecture Decision Records in `docs/adr/`, using the template and rules 
 
 - Positive: new contributors can learn *why* the system looks the way it does; superseded ADRs keep the history.
 - Negative / costs: every significant change needs a short extra document.
-- Follow-ups: [CLAUDE.md](../../CLAUDE.md) instructs AI sessions to read the relevant ADRs before changing an area, and to propose a superseding ADR instead of silently deviating.
+- Follow-ups: [AGENTS.md](../../AGENTS.md) instructs Codex sessions to read the relevant ADRs before changing an area, and to propose a superseding ADR instead of silently deviating.
 
 ## Validation
 

@@ -18,7 +18,7 @@ Each entry names the milestone it belongs to; see [docs/ROADMAP.md](docs/ROADMAP
   build identity, and a `Makefile` covering build, test, lint, and the
   cross-build matrix.
 - **M0 — linting that enforces the conventions.** `.golangci.yml` mechanises the
-  rules in `CLAUDE.md`: `fmt.Print*` and `context.Background()` are banned
+  rules in `AGENTS.md`: `fmt.Print*` and `context.Background()` are banned
   outside `cmd/` and tests, and `depguard` encodes the
   [ARCHITECTURE §13](docs/ARCHITECTURE.md#13-repository-structure) layering and
   the purity of `explain`, `semantics`, and the firewall renderer.

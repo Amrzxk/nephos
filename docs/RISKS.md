@@ -269,7 +269,7 @@ Risks whose mitigation lands in **M0–M8** must be mitigated before v0.1.0 (see
 - **Risk:** burnout, long gaps, and a bus factor of 1 on a large scope.
 - **Mitigation:**
   - Thin milestones with demos, so progress stays visible.
-  - [CLAUDE.md](../CLAUDE.md) and ADRs preserve context between sessions.
+  - [AGENTS.md](../AGENTS.md) and ADRs preserve context between sessions.
   - Early automation of tests and releases.
   - `good first issue` labels, with lab authoring as the low-barrier contribution path.
   - No public promises of dates.

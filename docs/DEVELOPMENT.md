@@ -1,7 +1,7 @@
 # Developing Nephos
 
 This is the setup guide. For *what to build and why*, read
-[CLAUDE.md](../CLAUDE.md), [ARCHITECTURE.md](ARCHITECTURE.md), and
+[AGENTS.md](../AGENTS.md), [ARCHITECTURE.md](ARCHITECTURE.md), and
 [ROADMAP.md](ROADMAP.md). For how to submit, read
 [CONTRIBUTING.md](../CONTRIBUTING.md).
 

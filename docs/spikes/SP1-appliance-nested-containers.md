@@ -128,7 +128,7 @@ every process into a leaf cgroup, then write the controllers into
 
 **This must fail closed.** Without `memory` and `pids` delegated, instance type
 limits silently enforce nothing while the API still reports them — precisely
-what [CLAUDE.md](../../CLAUDE.md) principle 2 forbids. The entrypoint now
+what [AGENTS.md](../../AGENTS.md) principle 2 forbids. The entrypoint now
 refuses to start unless `memory`, `pids`, and `cpu` are all delegated.
 
 **Carry into M1:** the real appliance entrypoint needs this, and

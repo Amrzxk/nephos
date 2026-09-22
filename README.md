@@ -45,7 +45,7 @@ nephos lab start nat-troubleshooting
 | [docs/LABS.md](docs/LABS.md) | The lab format, check types, and the first five labs |
 | [docs/RISKS.md](docs/RISKS.md) | Technical, security, and project risks with mitigations |
 | [docs/adr/](docs/adr/README.md) | Architecture Decision Records: language, packaging, networking, instances, state, API, console, labs, license |
-| [CLAUDE.md](CLAUDE.md) | Conventions for contributors and AI coding sessions |
+| [AGENTS.md](AGENTS.md) | Repository guidance for Codex and contributors |
 
 ## License
 

@@ -4,7 +4,7 @@ Thank you for considering it. Nephos is a learning tool, so the bar is slightly
 unusual: **correct beats complete**. A feature that teaches a wrong mental model
 is worse than a missing one.
 
-Start with [CLAUDE.md](CLAUDE.md). It is written for AI coding sessions but it is
+Start with [AGENTS.md](AGENTS.md). It is written for Codex sessions but it is
 the shortest accurate description of the conventions, and it applies to humans
 unchanged.
 
@@ -31,7 +31,7 @@ CI checks this on every commit in a pull request.
 
 Nephos is planned in milestones, and scope discipline is the main thing keeping a
 solo-maintained project alive. Before adding a feature, answer these — the same
-five questions CLAUDE.md asks:
+five questions AGENTS.md asks:
 
 1. **Which milestone does it belong to?** If none, it belongs in the
    [ROADMAP](docs/ROADMAP.md) backlog. Say so in an issue instead of building it.
@@ -69,7 +69,7 @@ make ci        # everything a pull request runs
 ## The rules that are not negotiable
 
 These outrank convenience, cleverness, and speed. The full list is in
-[CLAUDE.md](CLAUDE.md); the ones people trip over:
+[AGENTS.md](AGENTS.md); the ones people trip over:
 
 - **Never fake silently.** If a rule cannot be enforced, the resource goes to
   `failed` with a reason, or the appliance refuses to start. Nothing is ever

@@ -27,7 +27,7 @@ func realMain() int {
 	logger := newLogger(os.Getenv("NEPHOS_LOG_LEVEL"))
 	slog.SetDefault(logger)
 
-	// context.Background() belongs only in main and tests (CLAUDE.md).
+	// context.Background() belongs only in main and tests (AGENTS.md).
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
