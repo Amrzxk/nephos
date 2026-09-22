@@ -21,9 +21,17 @@ reconcile framework, the OpenAPI skeleton, and two instances in different
 subnets that can ping each other. The roadmap and its checkboxes are
 authoritative; update this summary if they move ahead.
 
+M1 uses one implicit `default` workspace and explicitly created VPCs. Its
+contributor workflow builds the appliance and development AMI locally before
+`nephos up`. Default VPCs, the simulated internet edge, arbitrary tags, and
+broader list filters belong to M3; DNS and IMDS belong to M2. Keep the
+`/v1/workspaces/default/...` API shape from ADR-0008, and implement its core
+contract for resources that M1 introduces. See the M1 boundary and delivery
+slices in the roadmap before adding a resource or endpoint.
+
 The M0 spikes pass on both WSL2 with Docker Desktop and native Ubuntu 24.04
-with Docker. Pull request #1 is merged, the standard GitHub CI workflow passes,
-and the native-Docker `Spikes` workflow passed all four spikes in
+with Docker. Pull requests #1 and #2 are merged, the standard GitHub CI
+workflow passes, and the native-Docker `Spikes` workflow passed all four spikes in
 [run 35698867324](https://github.com/Amrzxk/nephos/actions/runs/35698867324).
 M1 is now the active implementation milestone. Do not implement work from a
 later milestone unless the roadmap is updated first.

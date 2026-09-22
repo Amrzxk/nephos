@@ -78,7 +78,7 @@ Run instances as **system containers created by rootful Podman inside the applia
 - Root volume: the container's writable layer on the `nephos-data` volume. It survives stop/start and is deleted on terminate.
 - Serial-console analog: `exec` into the instance. Console output is the container log.
 
-The interface keeps backends swappable (containerd now, microVMs in M16):
+The interface keeps backends swappable (Podman now, microVMs in M16):
 
 ```go
 type Runtime interface {

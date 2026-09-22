@@ -89,20 +89,39 @@ flowchart LR
 
 **Goal:** the whole architecture exists end to end, in its smallest form.
 
+**M1 boundary:** one implicit `default` workspace, with the future-proof
+`/v1/workspaces/default/...` API path. Users create VPCs explicitly; M1 does
+not create a default VPC. Contributors build the appliance and the
+`ubuntu-24.04` development AMI locally before running `nephos up`. Published
+AMI images and the first-boot cloud-init path arrive in M2.
+
 **Scope:**
 
-- `nephos up`, `down`, `status` (fixed resource flags); appliance image v0 (`nephosd`, Podman, `nephos-hook`); API token bootstrap.
+- `nephos up`, `down`, `status` (fixed resource flags); appliance image v0 (`nephosd`, Podman, `nephos-hook`); local image-build instructions, startup preflight, and API token bootstrap. The full `nephos doctor` arrives in M8.
 - **`nephosd`:**
   - SQLite store with migrations, and the reconcile framework.
-  - OpenAPI v1 skeleton: `vpcs`, `subnets`, `instances` (run, list, describe, terminate), `/v1/health`, `/v1/events`.
+  - OpenAPI v1 skeleton: create, list, describe, and delete for `vpcs` and `subnets`; run, list, describe, and terminate for `instances`; `/v1/health` and `/v1/events`.
+  - For these resources, implement the core ADR-0008 contract: bearer authentication (health excepted), AWS-style IDs and errors, unique names, `Idempotency-Key` on creates, paginated lists, persistent state events, and defined `--wait` success, failure, and timeout behavior.
 - **Resource services:** CIDR validation, reserved addresses, IPAM, AWS-style IDs, unique names.
 - **Network engine:** VPC namespaces, subnet gateway addresses, ENI veth pairs with proxy ARP and /32 routes, the local route. No security groups exist yet, so none are exposed or implied.
 - **Compute engine:** Podman client; a locally built `ubuntu-24.04` development AMI; a single fixed instance type, `t3.micro`.
-- `nephos console <instance> [-- command]` (exec).
-- `nephos reset` with the leak checker, and `nephos reset --hard`.
+- `nephos console <instance> [-- command]` as the labeled, out-of-band Podman exec path. The command's network traffic still follows the VPC route.
+- `nephos reset` with the leak checker, and `nephos reset --hard` as an old-container-and-volume purge followed by a fresh `nephos up`.
 - An e2e test harness running in CI.
 
-**Out of scope:** SSH, key pairs, internet access, firewalls, DNS, console UI.
+**Out of scope:** workspace creation and selection; default VPCs, `nx-edge`,
+internet access, user-managed route tables, security groups, NACLs, arbitrary
+tags, and broader list filters (M3); SSH, key pairs, DNS, IMDS, user data,
+and the published AMI pipeline (M2); console UI (M6). The M1 `default`
+workspace has no default VPC, and a soft reset leaves it empty. No absent
+network rule is exposed or implied as enforced.
+
+**Delivery slices:** keep one M1 milestone, but make each increment reviewable:
+
+1. Locally built appliance, startup preflight, token bootstrap, and authenticated health.
+2. VPC/subnet CLI and API through SQLite, reconciliation, and real namespaces.
+3. Instance run, OCI hook, console, and cross-subnet ping.
+4. Restart recovery, reset and leak checks, native-Docker e2e CI, and WSL2 manual QA.
 
 **Demo:**
 
@@ -121,14 +140,16 @@ nephos reset
 
 **Acceptance criteria:**
 
-- [ ] The demo runs as an automated e2e test on GitHub Actions `ubuntu-24.04`.
+- [ ] The demo runs from locally built appliance and development AMI images as an automated e2e test on GitHub Actions `ubuntu-24.04`.
 - [ ] The demo passes manually on Windows 10 with WSL2 and Docker Desktop.
 - [ ] Instances in different subnets of one VPC can reach each other. Instances in different VPCs, even with overlapping CIDRs, cannot.
-- [ ] `nephos down && nephos up` restores VPCs, subnets, and running instances with the same private IPs.
-- [ ] `nephos reset` leaves zero leaks according to the leak checker; `nephos reset --hard` removes the container and the volume.
-- [ ] Invalid subnets (outside the VPC CIDR, overlapping, prefix outside /16–/28) are rejected with AWS-style error codes.
+- [ ] `nephos down && nephos up` restores VPCs, subnets, running instances, their private IPs, and a file written to an instance's root filesystem.
+- [ ] `nephos reset` leaves the default workspace empty and zero Nephos kernel or Podman leaks. `nephos reset --hard` removes the old container and volume, then starts a fresh appliance with empty state.
+- [ ] VPC or subnet CIDRs outside /16–/28, subnets outside the VPC CIDR or overlapping, and duplicate names are rejected with AWS-style error codes; reserved IPs are never allocated, and concurrent allocation never assigns the same IP twice.
+- [ ] Authentication rejects absent or invalid tokens; create retries with one idempotency key return one resource; list pagination and `/v1/events` work for M1 resources; `--wait` reports terminal errors and timeouts clearly.
+- [ ] A failed OCI hook leaves the instance `failed`, not `running`; the e2e suite verifies overlapping-VPC isolation, appliance host hygiene, and leak-free cleanup.
 
-**Effort:** 45–55 h
+**Effort:** 45–55 h is provisional; re-estimate after the M1 design is split into implementation plans.
 
 ## M2: Real machines
 
@@ -176,6 +197,7 @@ nephos instance stop web --wait && nephos instance start web --wait   # same pri
 - `nx-edge`: My IP (198.51.100.10), `echo.nephos.test` (198.51.100.80), real egress with MASQUERADE, and `nephos up --sealed`.
 - Route tables (create, routes, associations, main route table, `blackhole` status); internet gateways (create, attach, detach); public IPs on launch; Elastic IPs (allocate, associate, release).
 - A default VPC for every workspace (172.31.0.0/16 with one /20 per AZ).
+- Arbitrary resource tags and broader list filters deferred from M1; keep the M1 ID, name, error, idempotency, and pagination contracts compatible with them.
 - Access paths: `nephos ssh`, `nephos proxy`, `nephos ssh-config`, `nephos forward`.
 - Probe engine (internal; e2e tests use it).
 - Uplink MTU detection and TCP MSS clamping.

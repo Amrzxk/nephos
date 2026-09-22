@@ -223,7 +223,9 @@ Risks whose mitigation lands in **M0–M8** must be mitigated before v0.1.0 (see
   - Host header allowlist (`localhost`, `127.0.0.1`, `[::1]`); Origin checks on WebSockets and state-changing requests.
   - `SameSite=Strict` HttpOnly session cookies; no CORS.
   - Credentials file mode 0600, and `nephos token rotate`.
-  - Tests for all of the above in M6.
+  - M1 tests cover bearer-token rejection and localhost binding for the
+    endpoints it ships. M6 adds browser-facing Host, Origin, cookie, and CORS
+    tests with the web console.
 - **Milestone:** M1 (token, localhost binding), M6 (browser protections).
 - **Early warning:** any unauthenticated endpoint besides health; security reports.
 

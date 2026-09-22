@@ -47,6 +47,11 @@ Each entry names the milestone it belongs to; see [docs/ROADMAP.md](docs/ROADMAP
 
 ### Changed
 
+- **M1 — planning clarified.** The first runnable slice uses one implicit
+  workspace, explicit VPCs, locally built images, and the core API contract.
+  Its roadmap now names reviewable delivery slices and tests for persistence,
+  failure handling, authentication, host hygiene, and reset. Default VPCs,
+  arbitrary tags, and broader list filters are assigned to M3.
 - **M0 — native-Docker validation complete.** All four spikes pass on the
   Ubuntu 24.04 native-Docker runner as well as on WSL2 with Docker Desktop
   ([run 35698867324](https://github.com/Amrzxk/nephos/actions/runs/35698867324)).

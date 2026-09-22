@@ -397,6 +397,12 @@ The full API rules are in [ADR-0008](adr/0008-rest-openapi-api-not-aws-compatibl
 - Creates accept an `Idempotency-Key` header.
 - `/v1/events` streams server-sent events.
 
+M1 implements these core rules for VPCs, subnets, and instances in one implicit
+`default` workspace. It retains the workspace path so later workspace support
+does not change resource URLs. Arbitrary tags and broader list filters arrive
+in M3; the M1 list endpoints are still paginated. The M1 API token and
+localhost binding protect its resource, event, and console endpoints.
+
 **CLI grammar:** `nephos <resource> <verb> [name-or-id] [flags]`. Flags are kebab-case versions of the API field names. Anywhere a resource is referenced, either its name or its ID works.
 
 ```bash
@@ -425,7 +431,10 @@ nephos lab start nat-troubleshooting
 - **Output:** human-readable tables by default; `-o json` or `-o yaml` prints the exact API objects.
 - **Waiting:** `--wait` blocks until an asynchronous operation reaches a stable state.
 - **`my-ip`:** accepted wherever a CIDR is expected; it means 198.51.100.10/32.
-- **Workspaces:** selected with `--workspace` or `nephos workspace use <name>`. `nephos lab start` switches to the lab's workspace; `nephos lab finish` switches back.
+- **Workspaces:** M1 uses one implicit `default` workspace. When workspace
+  selection arrives, it uses `--workspace` or `nephos workspace use <name>`;
+  `nephos lab start` switches to the lab's workspace and `nephos lab finish`
+  switches back.
 - **Exit codes:**
 
   | Code | Meaning |
@@ -441,7 +450,7 @@ The full design is in [ADR-0007](adr/0007-sqlite-state-and-reconciliation.md). O
 
 - **Generations:** every resource row has `generation` (incremented on each spec change), plus `observed_generation`, `state`, and `state_reason` written by reconcilers. `failed` states carry an actionable reason and are retried with backoff.
 - **Deletion:** dependency checks run at the API (for example, deleting a subnet that still has ENIs returns `DependencyViolation`). Reconcilers tear resources down in reverse dependency order. Terminated instances stay visible for one hour, then are purged.
-- **Startup order:**
+- **Startup order for the full MVP:**
   1. Run database migrations.
   2. Garbage-collect orphaned `nx-*` objects.
   3. Ensure `nx-edge`.
@@ -450,15 +459,20 @@ The full design is in [ADR-0007](adr/0007-sqlite-state-and-reconciliation.md). O
   6. Start DNS and IMDS listeners.
   7. Start instances whose desired state is `running`.
   8. Report ready: `/v1/health` returns `ready` only after the first full reconcile.
+- **M1 startup subset:** run migrations and orphan cleanup, then complete an
+  initial reconcile sweep of explicitly created VPCs and instances before
+  reporting ready. Individual failures are recorded on those resources. M1
+  has no default VPC. DNS and IMDS listeners are added in M2; `nx-edge` and
+  the default VPC arrive in M3; NAT gateways arrive in M5.
 - **Resync:** every 60 seconds, reconcilers compare observed kernel and runtime state with desired state and repair drift. For example, a namespace deleted by hand gets recreated.
 
 **Reset levels:**
 
 | Command | Effect | Keeps |
 |---|---|---|
-| `nephos reset --workspace <name>` | Deletes every resource in one workspace; recreates its default VPC | Other workspaces, AMI cache, lab progress |
-| `nephos reset` | The above for every workspace | AMI cache, lab progress |
-| `nephos reset --hard` | Removes the appliance container and the `nephos-data` volume, then runs `nephos up` | Only the CLI configuration |
+| `nephos reset --workspace <name>` (after workspace selection exists) | Deletes every resource in one workspace; from M3 onward recreates its default VPC | Other workspaces, AMI cache, lab progress |
+| `nephos reset` | Deletes resources in the implicit M1 `default` workspace and leaves it empty; from M3 onward recreates default VPCs | AMI cache, lab progress |
+| `nephos reset --hard` | Removes the old appliance container and `nephos-data` volume, then runs `nephos up` with fresh initial state | Only the CLI configuration |
 
 After every non-hard reset, the **leak checker** verifies:
 
@@ -532,7 +546,7 @@ Fix: nephos sg authorize-ingress web --protocol tcp --port 22 --cidr my-ip
 | Boundary | Threat | Controls |
 |---|---|---|
 | **Host ↔ appliance** | The privileged appliance is root-equivalent on a Linux host ([RISKS](RISKS.md) S1) | Own network and PID namespaces (never `host`); no host bind mounts; per-namespace sysctls only; CPU, memory, and pids limits; clear documentation; VM delivery for stronger isolation (M16) |
-| **Appliance ↔ instances** | The learner is root inside an instance and may run pasted or buggy commands | `userns=auto` (instance root is unprivileged in the appliance); default capabilities and seccomp; no devices; no access to the Podman socket or appliance paths; cgroup limits; IMDS exposes no secrets |
+| **Appliance ↔ instances** | The learner is root inside an instance and may run pasted or buggy commands | `userns=auto` (instance root is unprivileged in the appliance); default capabilities plus `CAP_NET_ADMIN` inside the instance network namespace, and default seccomp; no devices; no access to the Podman socket or appliance paths; cgroup limits; IMDS exposes no secrets |
 | **Local processes and browsers ↔ API** | Other local software or malicious web pages calling the API (CSRF, DNS rebinding) | Bound to 127.0.0.1; bearer token (`~/.nephos/credentials`, mode 0600); Host header allowlist; Origin checks on WebSockets and state-changing requests; HttpOnly `SameSite=Strict` session cookie from a one-time login link; no CORS |
 | **Instances ↔ networks** | Instances exposed to the LAN or used for abuse | Public IPs reachable only through Nephos access paths; key-only SSH; AMIs ship without passwords; real egress can be disabled (`--sealed`) |
 | **Content supply chain** | Malicious AMIs, appliance images, or lab packs | Images pinned by digest and signed (M8); only built-in labs in the MVP; `script` checks run in a sandbox with a read-only, workspace-scoped token |

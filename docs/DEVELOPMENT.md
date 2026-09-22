@@ -89,6 +89,12 @@ make clean
 `make generate`, `make web`, `make appliance`, and `make e2e` exist but report
 which milestone fills them in.
 
+M1's first runnable contributor workflow will use documented local builds of
+the appliance and `ubuntu-24.04` development AMI before `nephos up`. Image
+publishing is an M2 task. The M1 implementation will replace the current
+`make appliance` and `make e2e` placeholders and document the exact image-build
+commands when they work; these are not available in the M0 scaffold.
+
 ### Why `make test-race` sets `CGO_ENABLED=1`
 
 Everything Nephos *ships* is built with `CGO_ENABLED=0`, so release tooling can
