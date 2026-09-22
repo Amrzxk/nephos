@@ -100,7 +100,7 @@ AMI images and the first-boot cloud-init path arrive in M2.
 - `nephos up`, `down`, `status` (fixed resource flags); appliance image v0 (`nephosd`, Podman, `nephos-hook`); local image-build instructions, startup preflight, and API token bootstrap. The full `nephos doctor` arrives in M8.
 - **`nephosd`:**
   - SQLite store with migrations, and the reconcile framework.
-  - OpenAPI v1 skeleton: create, list, describe, and delete for `vpcs` and `subnets`; run, list, describe, and terminate for `instances`; `/v1/health` and `/v1/events`.
+  - OpenAPI v1 skeleton: create, list, describe, and delete for `vpcs` and `subnets`; run, list, describe, and terminate for `instances`; `/v1/health`, `/v1/version`, and `/v1/events`.
   - For these resources, implement the core ADR-0008 contract: bearer authentication (health excepted), AWS-style IDs and errors, unique names, `Idempotency-Key` on creates, paginated lists, persistent state events, and defined `--wait` success, failure, and timeout behavior.
 - **Resource services:** CIDR validation, reserved addresses, IPAM, AWS-style IDs, unique names.
 - **Network engine:** VPC namespaces, subnet gateway addresses, ENI veth pairs with proxy ARP and /32 routes, the local route. No security groups exist yet, so none are exposed or implied.
