@@ -1,7 +1,7 @@
 # SP2: ENI plumbing through an OCI hook
 
-- **Status:** **PASS** (18 of 18 assertions)
-- **Date:** 2026-09-18
+- **Status:** **PASS** (18 of 18 assertions on WSL2 and native Ubuntu)
+- **Date:** 2026-09-18; native Ubuntu validation 2026-09-22
 - **Validates:** [ADR-0004](../adr/0004-instances-as-system-containers.md) R3 (a network namespace wired by Nephos before PID 1, owned by the instance's user namespace)
 - **Mitigates:** [RISKS](../RISKS.md) T1
 - **Reproduce:** `./spikes/run.sh sp2`
@@ -49,6 +49,11 @@ honesty rule.
 | Stop/start re-plumbs with the same address | PASS | `10.50.1.5` again after restart |
 | The router end is re-created on start | PASS | host route restored |
 | **An unplumbable instance does not start** | **PASS** | `podman run` exited 126, state `created` |
+
+The native Ubuntu 24.04 rerun passed the same 18 assertions in
+[`Spikes` run 35698867324](https://github.com/Amrzxk/nephos/actions/runs/35698867324),
+including `eth0` before PID 1, stop/start re-plumbing, `CAP_NET_ADMIN` confined
+to the instance namespace, and fail-closed handling of an unplumbable instance.
 
 ### The two that matter most
 
@@ -111,15 +116,15 @@ correct behaviour.
 
 ## Verdict
 
-**ADR-0004 R3 is validated.** An OCI `createRuntime` hook wires the ENI before
-PID 1, the namespace is owned by the instance's user namespace, stop/start
-re-plumbs, and an instance that cannot be plumbed refuses to boot.
+**ADR-0004 R3 is validated on WSL2 and native Ubuntu.** An OCI `createRuntime`
+hook wires the ENI before PID 1, the namespace is owned by the instance's user
+namespace, stop/start re-plumbs, and an instance that cannot be plumbed refuses
+to boot.
 
 `internal/compute` and `cmd/nephos-hook` can be written against this shape in M1.
 
 ## Outstanding
 
-- [ ] **Native Linux leg** — the `Spikes` workflow covers it.
 - [ ] The hook talks to `plumbd` over HTTP on a unix socket. M1 should decide
       whether `nephosd` keeps that shape or uses a smaller framing; the hook's
       contract (state on stdin, non-zero exit on failure) is what matters.

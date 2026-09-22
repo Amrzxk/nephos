@@ -134,4 +134,11 @@ delegated (and the appliance must fail closed if they cannot be), and
 `APT::Sandbox::User "root"` is required or every `apt` command fails inside a
 user namespace.
 
+**Native result (2026-09-22):** all six criteria also pass on Ubuntu 24.04 with
+Docker 28.0.4 in
+[`Spikes` run 35698867324](https://github.com/Amrzxk/nephos/actions/runs/35698867324).
+SP1 records a 4 278 ms median boot-to-sshd, a 5 614 ms first boot, and
+443,744,256 bytes total for 20 instances; SP2 again proves pre-PID-1 plumbing
+and fail-closed launch behavior. The containerd fallback remains unnecessary.
+
 **Revisit** if any point fails with no workaround, or when the microVM backend lands.

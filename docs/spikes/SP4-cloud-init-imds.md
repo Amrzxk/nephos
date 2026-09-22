@@ -1,7 +1,7 @@
 # SP4: cloud-init against a Nephos metadata service
 
-- **Status:** **PASS** (15 of 15 assertions)
-- **Date:** 2026-09-18
+- **Status:** **PASS** (16 of 16 assertions on WSL2 and native Ubuntu)
+- **Date:** 2026-09-18; native Ubuntu validation 2026-09-22
 - **Mitigates:** [RISKS](../RISKS.md) T2 (systemd and cloud-init quirks inside containers)
 - **Supports:** [ARCHITECTURE §5.1](../ARCHITECTURE.md#51-how-each-cloud-concept-is-implemented-on-the-host) (VPC DNS and IMDS), M2
 - **Reproduce:** `./spikes/run.sh sp4`
@@ -30,12 +30,17 @@ after.
 | With `http_tokens=required`, IMDSv1 gets **401** | PASS | |
 | With `http_tokens=required`, a token request still succeeds | PASS | |
 | The instance boots and reaches the service | PASS | `eth0` holds 10.60.1.4 |
+| Boot-to-sshd stays under 5 s with cloud-init enabled | PASS | 2 735 ms on WSL2; 3 100 ms on native Ubuntu |
 | **cloud-init completes without error** | **PASS** | `status: done` |
 | **cloud-init selects the Ec2 datasource** | **PASS** | `DataSourceEc2Local` |
 | **User data runs on first boot** | **PASS** | marker file written |
 | **The SSH public key is installed for the default user** | **PASS** | `ssh-ed25519 …` in `ubuntu`'s `authorized_keys` |
 
 Stock cloud-init, with no patches, accepts a Nephos-served metadata service.
+The native Ubuntu 24.04 rerun passed all 16 assertions, selected
+`DataSourceEc2Local`, completed cloud-init with `status: done`, and reached sshd
+in 3 100 ms. See
+[`Spikes` run 35698867324](https://github.com/Amrzxk/nephos/actions/runs/35698867324).
 
 ## Three findings that would each have broken M2
 
@@ -122,16 +127,15 @@ lab check output or user data.
 
 ## Verdict
 
-**Stock cloud-init works against a Nephos IMDS**, including the IMDSv2 token
-flow and `http_tokens=required` returning 401. User data runs and SSH keys are
-installed on first boot.
+**Stock cloud-init works against a Nephos IMDS on WSL2 and native Ubuntu**,
+including the IMDSv2 token flow and `http_tokens=required` returning 401. User
+data runs and SSH keys are installed on first boot.
 
 M2 can build the real IMDS and AMI pipeline against this shape, provided it
 carries the three findings above.
 
 ## Outstanding
 
-- [ ] **Native Linux leg** — the `Spikes` workflow covers it.
 - [ ] Hostname must be set at container creation (see Deviations).
 - [ ] The spike serves one instance and identifies it by nothing. The real IMDS
       identifies the caller by source address and incoming interface; that has

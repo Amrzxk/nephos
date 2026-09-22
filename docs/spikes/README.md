@@ -13,9 +13,19 @@ module. **These reports are the deliverable.**
 | [SP3 — the routed VPC network plane](SP3-routed-vpc-plane.md) | **PASS** 21/21 | [ADR-0005](../adr/0005-nephos-owned-routed-network-plane.md), [ADR-0002](../adr/0002-go-for-control-plane-and-cli.md) | T3, T8 |
 | [SP4 — cloud-init against a Nephos IMDS](SP4-cloud-init-imds.md) | **PASS** 16/16 | supports M2 | T2 |
 
-All four pass on **Windows 10 with WSL2 and Docker Desktop**. The native-Docker
-leg runs through the `Spikes` workflow on a `ubuntu-24.04` runner and is still
-outstanding.
+All four pass on both **Windows 10 with WSL2 and Docker Desktop** and
+**Ubuntu 24.04 with native Docker**. The native result is preserved in
+[`Spikes` run 35698867324](https://github.com/Amrzxk/nephos/actions/runs/35698867324).
+
+The first native run ([35290287254](https://github.com/Amrzxk/nephos/actions/runs/35290287254))
+found a harness timing issue rather than a platform failure: SP3 completed 100
+ruleset replacements so quickly that only 36 probe attempts landed in the
+window. All 36 remained denied, but the sample-density assertion required more
+than 50. SP3 now keeps replacing until it has completed at least 100
+replacements and at least 50 probes, with a 1,000-replacement safety cap. The
+passing rerun completed 189 replacements and 56 probes with zero leaks.
+The same patch also passed SP3 locally in the privileged WSL2 appliance: 21/21
+assertions, 100 replacements, 88 probes, and zero leaks.
 
 No fallback was needed: ADR-0004's containerd path stays unused, and ADR-0005's
 routed design is confirmed. ADR-0004's capability wording was amended in place

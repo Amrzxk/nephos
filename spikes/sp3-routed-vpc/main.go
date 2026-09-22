@@ -293,6 +293,17 @@ func checkStatelessNACL() error {
 // changes. If replacement were not atomic there would be a window in which no
 // rules applied, and a denied flow would briefly succeed. That would be a
 // security hole and, worse for a teaching tool, an intermittently wrong lesson.
+const (
+	atomicMinReplacements  = 100
+	atomicMinProbeAttempts = 50
+	atomicMaxReplacements  = 1000
+)
+
+func shouldContinueAtomicReplacement(replacements, attempts int) bool {
+	return replacements < atomicMinReplacements ||
+		(attempts < atomicMinProbeAttempts && replacements < atomicMaxReplacements)
+}
+
 func checkAtomicReplacement() error {
 	vpc, err := buildStandardVPC("atomic", "10.30.0.0/16")
 	if err != nil {
@@ -316,28 +327,40 @@ func checkAtomicReplacement() error {
 
 	probe := StartContinuousProbe(vpc.Instances[1].Namespace, "10.30.1.4:8080", 2*time.Millisecond, 4)
 
-	const replacements = 100
-	for i := 0; i < replacements; i++ {
+	// ADR-0005 validation 4 asks for 100 replacements. How many probe attempts
+	// land inside that window depends entirely on how fast the host is: a
+	// GitHub runner gets through the loop quicker than a laptop, and only 36
+	// attempts landed there, which is thin evidence for a claim of "never".
+	//
+	// So churn until BOTH conditions hold: at least 100 replacements, and
+	// enough attempts to mean something. The cap stops a pathologically slow
+	// probe from running forever.
+	replacements := 0
+	for shouldContinueAtomicReplacement(replacements, probe.AttemptCount()) {
 		// Churn an unrelated part of the ruleset on every pass. The denied
 		// flow above must stay denied throughout.
 		desired.Subnets[1].NACL = []NACLRule{
-			{ID: fmt.Sprintf("acl-churn-%d", i), RuleNumber: 100, Protocol: protocolAll, CIDR: "0.0.0.0/0", Allow: true},
+			{ID: fmt.Sprintf("acl-churn-%d", replacements), RuleNumber: 100, Protocol: protocolAll, CIDR: "0.0.0.0/0", Allow: true},
 		}
 		if err := vpc.ApplyRuleset(Render(desired)); err != nil {
 			probe.Stop()
-			return fmt.Errorf("replacement %d: %w", i, err)
+			return fmt.Errorf("replacement %d: %w", replacements, err)
 		}
+		replacements++
 	}
 	probe.Stop()
 
 	report.Metric("atomic_replacements", fmt.Sprintf("%d", replacements))
+	report.Metric("atomic_min_replacements_required", fmt.Sprintf("%d", atomicMinReplacements))
+	report.Metric("atomic_min_probe_attempts_required", fmt.Sprintf("%d", atomicMinProbeAttempts))
 	report.Metric("atomic_probe_attempts", fmt.Sprintf("%d", probe.Attempts))
 	report.Metric("atomic_probe_allowed", fmt.Sprintf("%d", probe.Allowed))
 	report.Metric("atomic_probe_denied", fmt.Sprintf("%d", probe.Denied))
 
 	report.Assert("the probe actually ran during the replacements",
-		probe.Attempts > 50, fmt.Sprintf("%d attempts across 4 concurrent probers", probe.Attempts))
-	report.Assert("100 ruleset replacements never briefly allow a denied flow (validation 4)",
+		probe.Attempts >= atomicMinProbeAttempts,
+		fmt.Sprintf("%d attempts across 4 concurrent probers (want at least %d)", probe.Attempts, atomicMinProbeAttempts))
+	report.Assert("at least 100 ruleset replacements never briefly allow a denied flow (validation 4)",
 		probe.Allowed == 0,
 		fmt.Sprintf("%d of %d attempts were allowed (want 0)", probe.Allowed, probe.Attempts))
 

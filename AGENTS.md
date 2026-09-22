@@ -21,10 +21,12 @@ reconcile framework, the OpenAPI skeleton, and two instances in different
 subnets that can ping each other. The roadmap and its checkboxes are
 authoritative; update this summary if they move ahead.
 
-The M0 spikes pass on WSL2 with Docker Desktop. Pull request #1 is merged and
-the standard GitHub CI workflow passes; the manually dispatched native-Docker
-`Spikes` workflow failed, so native Docker validation remains outstanding. Do
-not implement work from a later milestone unless the roadmap is updated first.
+The M0 spikes pass on both WSL2 with Docker Desktop and native Ubuntu 24.04
+with Docker. Pull request #1 is merged, the standard GitHub CI workflow passes,
+and the native-Docker `Spikes` workflow passed all four spikes in
+[run 35698867324](https://github.com/Amrzxk/nephos/actions/runs/35698867324).
+M1 is now the active implementation milestone. Do not implement work from a
+later milestone unless the roadmap is updated first.
 
 ## Start-of-task workflow
 

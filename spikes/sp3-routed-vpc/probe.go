@@ -223,6 +223,15 @@ func StartContinuousProbe(nsName, addr string, interval time.Duration, workers i
 	return p
 }
 
+// AttemptCount reports how many dials have completed so far. Safe to call
+// while the probe is running, which is what lets a caller keep churning the
+// ruleset until it has sampled the window densely enough.
+func (p *ContinuousProbe) AttemptCount() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.Attempts
+}
+
 // Stop ends the probe and waits for its goroutines to finish.
 func (p *ContinuousProbe) Stop() {
 	close(p.stop)
