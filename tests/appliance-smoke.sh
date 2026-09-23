@@ -34,9 +34,9 @@ trap cleanup EXIT
 test -f dist/ubuntu-24.04.oci.tar || fail "run make dev-ami first"
 docker image inspect nephos-appliance:dev >/dev/null || fail "run make appliance first"
 
-docker volume create nephos-data >/dev/null
+docker volume create --label io.nephos.appliance=true nephos-data >/dev/null
 made_volume=true
-docker run -d --name nephos --privileged --cgroupns private \
+docker run -d --name nephos --label io.nephos.appliance=true --privileged --cgroupns private \
     --memory 4g --cpus 2 --pids-limit 4096 \
     -v nephos-data:/var/lib/nephos \
     -p 127.0.0.1:7788:7788 \
@@ -61,6 +61,13 @@ done
 [ "$code" = 200 ] || fail "health did not become ready"
 [ "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:7788/v1/version)" = 401 ] || fail "version route accepted an unauthenticated request"
 [ "$(docker cp nephos:/var/lib/nephos/secrets/api-token - | tar -xOf - api-token | wc -c)" -ge 43 ] || fail "API token missing"
+version_body="$(curl -fsS --config <(
+    docker cp nephos:/var/lib/nephos/secrets/api-token - 2>/dev/null \
+        | tar -xOf - api-token \
+        | awk '{printf "header = \"Authorization: Bearer %s\"\n", $0}'
+) http://127.0.0.1:7788/v1/version)"
+expected_commit="$(git rev-parse HEAD)"
+[[ "$version_body" == *\"build_commit\":\"$expected_commit\"* ]] || fail "appliance build identifier does not match Git HEAD"
 for controller in memory pids cpu; do
     docker exec nephos grep -qw "$controller" /sys/fs/cgroup/cgroup.subtree_control || fail "$controller controller not delegated"
 done

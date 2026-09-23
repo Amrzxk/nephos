@@ -6,8 +6,13 @@ RUN go mod download
 COPY cmd/ cmd/
 COPY internal/ internal/
 ARG TARGETARCH
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH go build -trimpath -o /out/nephosd ./cmd/nephosd \
-    && CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH go build -trimpath -o /out/nephos-hook ./cmd/nephos-hook
+ARG BUILD_COMMIT=unknown
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH go build -trimpath \
+        -ldflags "-X github.com/Amrzxk/nephos/internal/version.commit=$BUILD_COMMIT" \
+        -o /out/nephosd ./cmd/nephosd \
+    && CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH go build -trimpath \
+        -ldflags "-X github.com/Amrzxk/nephos/internal/version.commit=$BUILD_COMMIT" \
+        -o /out/nephos-hook ./cmd/nephos-hook
 
 FROM debian:trixie-slim
 

@@ -134,7 +134,7 @@ web: ## Build the web console
 appliance: ## Build the local appliance image (after make dev-ami)
 	@test -f $(DIST_DIR)/ubuntu-24.04.oci.tar || { \
 		echo "appliance: missing development AMI archive; run 'make dev-ami' first"; exit 1; }
-	docker build -t nephos-appliance:dev -f images/appliance/Dockerfile .
+	docker build --build-arg BUILD_COMMIT=$(COMMIT) -t nephos-appliance:dev -f images/appliance/Dockerfile .
 
 .PHONY: dev-ami
 dev-ami: ## Build the local Ubuntu 24.04 development AMI as an OCI archive
