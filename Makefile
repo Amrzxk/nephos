@@ -112,18 +112,21 @@ cross: ## Cross-build every release target with CGO disabled
 	done
 
 .PHONY: generate
-generate: ## Regenerate code from api/openapi.yaml
+generate: ## Regenerate code from api/openapi.yaml and store SQL
 	$(GO) tool oapi-codegen -config api/server.cfg.yaml api/openapi.yaml
 	$(GO) tool oapi-codegen -config api/client.cfg.yaml api/openapi.yaml
+	$(GO) tool sqlc generate
 
 .PHONY: generate-check
 generate-check: ## Fail if generated code is stale (CI)
 	@tmpdir=$$(mktemp -d); trap 'rm -rf "$$tmpdir"' EXIT; \
 		cp internal/apiserver/generated/server.gen.go "$$tmpdir/server.gen.go"; \
 		cp pkg/client/client.gen.go "$$tmpdir/client.gen.go"; \
+		cp -a internal/store/sqlc "$$tmpdir/sqlc"; \
 		$(MAKE) generate; \
 		cmp -s "$$tmpdir/server.gen.go" internal/apiserver/generated/server.gen.go \
 			&& cmp -s "$$tmpdir/client.gen.go" pkg/client/client.gen.go \
+			&& diff -qr "$$tmpdir/sqlc" internal/store/sqlc >/dev/null \
 			|| { echo "Generated code is stale. Run 'make generate' and commit the result."; exit 1; }
 
 .PHONY: web

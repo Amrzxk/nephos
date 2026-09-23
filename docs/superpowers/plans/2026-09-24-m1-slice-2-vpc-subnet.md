@@ -76,7 +76,7 @@ if vpcPath == nil || vpcPath.Post == nil {
 
 **Files:** Create `sqlc.yaml`, `internal/store/migrations/0001_initial.sql`, `internal/store/queries.sql`, `internal/store/store.go`, `internal/store/store_test.go` and generated `internal/store/sqlc/*`; modify `go.mod`, `go.sum` and `Makefile`.
 
-**Interfaces:** `store.Open(ctx context.Context, path string) (*store.Store, error)` applies migrations, enables WAL, foreign keys and busy timeout, and inserts only the `default` workspace. `Store.Close() error` releases the DB. `Store.WorkspaceCount(ctx context.Context) (int, error)` queries the migrated schema. Generated query package is internal to `store`. The first migration creates `workspaces`, `vpcs`, `subnets`, `instances`, `enis`, `events`, `idempotency_requests`, `kernel_indexes`, and `schema_migrations`; resource rows have generation and observed/status columns.
+**Interfaces:** `store.Open(ctx context.Context, path string) (*store.Store, error)` applies migrations, enables WAL, foreign keys and busy timeout, and inserts only the `default` workspace. `Store.Close() error` releases the DB. The same-package migration test queries the workspace table directly; no production method exists only for that test. Generated query package is internal to `store`. The first migration creates `workspaces`, `vpcs`, `subnets`, `instances`, `enis`, `events`, `idempotency_requests`, `kernel_indexes`, and `schema_migrations`; resource rows have generation and observed/status columns.
 
 - [ ] **Step 1: Add a failing migration test.** Open a temporary file DB twice, assert the sole workspace is `default`, `PRAGMA journal_mode` is `wal`, `foreign_keys` is 1, and an invalid subnet foreign key is rejected. Assert an existing DB is not recreated on reopen.
 
@@ -84,8 +84,9 @@ if vpcPath == nil || vpcPath.Post == nil {
 s, err := store.Open(context.Background(), filepath.Join(t.TempDir(), "state.db"))
 if err != nil { t.Fatal(err) }
 defer s.Close()
-got, err := s.WorkspaceCount(context.Background())
-if err != nil || got != 1 { t.Fatalf("workspaces=%d err=%v", got, err) }
+var got int
+gotErr := s.db.QueryRowContext(context.Background(), "SELECT COUNT(*) FROM workspaces").Scan(&got)
+if gotErr != nil || got != 1 { t.Fatalf("workspaces=%d err=%v", got, gotErr) }
 ```
 
 - [ ] **Step 2: Run `go test ./internal/store`.** Expected: FAIL because `store.Open` does not exist.
