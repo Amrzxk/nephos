@@ -131,8 +131,20 @@ web: ## Build the web console
 	@echo "web: not until M6 (ADR-0009)." && exit 1
 
 .PHONY: appliance
-appliance: ## Build the appliance image
-	@echo "appliance: not until M1 (ADR-0003)." && exit 1
+appliance: ## Build the local appliance image (after make dev-ami)
+	@test -f $(DIST_DIR)/ubuntu-24.04.oci.tar || { \
+		echo "appliance: missing development AMI archive; run 'make dev-ami' first"; exit 1; }
+	docker build -t nephos-appliance:dev -f images/appliance/Dockerfile .
+
+.PHONY: dev-ami
+dev-ami: ## Build the local Ubuntu 24.04 development AMI as an OCI archive
+	@mkdir -p $(DIST_DIR)
+	@if ! docker buildx inspect nephos-oci >/dev/null 2>&1; then \
+		docker buildx create --name nephos-oci --driver docker-container >/dev/null; \
+	fi
+	docker buildx build --builder nephos-oci \
+		--output type=oci,name=nephos-ubuntu:dev,dest=$(DIST_DIR)/ubuntu-24.04.oci.tar \
+		-f images/dev-ami/Dockerfile images/dev-ami
 
 .PHONY: e2e
 e2e: ## Run the end-to-end suite (needs Docker and a privileged container)
