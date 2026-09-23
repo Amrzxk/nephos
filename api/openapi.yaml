@@ -33,12 +33,347 @@ paths:
                 $ref: '#/components/schemas/VersionResponse'
         '401':
           $ref: '#/components/responses/Unauthorized'
+  /v1/workspaces/{workspace}/vpcs:
+    parameters:
+      - $ref: '#/components/parameters/Workspace'
+    post:
+      operationId: createVpc
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateVpcRequest'
+      responses:
+        '201':
+          description: VPC created in a transitional state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Vpc'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    get:
+      operationId: listVpcs
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/PageToken'
+      responses:
+        '200':
+          description: VPC page in stable ID order
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VpcsPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /v1/workspaces/{workspace}/vpcs/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Workspace'
+      - $ref: '#/components/parameters/ResourceID'
+    get:
+      operationId: getVpc
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: VPC snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Vpc'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    delete:
+      operationId: deleteVpc
+      security:
+        - bearerAuth: []
+      responses:
+        '202':
+          description: VPC accepted for asynchronous deletion
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Vpc'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /v1/workspaces/{workspace}/subnets:
+    parameters:
+      - $ref: '#/components/parameters/Workspace'
+    post:
+      operationId: createSubnet
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSubnetRequest'
+      responses:
+        '201':
+          description: Subnet created in a transitional state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subnet'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    get:
+      operationId: listSubnets
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/PageToken'
+      responses:
+        '200':
+          description: Subnet page in stable ID order
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubnetsPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /v1/workspaces/{workspace}/subnets/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Workspace'
+      - $ref: '#/components/parameters/ResourceID'
+    get:
+      operationId: getSubnet
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Subnet snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subnet'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    delete:
+      operationId: deleteSubnet
+      security:
+        - bearerAuth: []
+      responses:
+        '202':
+          description: Subnet accepted for asynchronous deletion
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subnet'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /v1/events:
+    get:
+      operationId: getEvents
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/LastEventID'
+      responses:
+        '200':
+          description: Durable ordered resource events
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
 components:
   securitySchemes:
     bearerAuth:
       type: http
       scheme: bearer
+  parameters:
+    Workspace:
+      name: workspace
+      in: path
+      required: true
+      description: M1 supports only the implicit default workspace
+      schema:
+        type: string
+    ResourceID:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: Replays identical creates for 24 hours
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 255
+    Limit:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 50
+    PageToken:
+      name: page_token
+      in: query
+      required: false
+      schema:
+        type: string
+    LastEventID:
+      name: Last-Event-ID
+      in: header
+      required: false
+      schema:
+        type: string
   schemas:
+    CreateVpcRequest:
+      type: object
+      additionalProperties: false
+      required: [name, cidr_block]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        cidr_block:
+          type: string
+          example: 10.0.0.0/16
+    CreateSubnetRequest:
+      type: object
+      additionalProperties: false
+      required: [name, vpc_id, cidr_block, availability_zone]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        vpc_id:
+          type: string
+        cidr_block:
+          type: string
+          example: 10.0.1.0/24
+        availability_zone:
+          type: string
+          enum: [local-1a, local-1b, local-1c]
+    Vpc:
+      type: object
+      additionalProperties: false
+      required: [id, name, cidr_block, state, state_reason, generation, observed_generation]
+      properties:
+        id: {type: string}
+        name: {type: string}
+        cidr_block: {type: string}
+        state:
+          type: string
+          enum: [pending, available, deleting, failed]
+        state_reason: {type: string}
+        generation: {type: integer, format: int64}
+        observed_generation: {type: integer, format: int64}
+    Subnet:
+      type: object
+      additionalProperties: false
+      required: [id, name, vpc_id, cidr_block, availability_zone, state, state_reason, generation, observed_generation]
+      properties:
+        id: {type: string}
+        name: {type: string}
+        vpc_id: {type: string}
+        cidr_block: {type: string}
+        availability_zone:
+          type: string
+          enum: [local-1a, local-1b, local-1c]
+        state:
+          type: string
+          enum: [pending, available, deleting, failed]
+        state_reason: {type: string}
+        generation: {type: integer, format: int64}
+        observed_generation: {type: integer, format: int64}
+    VpcsPage:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Vpc'
+        next_page_token: {type: string}
+    SubnetsPage:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Subnet'
+        next_page_token: {type: string}
     HealthResponse:
       type: object
       additionalProperties: false
@@ -65,6 +400,24 @@ components:
         resource_id: {type: string}
         docs_url: {type: string}
   responses:
+    BadRequest:
+      description: BadRequest error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: NotFound error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Conflict:
+      description: Conflict error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
     Unauthorized:
       description: Missing or invalid bearer token
       content:
