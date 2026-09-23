@@ -1,0 +1,73 @@
+openapi: 3.1.0
+info:
+  title: Nephos API
+  version: 0.1.0
+paths:
+  /v1/health:
+    get:
+      operationId: getHealth
+      responses:
+        '200':
+          description: Appliance ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '503':
+          description: Appliance starting
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+  /v1/version:
+    get:
+      operationId: getVersion
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: API and appliance build version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VersionResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  schemas:
+    HealthResponse:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [starting, ready]
+    VersionResponse:
+      type: object
+      additionalProperties: false
+      required: [api_version, build_version, build_commit]
+      properties:
+        api_version: {type: string}
+        build_version: {type: string}
+        build_commit: {type: string}
+    Error:
+      type: object
+      additionalProperties: false
+      required: [code, message]
+      properties:
+        code: {type: string}
+        message: {type: string}
+        resource_id: {type: string}
+        docs_url: {type: string}
+  responses:
+    Unauthorized:
+      description: Missing or invalid bearer token
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
