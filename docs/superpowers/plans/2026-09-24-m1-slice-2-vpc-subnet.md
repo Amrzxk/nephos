@@ -96,7 +96,7 @@ if gotErr != nil || got != 1 { t.Fatalf("workspaces=%d err=%v", got, gotErr) }
 
 ### Task 3: Pin pure resource semantics and IDs
 
-**Files:** Create `internal/model/network.go`, `internal/service/validate.go`, `ids.go`, `errors.go` and `validate_test.go`.
+**Files:** Create `internal/service/validate.go`, `ids.go`, `errors.go` and `validate_test.go`. Model snapshots are introduced with their first service consumer in Task 4.
 
 **Interfaces:** `service.ParseCIDR(raw string) (netip.Prefix, error)` returns a masked IPv4 /16–/28 prefix; `service.ValidateName(raw string) (string, error)` returns a trimmed, case-preserving UTF-8 name; `service.NewID(prefix string, random io.Reader) (string, error)` returns prefix plus 17 lowercase hex characters. `service.Gateway(prefix netip.Prefix) netip.Addr` returns base+1; `service.Overlaps(a, b netip.Prefix) bool` is pure. Domain errors carry `Code`, `Message`, `ResourceID` and HTTP status without depending on `apiserver`.
 
@@ -108,7 +108,7 @@ if gotErr != nil || got != 1 { t.Fatalf("workspaces=%d err=%v", got, gotErr) }
 
 ### Task 4: Implement transactional VPC/subnet services and durable events
 
-**Files:** Create `internal/store/resources.go`, `events.go`, `resources_test.go`, `internal/service/network.go`, `network_test.go`; extend `internal/store/queries.sql` and generated code.
+**Files:** Create `internal/model/network.go`, `internal/store/resources.go`, `events.go`, `resources_test.go`, `internal/service/network.go`, `network_test.go`; extend `internal/store/queries.sql` and generated code.
 
 **Interfaces:** `service.Network` exposes `CreateVPC(ctx, input, key) (model.VPC, error)`, `ListVPCs(ctx, limit, token)`, `GetVPC(ctx, id)`, `DeleteVPC(ctx, id)`, and matching subnet methods. The service validates; store methods commit desired row, kernel index, idempotency record and event atomically. `store.EventsAfter(ctx, id, limit)` returns monotonically ordered events. Enqueue is an injected `func(string)` taking a VPC ID and may be absent after commit.
 
