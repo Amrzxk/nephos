@@ -145,6 +145,9 @@ jobs:
           make appliance
           make build
 
+      - name: Check failed-start cleanup
+        run: bash tests/appliance-smoke-failed-start.sh
+
       - name: Check isolated appliance startup
         run: bash tests/appliance-smoke.sh
 
@@ -163,4 +166,7 @@ jobs:
           fi
           if [ "$(docker volume inspect -f '{{index .Labels "io.nephos.appliance"}}' nephos-data 2>/dev/null || true)" = true ]; then
             docker volume rm nephos-data
+          fi
+          if [ "$(docker inspect -f '{{index .Config.Labels "io.nephos.test"}}' nephos-smoke-port-blocker 2>/dev/null || true)" = true ]; then
+            docker rm -f nephos-smoke-port-blocker
           fi

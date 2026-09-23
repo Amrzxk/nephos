@@ -17,6 +17,10 @@ test -f dist/ubuntu-24.04.oci.tar || fail "run make dev-ami first"
 docker image inspect nephos-appliance:dev >/dev/null || fail "run make appliance first"
 test -x bin/nephos || fail "run make build first"
 
+# The contributor path must explain both preserving and discarding volume state.
+grep -Fq 'docker rm nephos' docs/DEVELOPMENT.md || fail "appliance refresh instructions missing"
+grep -Fq 'docker volume rm nephos-data' docs/DEVELOPMENT.md || fail "AMI refresh instructions missing"
+
 test_home="$(mktemp -d /tmp/nephos-cli-smoke.XXXXXX)"
 [[ "$test_home" == /tmp/nephos-cli-smoke.* ]] || fail "unexpected temporary home path"
 test_started=false
@@ -57,4 +61,30 @@ HOME="$test_home" bin/nephos up
 [ "$(docker inspect -f '{{.Id}}' nephos)" = "$first_id" ] || fail "up created a duplicate container"
 [ "$(sha256sum "$credentials" | cut -d' ' -f1)" = "$first_token_hash" ] || fail "restart replaced the token"
 
-echo "appliance-cli-smoke: CLI bootstrap, auth, and restart reuse passed"
+if HOME="$test_home" bin/nephos up --memory=3g >/dev/null 2>&1; then
+    fail "explicit resource change was silently ignored"
+fi
+[ "$(docker inspect -f '{{.Id}}' nephos)" = "$first_id" ] || fail "limit rejection replaced the container"
+
+# The documented appliance-only refresh recreates the container, not its data.
+HOME="$test_home" bin/nephos down
+docker rm "$first_id" >/dev/null
+HOME="$test_home" bin/nephos up --memory=3g --cpus=1 --pids-limit=512
+second_id="$(docker inspect -f '{{.Id}}' nephos)"
+[ "$second_id" != "$first_id" ] || fail "manual appliance refresh reused old container"
+[ "$(sha256sum "$credentials" | cut -d' ' -f1)" = "$first_token_hash" ] || fail "container refresh replaced the token"
+[ "$(docker inspect -f '{{.HostConfig.Memory}}' nephos)" = 3221225472 ] || fail "custom memory limit not applied"
+[ "$(docker inspect -f '{{.HostConfig.NanoCpus}}' nephos)" = 1000000000 ] || fail "custom CPU limit not applied"
+[ "$(docker inspect -f '{{.HostConfig.PidsLimit}}' nephos)" = 512 ] || fail "custom PID limit not applied"
+HOME="$test_home" bin/nephos down
+HOME="$test_home" bin/nephos up
+[ "$(docker inspect -f '{{.Id}}' nephos)" = "$second_id" ] || fail "default restart recreated custom-limit container"
+
+# The documented AMI refresh discards the test-owned data volume and token.
+HOME="$test_home" bin/nephos down
+docker rm "$second_id" >/dev/null
+docker volume rm nephos-data >/dev/null
+HOME="$test_home" bin/nephos up
+[ "$(sha256sum "$credentials" | cut -d' ' -f1)" != "$first_token_hash" ] || fail "fresh volume retained old token"
+
+echo "appliance-cli-smoke: auth, limit handling, restart, and image refresh paths passed"

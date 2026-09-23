@@ -15,14 +15,14 @@ if docker volume inspect nephos-data >/dev/null 2>&1; then
 fi
 
 made_volume=false
-made_container=false
+created_container_id=""
 cleanup() {
     result=$?
-    if [ "$result" -ne 0 ] && [ "$made_container" = true ]; then
-        docker logs nephos >&2 || true
+    if [ "$result" -ne 0 ] && [ -n "$created_container_id" ]; then
+        docker logs "$created_container_id" >&2 || true
     fi
-    if [ "$made_container" = true ]; then
-        docker rm -f nephos >/dev/null || true
+    if [ -n "$created_container_id" ]; then
+        docker rm -f "$created_container_id" >/dev/null || true
     fi
     if [ "$made_volume" = true ]; then
         docker volume rm nephos-data >/dev/null || true
@@ -36,12 +36,12 @@ docker image inspect nephos-appliance:dev >/dev/null || fail "run make appliance
 
 docker volume create --label io.nephos.appliance=true nephos-data >/dev/null
 made_volume=true
-docker run -d --name nephos --label io.nephos.appliance=true --privileged --cgroupns private \
+created_container_id="$(docker create --name nephos --label io.nephos.appliance=true --privileged --cgroupns private \
     --memory 4g --cpus 2 --pids-limit 4096 \
     -v nephos-data:/var/lib/nephos \
     -p 127.0.0.1:7788:7788 \
-    nephos-appliance:dev >/dev/null
-made_container=true
+    nephos-appliance:dev)"
+docker start "$created_container_id" >/dev/null
 
 [ "$(docker inspect -f '{{.HostConfig.Privileged}}' nephos)" = true ] || fail "not privileged"
 [ "$(docker inspect -f '{{.HostConfig.CgroupnsMode}}' nephos)" = private ] || fail "cgroup namespace is not private"
@@ -59,6 +59,12 @@ for attempt in $(seq 1 60); do
     sleep 1
 done
 [ "$code" = 200 ] || fail "health did not become ready"
+for attempt in $(seq 1 15); do
+    health="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{end}}' nephos)"
+    if [ "$health" = healthy ]; then break; fi
+    sleep 1
+done
+[ "$health" = healthy ] || fail "Docker healthcheck did not report ready"
 [ "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:7788/v1/version)" = 401 ] || fail "version route accepted an unauthenticated request"
 [ "$(docker cp nephos:/var/lib/nephos/secrets/api-token - | tar -xOf - api-token | wc -c)" -ge 43 ] || fail "API token missing"
 version_body="$(curl -fsS --config <(

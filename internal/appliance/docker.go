@@ -76,6 +76,9 @@ func (d *dockerEngine) Inspect(ctx context.Context) (ContainerState, error) {
 	if c.State != nil {
 		state.Running = c.State.Running
 		state.Status = string(c.State.Status)
+		if c.State.Health != nil {
+			state.HealthStatus = string(c.State.Health.Status)
+		}
 	}
 	if c.Config != nil {
 		state.Owned = c.Config.Labels[ownerLabel] == "true"
@@ -84,6 +87,13 @@ func (d *dockerEngine) Inspect(ctx context.Context) (ContainerState, error) {
 	for _, m := range c.Mounts {
 		if m.Type == mount.TypeVolume && m.Destination == "/var/lib/nephos" {
 			state.Volume = m.Name
+		}
+	}
+	if c.HostConfig != nil {
+		state.Limits.MemoryBytes = c.HostConfig.Memory
+		state.Limits.NanoCPUs = c.HostConfig.NanoCPUs
+		if c.HostConfig.PidsLimit != nil {
+			state.Limits.PIDs = *c.HostConfig.PidsLimit
 		}
 	}
 	return state, nil

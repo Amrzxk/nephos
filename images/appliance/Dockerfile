@@ -37,5 +37,7 @@ RUN chmod 0755 /usr/local/bin/nephos-entrypoint /usr/local/bin/nephosd /usr/loca
 
 VOLUME /var/lib/nephos
 EXPOSE 7788
+HEALTHCHECK --interval=5s --timeout=2s --start-period=120s --retries=3 \
+    CMD curl -fsS http://127.0.0.1:7788/v1/health >/dev/null || exit 1
 ENTRYPOINT ["/usr/bin/catatonit", "--", "/usr/local/bin/nephos-entrypoint"]
 CMD ["/usr/local/bin/nephosd"]

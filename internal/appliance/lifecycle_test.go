@@ -11,10 +11,12 @@ import (
 
 type fakeEngine struct {
 	host          HostInfo
+	limits        Limits
 	image         bool
 	container     bool
 	volume        bool
 	owned         bool
+	healthStatus  string
 	volumeOwned   bool
 	running       bool
 	creates       int
@@ -31,7 +33,7 @@ func (f *fakeEngine) Inspect(context.Context) (ContainerState, error) {
 	if !f.container {
 		return ContainerState{}, ErrNotFound
 	}
-	return ContainerState{Running: f.running, Owned: f.owned, Volume: volumeName, Image: imageName}, nil
+	return ContainerState{Running: f.running, Owned: f.owned, Volume: volumeName, Image: imageName, Limits: f.limits, HealthStatus: f.healthStatus}, nil
 }
 func (f *fakeEngine) InspectVolume(context.Context) (VolumeState, error) {
 	if !f.volume {
@@ -45,9 +47,10 @@ func (f *fakeEngine) CreateVolume(context.Context) error {
 	f.volumeCreates++
 	return nil
 }
-func (f *fakeEngine) Create(_ context.Context, _ Limits) error {
+func (f *fakeEngine) Create(_ context.Context, limits Limits) error {
 	f.container = true
 	f.owned = true
+	f.limits = limits
 	f.creates++
 	return nil
 }
@@ -117,6 +120,57 @@ func TestUpCreatesOnceAndReusesStoppedAppliance(t *testing.T) {
 	}
 	if engine.creates != 1 || engine.volumeCreates != 1 || engine.starts != 2 {
 		t.Fatalf("restart created an object: %+v", engine)
+	}
+}
+
+func TestUpRejectsExplicitLimitChangeWithoutMutatingExistingAppliance(t *testing.T) {
+	ctx := context.Background()
+	engine := &fakeEngine{host: validHost(), image: true}
+	m := Manager{Engine: engine, Health: fakeHealth{HealthReady}, Credentials: &fakeCredentials{}}
+	custom := Limits{MemoryBytes: 3 << 30, NanoCPUs: 1e9, PIDs: 512}
+	if err := m.Up(ctx, custom); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.Down(ctx); err != nil {
+		t.Fatal(err)
+	}
+	defaults := Limits{MemoryBytes: 4 << 30, NanoCPUs: 2e9, PIDs: 4096}
+	engine.host.MemTotal = 3 << 30
+	if err := m.Up(ctx, defaults); err != nil {
+		t.Fatalf("plain restart should retain custom limits: %v", err)
+	}
+	engine.host.MemTotal = 8 << 30
+	if err := m.Down(ctx); err != nil {
+		t.Fatal(err)
+	}
+	requested := defaults
+	requested.Explicit.Memory = true
+	if err := m.Up(ctx, requested); err == nil || !strings.Contains(err.Error(), "existing appliance limits") {
+		t.Fatalf("explicit limit change was silently accepted: %v", err)
+	}
+	if engine.starts != 2 || engine.creates != 1 || engine.copies != 2 {
+		t.Fatalf("limit rejection mutated existing appliance: %+v", engine)
+	}
+}
+
+func TestUpPreflightsObservedLimitsOnReuse(t *testing.T) {
+	ctx := context.Background()
+	engine := &fakeEngine{host: validHost(), image: true}
+	m := Manager{Engine: engine, Health: fakeHealth{HealthReady}, Credentials: &fakeCredentials{}}
+	actual := Limits{MemoryBytes: 4 << 30, NanoCPUs: 2e9, PIDs: 4096}
+	if err := m.Up(ctx, actual); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.Down(ctx); err != nil {
+		t.Fatal(err)
+	}
+	engine.host.MemTotal = 3 << 30
+	requested := Limits{MemoryBytes: 3 << 30, NanoCPUs: 1e9, PIDs: 512}
+	if err := m.Up(ctx, requested); err == nil || !strings.Contains(err.Error(), "below") {
+		t.Fatalf("reuse did not preflight observed memory limit: %v", err)
+	}
+	if engine.starts != 1 {
+		t.Fatalf("unsupported appliance restarted: %+v", engine)
 	}
 }
 
@@ -199,5 +253,22 @@ func TestStatusDistinguishesLifecycleStates(t *testing.T) {
 				t.Fatalf("status=%s, err=%v; want %s", got, err, tc.want)
 			}
 		})
+	}
+}
+
+func TestStatusTreatsDockerBootstrapAsStarting(t *testing.T) {
+	engine := &fakeEngine{
+		host: validHost(), image: true, container: true, owned: true,
+		volume: true, volumeOwned: true, running: true, healthStatus: "starting",
+	}
+	m := Manager{Engine: engine, Health: fakeHealth{HealthUnhealthy}}
+	got, err := m.Status(context.Background())
+	if err != nil || got != StatusStarting {
+		t.Fatalf("bootstrap status=%s err=%v; want starting", got, err)
+	}
+	engine.healthStatus = "unhealthy"
+	got, err = m.Status(context.Background())
+	if err != nil || got != StatusUnhealthy {
+		t.Fatalf("failed healthcheck status=%s err=%v; want unhealthy", got, err)
 	}
 }

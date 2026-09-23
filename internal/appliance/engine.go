@@ -22,6 +22,15 @@ type Limits struct {
 	MemoryBytes int64
 	NanoCPUs    int64
 	PIDs        int64
+	Explicit    LimitSelection
+}
+
+// LimitSelection distinguishes CLI overrides from defaults when reusing a
+// container whose original limits must remain in force.
+type LimitSelection struct {
+	Memory bool
+	CPUs   bool
+	PIDs   bool
 }
 
 // HostInfo contains Docker host capabilities needed for appliance preflight.
@@ -40,11 +49,13 @@ type HostInfo struct {
 
 // ContainerState is the observed state of the fixed Nephos container.
 type ContainerState struct {
-	Running bool
-	Owned   bool
-	Status  string
-	Image   string
-	Volume  string
+	Running      bool
+	Owned        bool
+	Status       string
+	Image        string
+	Volume       string
+	Limits       Limits
+	HealthStatus string
 }
 
 // VolumeState is the observed state of the fixed Nephos data volume.

@@ -62,9 +62,6 @@ func (m Manager) Up(ctx context.Context, limits Limits) error {
 	if err != nil {
 		return err
 	}
-	if err := preflight(host, limits); err != nil {
-		return err
-	}
 	exists, err := m.Engine.ImageExists(ctx)
 	if err != nil {
 		return err
@@ -74,7 +71,11 @@ func (m Manager) Up(ctx context.Context, limits Limits) error {
 	}
 
 	c, err := m.Engine.Inspect(ctx)
+	existing := err == nil
 	if errors.Is(err, ErrNotFound) {
+		if err := preflight(host, limits); err != nil {
+			return err
+		}
 		volume, volumeErr := m.Engine.InspectVolume(ctx)
 		switch {
 		case errors.Is(volumeErr, ErrNotFound):
@@ -89,12 +90,21 @@ func (m Manager) Up(ctx context.Context, limits Limits) error {
 		if createErr := m.Engine.Create(ctx, limits); createErr != nil {
 			return createErr
 		}
-		c = ContainerState{Owned: true, Volume: volumeName, Image: imageName}
+		c = ContainerState{Owned: true, Volume: volumeName, Image: imageName, Limits: limits}
 	} else if err != nil {
 		return err
 	}
 	if err := verifyContainer(c); err != nil {
 		return err
+	}
+	if existing {
+		if err := checkRequestedLimits(c.Limits, limits); err != nil {
+			return err
+		}
+		// Docker's stored limits, not CLI defaults, govern a reused container.
+		if err := preflight(host, c.Limits); err != nil {
+			return err
+		}
 	}
 	volume, err := m.Engine.InspectVolume(ctx)
 	if err != nil {
@@ -171,6 +181,10 @@ func (m Manager) Status(ctx context.Context) (Status, error) {
 	case HealthStarting:
 		return StatusStarting, nil
 	default:
+		// The image imports its AMI before nephosd opens the HTTP listener.
+		if c.HealthStatus == "starting" {
+			return StatusStarting, nil
+		}
 		return StatusUnhealthy, nil
 	}
 }
@@ -178,6 +192,21 @@ func (m Manager) Status(ctx context.Context) (Status, error) {
 func verifyContainer(c ContainerState) error {
 	if !c.Owned || c.Volume != volumeName || c.Image != imageName {
 		return fmt.Errorf("docker container %q exists but does not match the Nephos appliance", containerName)
+	}
+	return nil
+}
+
+func checkRequestedLimits(actual, requested Limits) error {
+	if actual.MemoryBytes <= 0 || actual.NanoCPUs <= 0 || actual.PIDs <= 0 {
+		return fmt.Errorf("existing appliance has missing Docker resource limits; inspect its configuration before restarting")
+	}
+	if requested.Explicit.Memory && actual.MemoryBytes != requested.MemoryBytes ||
+		requested.Explicit.CPUs && actual.NanoCPUs != requested.NanoCPUs ||
+		requested.Explicit.PIDs && actual.PIDs != requested.PIDs {
+		return fmt.Errorf(
+			"existing appliance limits are memory=%d bytes, cpus=%.3f, pids=%d; requested limits differ; run 'nephos down', then 'docker rm nephos' to recreate the container while preserving nephos-data",
+			actual.MemoryBytes, float64(actual.NanoCPUs)/1e9, actual.PIDs,
+		)
 	}
 	return nil
 }

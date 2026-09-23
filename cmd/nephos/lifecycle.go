@@ -53,6 +53,16 @@ func runUp(args []string, stdout, stderr *os.File) int {
 		return 1
 	}
 	limits := appliance.Limits{MemoryBytes: bytes, NanoCPUs: int64(*cpus * 1e9), PIDs: *pids}
+	fs.Visit(func(f *flag.Flag) {
+		switch f.Name {
+		case "memory":
+			limits.Explicit.Memory = true
+		case "cpus":
+			limits.Explicit.CPUs = true
+		case "pids-limit":
+			limits.Explicit.PIDs = true
+		}
+	})
 	if err := m.Up(context.Background(), limits); err != nil {
 		fmt.Fprintf(stderr, "nephos up: %v\n", err)
 		return 1
