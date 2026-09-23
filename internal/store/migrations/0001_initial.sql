@@ -1,5 +1,5 @@
 -- M1 state is authoritative. Kernel objects and Podman containers are caches.
--- This migration runs once inside the same transaction as PRAGMA user_version=1.
+-- This migration runs once in the state-opening transaction.
 CREATE TABLE schema_migrations (
     version INTEGER PRIMARY KEY,
     applied_at INTEGER NOT NULL

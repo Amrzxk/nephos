@@ -9,6 +9,17 @@ import (
 	"context"
 )
 
+const countInstancesInSubnet = `-- name: CountInstancesInSubnet :one
+SELECT COUNT(*) FROM instances WHERE subnet_id = ?
+`
+
+func (q *Queries) CountInstancesInSubnet(ctx context.Context, subnetID string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countInstancesInSubnet, subnetID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const deleteSubnet = `-- name: DeleteSubnet :exec
 DELETE FROM subnets WHERE id = ? AND workspace_id = ?
 `
@@ -77,6 +88,33 @@ func (q *Queries) EventsAfter(ctx context.Context, arg EventsAfterParams) ([]Eve
 		return nil, err
 	}
 	return items, nil
+}
+
+const getIdempotency = `-- name: GetIdempotency :one
+SELECT workspace_id, operation, "key", payload_hash, resource_id, created_at, expires_at, response_json FROM idempotency_requests
+WHERE workspace_id = ? AND operation = ? AND key = ?
+`
+
+type GetIdempotencyParams struct {
+	WorkspaceID string
+	Operation   string
+	Key         string
+}
+
+func (q *Queries) GetIdempotency(ctx context.Context, arg GetIdempotencyParams) (IdempotencyRequest, error) {
+	row := q.db.QueryRowContext(ctx, getIdempotency, arg.WorkspaceID, arg.Operation, arg.Key)
+	var i IdempotencyRequest
+	err := row.Scan(
+		&i.WorkspaceID,
+		&i.Operation,
+		&i.Key,
+		&i.PayloadHash,
+		&i.ResourceID,
+		&i.CreatedAt,
+		&i.ExpiresAt,
+		&i.ResponseJson,
+	)
+	return i, err
 }
 
 const getSubnet = `-- name: GetSubnet :one
@@ -425,6 +463,77 @@ func (q *Queries) ListVPCPage(ctx context.Context, arg ListVPCPageParams) ([]Vpc
 		return nil, err
 	}
 	return items, nil
+}
+
+const markSubnetDeleting = `-- name: MarkSubnetDeleting :exec
+UPDATE subnets SET state = 'deleting', state_reason = '',
+    generation = generation + 1, updated_at = ?
+WHERE id = ? AND workspace_id = ? AND state != 'deleting'
+`
+
+type MarkSubnetDeletingParams struct {
+	UpdatedAt   int64
+	ID          string
+	WorkspaceID string
+}
+
+func (q *Queries) MarkSubnetDeleting(ctx context.Context, arg MarkSubnetDeletingParams) error {
+	_, err := q.db.ExecContext(ctx, markSubnetDeleting, arg.UpdatedAt, arg.ID, arg.WorkspaceID)
+	return err
+}
+
+const markVPCDeleting = `-- name: MarkVPCDeleting :exec
+UPDATE vpcs SET state = 'deleting', state_reason = '',
+    generation = generation + 1, updated_at = ?
+WHERE id = ? AND workspace_id = ? AND state != 'deleting'
+`
+
+type MarkVPCDeletingParams struct {
+	UpdatedAt   int64
+	ID          string
+	WorkspaceID string
+}
+
+func (q *Queries) MarkVPCDeleting(ctx context.Context, arg MarkVPCDeletingParams) error {
+	_, err := q.db.ExecContext(ctx, markVPCDeleting, arg.UpdatedAt, arg.ID, arg.WorkspaceID)
+	return err
+}
+
+const putIdempotency = `-- name: PutIdempotency :exec
+INSERT INTO idempotency_requests (
+    workspace_id, operation, key, payload_hash, resource_id, response_json, created_at, expires_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(workspace_id, operation, key) DO UPDATE SET
+    payload_hash = excluded.payload_hash,
+    resource_id = excluded.resource_id,
+    response_json = excluded.response_json,
+    created_at = excluded.created_at,
+    expires_at = excluded.expires_at
+`
+
+type PutIdempotencyParams struct {
+	WorkspaceID  string
+	Operation    string
+	Key          string
+	PayloadHash  string
+	ResourceID   string
+	ResponseJson string
+	CreatedAt    int64
+	ExpiresAt    int64
+}
+
+func (q *Queries) PutIdempotency(ctx context.Context, arg PutIdempotencyParams) error {
+	_, err := q.db.ExecContext(ctx, putIdempotency,
+		arg.WorkspaceID,
+		arg.Operation,
+		arg.Key,
+		arg.PayloadHash,
+		arg.ResourceID,
+		arg.ResponseJson,
+		arg.CreatedAt,
+		arg.ExpiresAt,
+	)
+	return err
 }
 
 const updateSubnetStatus = `-- name: UpdateSubnetStatus :exec

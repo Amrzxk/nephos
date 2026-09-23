@@ -15,7 +15,10 @@ import (
 //go:embed migrations/0001_initial.sql
 var initialMigration string
 
-const schemaVersion = 1
+//go:embed migrations/0002_idempotency_result.sql
+var idempotencyResultMigration string
+
+const schemaVersion = 2
 
 // Store is the sole durable authority for resource state. Its single database
 // connection keeps SQLite connection-local PRAGMAs consistent.
@@ -87,19 +90,27 @@ func Open(ctx context.Context, path string) (*Store, error) {
 		if _, err := tx.ExecContext(ctx, initialMigration); err != nil {
 			return nil, fmt.Errorf("apply state migration 1: %w", err)
 		}
-		if _, err := tx.ExecContext(ctx, "PRAGMA user_version = 1"); err != nil {
-			return nil, fmt.Errorf("record state schema version: %w", err)
+		fallthrough
+	case 1:
+		if _, err := tx.ExecContext(ctx, idempotencyResultMigration); err != nil {
+			return nil, fmt.Errorf("apply state migration 2: %w", err)
 		}
+		fallthrough
 	case schemaVersion:
 		var count int
-		if err := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM schema_migrations WHERE version = 1").Scan(&count); err != nil {
-			return nil, fmt.Errorf("verify state migration 1: %w", err)
+		if err := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM schema_migrations WHERE version IN (1, 2)").Scan(&count); err != nil {
+			return nil, fmt.Errorf("verify state migrations: %w", err)
 		}
-		if count != 1 {
-			return nil, fmt.Errorf("state migration 1 metadata missing")
+		if count != schemaVersion {
+			return nil, fmt.Errorf("state migration metadata incomplete: %d of %d", count, schemaVersion)
 		}
 	default:
 		return nil, fmt.Errorf("unsupported state schema version %d (supported: %d)", version, schemaVersion)
+	}
+	if version != schemaVersion {
+		if _, err := tx.ExecContext(ctx, "PRAGMA user_version = 2"); err != nil {
+			return nil, fmt.Errorf("record state schema version: %w", err)
+		}
 	}
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("commit state migration: %w", err)

@@ -59,8 +59,8 @@ func TestOpenMigratesAndReopensWithoutLosingState(t *testing.T) {
 	if err := s.db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil {
 		t.Fatal(err)
 	}
-	if version != 1 {
-		t.Fatalf("schema version=%d, want 1", version)
+	if version != 2 {
+		t.Fatalf("schema version=%d, want 2", version)
 	}
 	var migrationCount int
 	if err := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM schema_migrations WHERE version = 1").Scan(&migrationCount); err != nil {
@@ -92,8 +92,59 @@ func TestOpenMigratesAndReopensWithoutLosingState(t *testing.T) {
 	if err := reopened.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM schema_migrations").Scan(&migrationCount); err != nil {
 		t.Fatal(err)
 	}
-	if migrationCount != 1 {
-		t.Fatalf("migration rows after reopen=%d, want 1", migrationCount)
+	if migrationCount != 2 {
+		t.Fatalf("migration rows after reopen=%d, want 2", migrationCount)
+	}
+}
+
+func TestOpenUpgradesVersionOneWithoutLosingEvents(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "old.db")
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.ExecContext(ctx, initialMigration); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.ExecContext(ctx, "PRAGMA user_version = 1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.ExecContext(ctx, "INSERT INTO events(workspace_id, resource_type, resource_id, action, generation, created_at) VALUES ('default', 'vpc', 'vpc-0123456789abcdef0', 'created', 1, 100)"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	s, err := Open(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	var version, eventCount, migrationCount int
+	if err := s.db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM events").Scan(&eventCount); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM schema_migrations").Scan(&migrationCount); err != nil {
+		t.Fatal(err)
+	}
+	if version != 2 || eventCount != 1 || migrationCount != 2 {
+		t.Fatalf("upgraded version=%d events=%d migrations=%d", version, eventCount, migrationCount)
+	}
+	_, err = s.db.ExecContext(ctx, "INSERT INTO idempotency_requests(workspace_id, operation, key, payload_hash, resource_id, response_json, created_at, expires_at) VALUES ('default', 'create-vpc', 'old-key', 'hash', 'vpc-0123456789abcdef0', '{}', 100, 200)")
+	if err != nil {
+		t.Fatalf("new idempotency snapshot column unavailable: %v", err)
 	}
 }
 

@@ -33,13 +33,14 @@ type Event struct {
 }
 
 type IdempotencyRequest struct {
-	WorkspaceID string
-	Operation   string
-	Key         string
-	PayloadHash string
-	ResourceID  string
-	CreatedAt   int64
-	ExpiresAt   int64
+	WorkspaceID  string
+	Operation    string
+	Key          string
+	PayloadHash  string
+	ResourceID   string
+	CreatedAt    int64
+	ExpiresAt    int64
+	ResponseJson string
 }
 
 type Instance struct {

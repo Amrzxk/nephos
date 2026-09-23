@@ -60,3 +60,31 @@ INSERT INTO events (
 
 -- name: EventsAfter :many
 SELECT * FROM events WHERE id > ? ORDER BY id LIMIT ?;
+
+-- name: GetIdempotency :one
+SELECT * FROM idempotency_requests
+WHERE workspace_id = ? AND operation = ? AND key = ?;
+
+-- name: PutIdempotency :exec
+INSERT INTO idempotency_requests (
+    workspace_id, operation, key, payload_hash, resource_id, response_json, created_at, expires_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(workspace_id, operation, key) DO UPDATE SET
+    payload_hash = excluded.payload_hash,
+    resource_id = excluded.resource_id,
+    response_json = excluded.response_json,
+    created_at = excluded.created_at,
+    expires_at = excluded.expires_at;
+
+-- name: MarkVPCDeleting :exec
+UPDATE vpcs SET state = 'deleting', state_reason = '',
+    generation = generation + 1, updated_at = ?
+WHERE id = ? AND workspace_id = ? AND state != 'deleting';
+
+-- name: MarkSubnetDeleting :exec
+UPDATE subnets SET state = 'deleting', state_reason = '',
+    generation = generation + 1, updated_at = ?
+WHERE id = ? AND workspace_id = ? AND state != 'deleting';
+
+-- name: CountInstancesInSubnet :one
+SELECT COUNT(*) FROM instances WHERE subnet_id = ?;
