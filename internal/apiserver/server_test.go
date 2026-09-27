@@ -10,7 +10,7 @@ import (
 )
 
 func TestHealthIsPublicButVersionNeedsBearer(t *testing.T) {
-	h := New("secret", version.Get(), func() bool { return true })
+	h := New("secret", version.Get(), func() bool { return true }, nil, nil)
 	for _, tc := range []struct {
 		path, auth string
 		want       int
@@ -35,7 +35,7 @@ func TestHealthIsPublicButVersionNeedsBearer(t *testing.T) {
 
 func TestHealthReportsStartingUntilReady(t *testing.T) {
 	ready := false
-	h := New("secret", version.Get(), func() bool { return ready })
+	h := New("secret", version.Get(), func() bool { return ready }, nil, nil)
 	req := httptest.NewRequest(http.MethodGet, "/v1/health", http.NoBody)
 	req.Host = "127.0.0.1:7788"
 	rec := httptest.NewRecorder()
@@ -58,7 +58,7 @@ func TestHealthReportsStartingUntilReady(t *testing.T) {
 }
 
 func TestRejectsUnexpectedHostAndBrowserOrigin(t *testing.T) {
-	h := New("secret", version.Get(), func() bool { return true })
+	h := New("secret", version.Get(), func() bool { return true }, nil, nil)
 	for _, tc := range []struct {
 		host, origin string
 	}{

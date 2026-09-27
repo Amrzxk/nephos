@@ -2,8 +2,8 @@
 // container and owns the API server, the store, the reconcilers, and the
 // network and compute engines.
 //
-// M1 begins with authenticated health and version routes. Resource handlers,
-// the store, and reconcilers are added in later M1 slices.
+// M1 serves persisted VPC/subnet resources and converges their topology before
+// the appliance reports ready.
 package main
 
 import (
@@ -15,11 +15,16 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync/atomic"
 	"syscall"
 	"time"
 
 	"github.com/Amrzxk/nephos/internal/apiserver"
 	"github.com/Amrzxk/nephos/internal/credentials"
+	"github.com/Amrzxk/nephos/internal/network/topology"
+	"github.com/Amrzxk/nephos/internal/reconcile"
+	"github.com/Amrzxk/nephos/internal/service"
+	"github.com/Amrzxk/nephos/internal/store"
 	"github.com/Amrzxk/nephos/internal/version"
 )
 
@@ -59,37 +64,68 @@ func run(ctx context.Context, logger *slog.Logger) error {
 		return fmt.Errorf("listening for the API: %w", err)
 	}
 	defer ln.Close()
-	if err := serve(ctx, ln, "/var/lib/nephos/secrets/api-token", info); err != nil {
+	if err := serve(ctx, ln, "/var/lib/nephos/secrets/api-token", "/var/lib/nephos/state/nephos.db", info, topology.New()); err != nil {
 		return err
 	}
-	logger.Info("nephosd shutting down", slog.String("reason", context.Cause(ctx).Error()))
+	logger.Info("nephosd shutting down")
 	return nil
 }
 
-func serve(ctx context.Context, ln net.Listener, tokenPath string, build version.Info) error {
+func serve(ctx context.Context, ln net.Listener, tokenPath, dbPath string, build version.Info, network reconcile.NetworkEngine) error {
 	token, err := credentials.LoadOrCreate(tokenPath)
 	if err != nil {
 		return fmt.Errorf("loading API token: %w", err)
 	}
-	h := apiserver.New(token, build, func() bool { return true })
-	srv := &http.Server{Handler: h, ReadHeaderTimeout: 5 * time.Second}
-	stopped := make(chan struct{})
-	go func() {
-		select {
-		case <-ctx.Done():
-			shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-			defer cancel()
-			_ = srv.Shutdown(shutdownCtx)
-		case <-stopped:
-		}
-	}()
-	err = srv.Serve(ln)
-	close(stopped)
-	if errors.Is(err, http.ErrServerClosed) && ctx.Err() != nil {
-		err = nil
-	}
+	s, err := store.Open(ctx, dbPath)
 	if err != nil {
-		return fmt.Errorf("serving the API: %w", err)
+		return fmt.Errorf("opening appliance state: %w", err)
+	}
+	defer s.Close()
+	controller := reconcile.New(s, network, 60*time.Second)
+	resources := service.NewNetwork(s, controller.Enqueue, nil)
+	var ready atomic.Bool
+	h := apiserver.New(token, build, ready.Load, resources, s)
+	srv := &http.Server{Handler: h, ReadHeaderTimeout: 5 * time.Second}
+	serverDone := make(chan error, 1)
+	go func() { serverDone <- srv.Serve(ln) }()
+	shutdown := func() {
+		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		defer cancel()
+		_ = srv.Shutdown(shutdownCtx)
+	}
+	if err := controller.Sweep(ctx); err != nil {
+		shutdown()
+		<-serverDone
+		return fmt.Errorf("initial VPC reconcile sweep: %w", err)
+	}
+	ready.Store(true)
+	runCtx, stop := context.WithCancel(ctx)
+	defer stop()
+	controllerDone := make(chan error, 1)
+	go func() { controllerDone <- controller.Run(runCtx) }()
+	var serveErr, controllerErr error
+	serverExited, controllerExited := false, false
+	select {
+	case <-ctx.Done():
+	case serveErr = <-serverDone:
+		serverExited = true
+	case controllerErr = <-controllerDone:
+		controllerExited = true
+	}
+	ready.Store(false)
+	stop()
+	shutdown()
+	if !serverExited {
+		serveErr = <-serverDone
+	}
+	if !controllerExited {
+		controllerErr = <-controllerDone
+	}
+	if serveErr != nil && !errors.Is(serveErr, http.ErrServerClosed) {
+		return fmt.Errorf("serving the API: %w", serveErr)
+	}
+	if controllerErr != nil && !errors.Is(controllerErr, context.Canceled) {
+		return fmt.Errorf("running VPC reconciler: %w", controllerErr)
 	}
 	return nil
 }

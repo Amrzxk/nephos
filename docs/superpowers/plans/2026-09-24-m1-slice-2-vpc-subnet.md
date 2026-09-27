@@ -144,7 +144,7 @@ if gotErr != nil || got != 1 { t.Fatalf("workspaces=%d err=%v", got, gotErr) }
 
 ### Task 7: Serve VPC/subnet CRUD and resumable events
 
-**Files:** Create `internal/apiserver/network.go`, `events.go`, `network_test.go`; modify `internal/apiserver/server.go`, `cmd/nephosd/main.go` and daemon tests.
+**Files:** Create `internal/apiserver/network.go`, `events.go`, `network_test.go`; replace `network_stub.go` and its temporary test; modify `internal/apiserver/server.go`, `server_test.go`, `cmd/nephosd/main.go` and daemon tests.
 
 **Interfaces:** `apiserver.New(token string, build version.Info, ready func() bool, resources *service.Network, events *store.Store) http.Handler` replaces the bootstrap constructor. The daemon opens `/var/lib/nephos/state/nephos.db`, starts controller initial sweep, sets readiness, then serves. Generated resource route methods replace Task 1's 501 stubs. Event handler resumes after a validated `Last-Event-ID`.
 
