@@ -26,9 +26,19 @@ case "$memory_max" in
 esac
 [ "$memory_max" -ge 3221225472 ] || fail "at least 3 GiB of appliance memory is required"
 
-mkdir -p /var/lib/nephos/containers /var/lib/nephos/runroot /run/nephos
+mkdir -p /var/lib/nephos/containers /var/lib/nephos/runroot /run/nephos /run/netns
 available_kb=$(df -Pk /var/lib/nephos | awk 'NR == 2 {print $4}')
 [ -n "$available_kb" ] && [ "$available_kb" -ge 2097152 ] || fail "at least 2 GiB free in nephos-data is required"
+
+# Docker restarts the same container with its writable layer but a new mount
+# namespace. Old /run/netns mountpoint files survive in that layer after their
+# namespace bind mounts disappear. Give each start a fresh, private runtime
+# directory so the SQLite startup sweep can rebuild namespaces by short index.
+# The mount is inside the appliance, never a host mount or persistent volume.
+mount -t tmpfs -o mode=0755,nosuid,nodev,noexec tmpfs /run/netns \
+    || fail "could not initialize ephemeral network namespace directory"
+mount --make-private /run/netns \
+    || fail "could not make network namespace directory private"
 
 # Functional probes run only inside the appliance's own namespace. No module
 # is explicitly loaded and no host network or firewall object is changed.

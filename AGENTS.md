@@ -36,6 +36,14 @@ workflow passes, and the native-Docker `Spikes` workflow passed all four spikes 
 M1 is now the active implementation milestone. Do not implement work from a
 later milestone unless the roadmap is updated first.
 
+M1 delivery slice 1 (appliance bootstrap) is on draft PR #3. Slice 2 adds
+SQLite-backed VPC/subnet CRUD, reconciliation, real namespaces and gateway
+addresses, and a guarded native-Docker smoke; see the
+[slice-2 plan](docs/superpowers/plans/2026-09-24-m1-slice-2-vpc-subnet.md) and
+[connectivity matrix](docs/tests/M1-connectivity-matrix.md). The next slice
+adds ENIs, instances, and real cross-subnet ping. M1 is **not** complete, and
+namespace/gateway checks must not be reported as packet connectivity.
+
 ## Start-of-task workflow
 
 1. Run `git status --short --branch`. Treat existing modifications and

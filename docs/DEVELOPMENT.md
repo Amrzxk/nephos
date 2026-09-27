@@ -200,7 +200,18 @@ temporary HOME so it cannot replace your normal credential:
 ```bash
 bash tests/appliance-smoke.sh
 bash tests/appliance-cli-smoke.sh
+bash tests/vpc-subnet-smoke.sh
 ```
+
+The last script requires locally built images and `bin/nephos`, `jq`, Docker,
+and permission to run a privileged appliance. It creates overlapping-CIDR
+VPCs in separate namespaces, checks subnet gateways, authentication, durable
+events, pagination, restart persistence, and deletion. It snapshots host
+network objects before the appliance starts and after its test-owned
+container/volume are removed. Native CI installs `nftables` and requires
+readable host rules; a WSL2 host without `nft` reports that part as unavailable.
+The [M1 connectivity matrix](tests/M1-connectivity-matrix.md) identifies the
+instance-packet cases still assigned to slice 3.
 
 ### Why `make test-race` sets `CGO_ENABLED=1`
 
