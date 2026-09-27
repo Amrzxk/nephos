@@ -156,7 +156,7 @@ if gotErr != nil || got != 1 { t.Fatalf("workspaces=%d err=%v", got, gotErr) }
 
 ### Task 8: Add generated-client VPC/subnet CLI commands
 
-**Files:** Create `cmd/nephos/network.go`, `network_test.go`; modify `cmd/nephos/main.go` and `docs/DEVELOPMENT.md`.
+**Files:** Create `cmd/nephos/network.go`, `network_client.go`, `network_wait.go`, `network_test.go`; modify `cmd/nephos/main.go` and `docs/DEVELOPMENT.md`.
 
 **Interfaces:** `nephos vpc create|list|describe|delete` and `nephos subnet create|list|describe|delete` accept the roadmap grammar; references resolve exact ID or unique case-sensitive name through the generated client. `-o json` emits exact API objects. `--wait` polls GET to `available`, reports `state_reason` on `failed`, and times out nonzero after two minutes unless `--timeout` overrides it. A create generates one cryptographic idempotency key and reuses it on retries.
 

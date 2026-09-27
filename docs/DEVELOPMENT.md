@@ -123,8 +123,29 @@ bin/nephos up        # reuses the same container, volume, and token
 user's default builder. `make appliance` deliberately refuses to build if
 the AMI archive is absent; rebuild both after changing the AMI definition.
 The CLI does not download or build either image. Publishing the AMI belongs
-to M2. M1 currently has only appliance lifecycle commands; VPC, subnet, and
-instance commands arrive in its next slices.
+to M2. This M1 slice adds VPC and subnet commands; instance commands arrive
+in the next slice. The sole workspace is implicit and named `default`.
+
+Create a VPC explicitly, then create a subnet inside it. Names are
+case-sensitive and may contain spaces or UTF-8 characters:
+
+```bash
+bin/nephos vpc create 'Lab East' --cidr-block 10.0.0.0/16 --wait
+bin/nephos subnet create 'App α' --vpc 'Lab East' \
+  --cidr-block 10.0.1.0/24 --availability-zone local-1a --wait
+bin/nephos vpc describe 'Lab East' -o json
+bin/nephos subnet list --limit 50 -o json
+```
+
+`vpc` and `subnet` support `create`, `list`, `describe`, and `delete`.
+Describe/delete references accept an ID or exact name. Lists return one
+stable ID-ordered page; `--limit` and `--page-token` select later pages.
+`-o json` prints the API object or page. `--wait` polls until availability,
+failure, or timeout (two minutes by default, overridden with `--timeout`).
+Delete with `--wait` succeeds only after the resource disappears. Resource
+commands use the locally stored token and never contact the Docker Engine.
+For `delete --wait -o json`, the output is the original API-accepted deletion
+object; the successful exit code confirms that the later GET returned 404.
 
 ### Activating rebuilt development images
 
