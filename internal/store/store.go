@@ -18,7 +18,10 @@ var initialMigration string
 //go:embed migrations/0002_idempotency_result.sql
 var idempotencyResultMigration string
 
-const schemaVersion = 2
+//go:embed migrations/0003_deletion_intent.sql
+var deletionIntentMigration string
+
+const schemaVersion = 3
 
 // Store is the sole durable authority for resource state. Its single database
 // connection keeps SQLite connection-local PRAGMAs consistent.
@@ -96,9 +99,14 @@ func Open(ctx context.Context, path string) (*Store, error) {
 			return nil, fmt.Errorf("apply state migration 2: %w", err)
 		}
 		fallthrough
+	case 2:
+		if _, err := tx.ExecContext(ctx, deletionIntentMigration); err != nil {
+			return nil, fmt.Errorf("apply state migration 3: %w", err)
+		}
+		fallthrough
 	case schemaVersion:
 		var count int
-		if err := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM schema_migrations WHERE version IN (1, 2)").Scan(&count); err != nil {
+		if err := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM schema_migrations WHERE version IN (1, 2, 3)").Scan(&count); err != nil {
 			return nil, fmt.Errorf("verify state migrations: %w", err)
 		}
 		if count != schemaVersion {
@@ -108,7 +116,7 @@ func Open(ctx context.Context, path string) (*Store, error) {
 		return nil, fmt.Errorf("unsupported state schema version %d (supported: %d)", version, schemaVersion)
 	}
 	if version != schemaVersion {
-		if _, err := tx.ExecContext(ctx, "PRAGMA user_version = 2"); err != nil {
+		if _, err := tx.ExecContext(ctx, "PRAGMA user_version = 3"); err != nil {
 			return nil, fmt.Errorf("record state schema version: %w", err)
 		}
 	}

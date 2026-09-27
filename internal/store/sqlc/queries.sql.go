@@ -118,7 +118,7 @@ func (q *Queries) GetIdempotency(ctx context.Context, arg GetIdempotencyParams) 
 }
 
 const getSubnet = `-- name: GetSubnet :one
-SELECT id, workspace_id, vpc_id, short_index, name, cidr_block, availability_zone, generation, observed_generation, state, state_reason, created_at, updated_at FROM subnets WHERE id = ? AND workspace_id = ?
+SELECT id, workspace_id, vpc_id, short_index, name, cidr_block, availability_zone, generation, observed_generation, state, state_reason, created_at, updated_at, deletion_requested FROM subnets WHERE id = ? AND workspace_id = ?
 `
 
 type GetSubnetParams struct {
@@ -143,12 +143,13 @@ func (q *Queries) GetSubnet(ctx context.Context, arg GetSubnetParams) (Subnet, e
 		&i.StateReason,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DeletionRequested,
 	)
 	return i, err
 }
 
 const getSubnetByName = `-- name: GetSubnetByName :one
-SELECT id, workspace_id, vpc_id, short_index, name, cidr_block, availability_zone, generation, observed_generation, state, state_reason, created_at, updated_at FROM subnets WHERE workspace_id = ? AND name = ?
+SELECT id, workspace_id, vpc_id, short_index, name, cidr_block, availability_zone, generation, observed_generation, state, state_reason, created_at, updated_at, deletion_requested FROM subnets WHERE workspace_id = ? AND name = ?
 `
 
 type GetSubnetByNameParams struct {
@@ -173,12 +174,13 @@ func (q *Queries) GetSubnetByName(ctx context.Context, arg GetSubnetByNameParams
 		&i.StateReason,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DeletionRequested,
 	)
 	return i, err
 }
 
 const getVPC = `-- name: GetVPC :one
-SELECT id, workspace_id, short_index, name, cidr_block, generation, observed_generation, state, state_reason, created_at, updated_at FROM vpcs WHERE id = ? AND workspace_id = ?
+SELECT id, workspace_id, short_index, name, cidr_block, generation, observed_generation, state, state_reason, created_at, updated_at, deletion_requested FROM vpcs WHERE id = ? AND workspace_id = ?
 `
 
 type GetVPCParams struct {
@@ -201,12 +203,13 @@ func (q *Queries) GetVPC(ctx context.Context, arg GetVPCParams) (Vpc, error) {
 		&i.StateReason,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DeletionRequested,
 	)
 	return i, err
 }
 
 const getVPCByName = `-- name: GetVPCByName :one
-SELECT id, workspace_id, short_index, name, cidr_block, generation, observed_generation, state, state_reason, created_at, updated_at FROM vpcs WHERE workspace_id = ? AND name = ?
+SELECT id, workspace_id, short_index, name, cidr_block, generation, observed_generation, state, state_reason, created_at, updated_at, deletion_requested FROM vpcs WHERE workspace_id = ? AND name = ?
 `
 
 type GetVPCByNameParams struct {
@@ -229,6 +232,7 @@ func (q *Queries) GetVPCByName(ctx context.Context, arg GetVPCByNameParams) (Vpc
 		&i.StateReason,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DeletionRequested,
 	)
 	return i, err
 }
@@ -236,8 +240,8 @@ func (q *Queries) GetVPCByName(ctx context.Context, arg GetVPCByNameParams) (Vpc
 const insertEvent = `-- name: InsertEvent :exec
 INSERT INTO events (
     workspace_id, resource_type, resource_id, action, state, generation,
-    created_at
-) VALUES (?, ?, ?, ?, ?, ?, ?)
+    message, created_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type InsertEventParams struct {
@@ -247,6 +251,7 @@ type InsertEventParams struct {
 	Action       string
 	State        string
 	Generation   int64
+	Message      string
 	CreatedAt    int64
 }
 
@@ -258,6 +263,7 @@ func (q *Queries) InsertEvent(ctx context.Context, arg InsertEventParams) error 
 		arg.Action,
 		arg.State,
 		arg.Generation,
+		arg.Message,
 		arg.CreatedAt,
 	)
 	return err
@@ -327,7 +333,7 @@ func (q *Queries) InsertVPC(ctx context.Context, arg InsertVPCParams) error {
 }
 
 const listSubnetPage = `-- name: ListSubnetPage :many
-SELECT id, workspace_id, vpc_id, short_index, name, cidr_block, availability_zone, generation, observed_generation, state, state_reason, created_at, updated_at FROM subnets
+SELECT id, workspace_id, vpc_id, short_index, name, cidr_block, availability_zone, generation, observed_generation, state, state_reason, created_at, updated_at, deletion_requested FROM subnets
 WHERE workspace_id = ? AND id > ?
 ORDER BY id
 LIMIT ?
@@ -362,6 +368,7 @@ func (q *Queries) ListSubnetPage(ctx context.Context, arg ListSubnetPageParams) 
 			&i.StateReason,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.DeletionRequested,
 		); err != nil {
 			return nil, err
 		}
@@ -377,7 +384,7 @@ func (q *Queries) ListSubnetPage(ctx context.Context, arg ListSubnetPageParams) 
 }
 
 const listSubnetsByVPC = `-- name: ListSubnetsByVPC :many
-SELECT id, workspace_id, vpc_id, short_index, name, cidr_block, availability_zone, generation, observed_generation, state, state_reason, created_at, updated_at FROM subnets WHERE vpc_id = ? ORDER BY id
+SELECT id, workspace_id, vpc_id, short_index, name, cidr_block, availability_zone, generation, observed_generation, state, state_reason, created_at, updated_at, deletion_requested FROM subnets WHERE vpc_id = ? ORDER BY id
 `
 
 func (q *Queries) ListSubnetsByVPC(ctx context.Context, vpcID string) ([]Subnet, error) {
@@ -403,6 +410,7 @@ func (q *Queries) ListSubnetsByVPC(ctx context.Context, vpcID string) ([]Subnet,
 			&i.StateReason,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.DeletionRequested,
 		); err != nil {
 			return nil, err
 		}
@@ -418,7 +426,7 @@ func (q *Queries) ListSubnetsByVPC(ctx context.Context, vpcID string) ([]Subnet,
 }
 
 const listVPCPage = `-- name: ListVPCPage :many
-SELECT id, workspace_id, short_index, name, cidr_block, generation, observed_generation, state, state_reason, created_at, updated_at FROM vpcs
+SELECT id, workspace_id, short_index, name, cidr_block, generation, observed_generation, state, state_reason, created_at, updated_at, deletion_requested FROM vpcs
 WHERE workspace_id = ? AND id > ?
 ORDER BY id
 LIMIT ?
@@ -451,6 +459,7 @@ func (q *Queries) ListVPCPage(ctx context.Context, arg ListVPCPageParams) ([]Vpc
 			&i.StateReason,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.DeletionRequested,
 		); err != nil {
 			return nil, err
 		}
@@ -466,9 +475,9 @@ func (q *Queries) ListVPCPage(ctx context.Context, arg ListVPCPageParams) ([]Vpc
 }
 
 const markSubnetDeleting = `-- name: MarkSubnetDeleting :exec
-UPDATE subnets SET state = 'deleting', state_reason = '',
+UPDATE subnets SET state = 'deleting', state_reason = '', deletion_requested = 1,
     generation = generation + 1, updated_at = ?
-WHERE id = ? AND workspace_id = ? AND state != 'deleting'
+WHERE id = ? AND workspace_id = ? AND deletion_requested = 0
 `
 
 type MarkSubnetDeletingParams struct {
@@ -483,9 +492,9 @@ func (q *Queries) MarkSubnetDeleting(ctx context.Context, arg MarkSubnetDeleting
 }
 
 const markVPCDeleting = `-- name: MarkVPCDeleting :exec
-UPDATE vpcs SET state = 'deleting', state_reason = '',
+UPDATE vpcs SET state = 'deleting', state_reason = '', deletion_requested = 1,
     generation = generation + 1, updated_at = ?
-WHERE id = ? AND workspace_id = ? AND state != 'deleting'
+WHERE id = ? AND workspace_id = ? AND deletion_requested = 0
 `
 
 type MarkVPCDeletingParams struct {

@@ -27,6 +27,7 @@ type VPC struct {
 	ShortIndex         int64
 	State              State
 	StateReason        string
+	DeletionRequested  bool
 	Generation         int64
 	ObservedGeneration int64
 }
@@ -42,6 +43,7 @@ type Subnet struct {
 	ShortIndex         int64
 	State              State
 	StateReason        string
+	DeletionRequested  bool
 	Generation         int64
 	ObservedGeneration int64
 }

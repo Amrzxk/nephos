@@ -55,8 +55,8 @@ DELETE FROM subnets WHERE id = ? AND workspace_id = ?;
 -- name: InsertEvent :exec
 INSERT INTO events (
     workspace_id, resource_type, resource_id, action, state, generation,
-    created_at
-) VALUES (?, ?, ?, ?, ?, ?, ?);
+    message, created_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: EventsAfter :many
 SELECT * FROM events WHERE id > ? ORDER BY id LIMIT ?;
@@ -77,14 +77,14 @@ ON CONFLICT(workspace_id, operation, key) DO UPDATE SET
     expires_at = excluded.expires_at;
 
 -- name: MarkVPCDeleting :exec
-UPDATE vpcs SET state = 'deleting', state_reason = '',
+UPDATE vpcs SET state = 'deleting', state_reason = '', deletion_requested = 1,
     generation = generation + 1, updated_at = ?
-WHERE id = ? AND workspace_id = ? AND state != 'deleting';
+WHERE id = ? AND workspace_id = ? AND deletion_requested = 0;
 
 -- name: MarkSubnetDeleting :exec
-UPDATE subnets SET state = 'deleting', state_reason = '',
+UPDATE subnets SET state = 'deleting', state_reason = '', deletion_requested = 1,
     generation = generation + 1, updated_at = ?
-WHERE id = ? AND workspace_id = ? AND state != 'deleting';
+WHERE id = ? AND workspace_id = ? AND deletion_requested = 0;
 
 -- name: CountInstancesInSubnet :one
 SELECT COUNT(*) FROM instances WHERE subnet_id = ?;

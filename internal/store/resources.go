@@ -262,7 +262,8 @@ func vpcFromRow(row sqlc.Vpc) (model.VPC, error) {
 	return model.VPC{
 		ID: row.ID, WorkspaceID: row.WorkspaceID, Name: row.Name, CIDRBlock: prefix,
 		ShortIndex: row.ShortIndex, State: model.State(row.State), StateReason: row.StateReason,
-		Generation: row.Generation, ObservedGeneration: row.ObservedGeneration,
+		DeletionRequested: row.DeletionRequested != 0,
+		Generation:        row.Generation, ObservedGeneration: row.ObservedGeneration,
 	}, nil
 }
 
@@ -275,7 +276,8 @@ func subnetFromRow(row sqlc.Subnet) (model.Subnet, error) {
 		ID: row.ID, WorkspaceID: row.WorkspaceID, VPCID: row.VpcID, Name: row.Name,
 		CIDRBlock: prefix, AvailabilityZone: row.AvailabilityZone, ShortIndex: row.ShortIndex,
 		State: model.State(row.State), StateReason: row.StateReason,
-		Generation: row.Generation, ObservedGeneration: row.ObservedGeneration,
+		DeletionRequested: row.DeletionRequested != 0,
+		Generation:        row.Generation, ObservedGeneration: row.ObservedGeneration,
 	}, nil
 }
 

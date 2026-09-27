@@ -132,7 +132,7 @@ if gotErr != nil || got != 1 { t.Fatalf("workspaces=%d err=%v", got, gotErr) }
 
 ### Task 6: Add level-triggered reconciliation and startup sweep
 
-**Files:** Create `internal/reconcile/controller.go`, `network.go`, `controller_test.go`; extend store status/event methods.
+**Files:** Create `internal/reconcile/controller.go`, `network.go`, `controller_test.go`, `internal/store/reconcile.go`, `internal/store/migrations/0003_deletion_intent.sql`; extend model deletion intent, store status/event methods, migration tests, service delete guards, queries and generated sqlc code.
 
 **Interfaces:** `reconcile.New(store *store.Store, network topology.Engine, interval time.Duration) *Controller`, `Controller.Enqueue(vpcID string)`, `Controller.Sweep(ctx context.Context) error`, and `Controller.Run(ctx context.Context) error`. Only one worker acts on a VPC key at a time. `Sweep` lists desired VPCs/subnets, collects only orphaned `nx-vpc-*` namespaces, converges desired namespaces, then returns. The daemon calls it before readiness becomes true. `Run` performs queued work and a full sweep every 60 seconds, with exponential retry on failures.
 

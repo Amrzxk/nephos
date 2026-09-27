@@ -83,6 +83,7 @@ type Subnet struct {
 	StateReason        string
 	CreatedAt          int64
 	UpdatedAt          int64
+	DeletionRequested  int64
 }
 
 type Vpc struct {
@@ -97,6 +98,7 @@ type Vpc struct {
 	StateReason        string
 	CreatedAt          int64
 	UpdatedAt          int64
+	DeletionRequested  int64
 }
 
 type Workspace struct {

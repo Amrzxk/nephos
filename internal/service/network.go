@@ -168,7 +168,7 @@ func (n *Network) DeleteVPC(ctx context.Context, id string) (model.VPC, error) {
 		if len(children) != 0 {
 			return dependencyViolation(id, "VPC still has subnets")
 		}
-		if vpc.State == model.StateDeleting {
+		if vpc.DeletionRequested {
 			result = vpc
 			return nil
 		}
@@ -238,7 +238,7 @@ func (n *Network) CreateSubnet(ctx context.Context, input CreateSubnetInput, key
 		if err != nil {
 			return err
 		}
-		if vpc.State == model.StateDeleting {
+		if vpc.DeletionRequested {
 			return dependencyViolation(vpc.ID, "VPC is deleting")
 		}
 		if err := ValidateSubnetRange(vpc.CIDRBlock, cidr); err != nil {
@@ -349,7 +349,7 @@ func (n *Network) DeleteSubnet(ctx context.Context, id string) (model.Subnet, er
 		if instances != 0 {
 			return dependencyViolation(id, "subnet still has instances")
 		}
-		if subnet.State == model.StateDeleting {
+		if subnet.DeletionRequested {
 			result = subnet
 			return nil
 		}

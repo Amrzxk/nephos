@@ -59,8 +59,8 @@ func TestOpenMigratesAndReopensWithoutLosingState(t *testing.T) {
 	if err := s.db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil {
 		t.Fatal(err)
 	}
-	if version != 2 {
-		t.Fatalf("schema version=%d, want 2", version)
+	if version != 3 {
+		t.Fatalf("schema version=%d, want 3", version)
 	}
 	var migrationCount int
 	if err := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM schema_migrations WHERE version = 1").Scan(&migrationCount); err != nil {
@@ -92,8 +92,8 @@ func TestOpenMigratesAndReopensWithoutLosingState(t *testing.T) {
 	if err := reopened.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM schema_migrations").Scan(&migrationCount); err != nil {
 		t.Fatal(err)
 	}
-	if migrationCount != 2 {
-		t.Fatalf("migration rows after reopen=%d, want 2", migrationCount)
+	if migrationCount != 3 {
+		t.Fatalf("migration rows after reopen=%d, want 3", migrationCount)
 	}
 }
 
@@ -139,12 +139,58 @@ func TestOpenUpgradesVersionOneWithoutLosingEvents(t *testing.T) {
 	if err := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM schema_migrations").Scan(&migrationCount); err != nil {
 		t.Fatal(err)
 	}
-	if version != 2 || eventCount != 1 || migrationCount != 2 {
+	if version != 3 || eventCount != 1 || migrationCount != 3 {
 		t.Fatalf("upgraded version=%d events=%d migrations=%d", version, eventCount, migrationCount)
 	}
 	_, err = s.db.ExecContext(ctx, "INSERT INTO idempotency_requests(workspace_id, operation, key, payload_hash, resource_id, response_json, created_at, expires_at) VALUES ('default', 'create-vpc', 'old-key', 'hash', 'vpc-0123456789abcdef0', '{}', 100, 200)")
 	if err != nil {
 		t.Fatalf("new idempotency snapshot column unavailable: %v", err)
+	}
+}
+
+func TestOpenUpgradesVersionTwoAndPreservesDeleteIntent(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "old-v2.db")
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.ExecContext(ctx, initialMigration); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.ExecContext(ctx, idempotencyResultMigration); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.ExecContext(ctx, "PRAGMA user_version = 2"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.ExecContext(ctx, "INSERT INTO kernel_indexes(resource_kind, resource_id) VALUES ('vpc', 'vpc-0123456789abcdef0')"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.ExecContext(ctx, "INSERT INTO vpcs(id, workspace_id, short_index, name, cidr_block, generation, state) VALUES ('vpc-0123456789abcdef0', 'default', 1, 'old', '10.0.0.0/16', 2, 'deleting')"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	s, err := Open(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	vpc, err := s.GetVPC(ctx, "default", "vpc-0123456789abcdef0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !vpc.DeletionRequested || vpc.State != "deleting" {
+		t.Fatalf("upgraded VPC=%+v", vpc)
 	}
 }
 

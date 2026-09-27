@@ -25,7 +25,7 @@ func (tx *Tx) AppendEvent(ctx context.Context, event Event) error {
 	if err := tx.q.InsertEvent(ctx, sqlc.InsertEventParams{
 		WorkspaceID: event.WorkspaceID, ResourceType: event.ResourceType,
 		ResourceID: event.ResourceID, Action: event.Action, State: event.State,
-		Generation: event.Generation, CreatedAt: event.CreatedAt,
+		Generation: event.Generation, Message: event.Message, CreatedAt: event.CreatedAt,
 	}); err != nil {
 		return fmt.Errorf("append %s event for %s: %w", event.Action, event.ResourceID, err)
 	}
