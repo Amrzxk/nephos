@@ -120,7 +120,7 @@ if gotErr != nil || got != 1 { t.Fatalf("workspaces=%d err=%v", got, gotErr) }
 
 ### Task 5: Build safe VPC namespace and subnet-gateway topology
 
-**Files:** Create `internal/network/netns/netns_linux.go`, `netns_linux_test.go`, `internal/network/topology/vpc_linux.go`, `vpc_linux_test.go`; modify `go.mod`/`go.sum`.
+**Files:** Create `internal/network/netns/netns_linux.go`, `netns_linux_test.go`, `netns_integration_test.go`, `internal/network/topology/vpc_linux.go`, `policy_linux.go`, `vpc_linux_test.go`, `vpc_integration_test.go`; modify `go.mod`/`go.sum`.
 
 **Interfaces:** `netns.Ensure(ctx, name) error` creates only an absent, valid `nx-vpc-<database short index>` named namespace; `netns.Do(ctx, name, func() error) error` runs on a locked disposable OS thread and binds netlink handles to that namespace; `netns.Delete(ctx, name) error` deletes only a validated Nephos name. `topology.Engine` exposes `EnsureVPC(ctx, model.VPC, []model.Subnet) error`, `DeleteVPC(ctx, model.VPC) error` and `ListVPCNames(ctx) ([]string, error)`. It does not import service or apiserver.
 
