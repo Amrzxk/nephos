@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"errors"
 	"os"
 	"path/filepath"
@@ -213,6 +214,41 @@ func TestOpenEnforcesSubnetForeignKey(t *testing.T) {
 	_, err = s.db.ExecContext(ctx, "INSERT INTO subnets(id, workspace_id, vpc_id, name, cidr_block, availability_zone, short_index) VALUES (?, 'default', 'vpc-fffffffffffffffff', 'isolated', '10.0.1.0/24', 'local-1a', ?)", "subnet-0123456789abcdef0", shortIndex)
 	if err == nil || !strings.Contains(strings.ToLower(err.Error()), "foreign key") {
 		t.Fatalf("invalid VPC foreign key error=%v", err)
+	}
+}
+
+func TestConnectionPragmasSurviveReplacement(t *testing.T) {
+	ctx := context.Background()
+	s, err := Open(ctx, filepath.Join(t.TempDir(), "replacement file #1?.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+
+	conn, err := s.db.Conn(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := conn.Raw(func(any) error { return driver.ErrBadConn }); !errors.Is(err, driver.ErrBadConn) {
+		t.Fatalf("discard pooled connection: %v", err)
+	}
+	if err := conn.Close(); err != nil && !errors.Is(err, sql.ErrConnDone) {
+		t.Fatal(err)
+	}
+
+	var foreignKeys, busyTimeout int
+	if err := s.db.QueryRowContext(ctx, "PRAGMA foreign_keys").Scan(&foreignKeys); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.db.QueryRowContext(ctx, "PRAGMA busy_timeout").Scan(&busyTimeout); err != nil {
+		t.Fatal(err)
+	}
+	if foreignKeys != 1 || busyTimeout != 5000 {
+		t.Fatalf("replacement connection: foreign_keys=%d busy_timeout=%d, want 1 and 5000", foreignKeys, busyTimeout)
+	}
+	_, err = s.db.ExecContext(ctx, "INSERT INTO subnets(id, workspace_id, vpc_id, name, cidr_block, availability_zone, short_index) VALUES ('subnet-0123456789abcdef0', 'default', 'vpc-fffffffffffffffff', 'orphan', '10.0.1.0/24', 'local-1a', 1)")
+	if err == nil || !strings.Contains(strings.ToLower(err.Error()), "foreign key") {
+		t.Fatalf("replacement connection accepted orphan subnet: %v", err)
 	}
 }
 

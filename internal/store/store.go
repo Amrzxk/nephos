@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	_ "embed"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 
@@ -23,8 +24,9 @@ var deletionIntentMigration string
 
 const schemaVersion = 3
 
-// Store is the sole durable authority for resource state. Its single database
-// connection keeps SQLite connection-local PRAGMAs consistent.
+// Store is the sole durable authority for resource state. One connection at a
+// time serializes SQLite writes; the DSN reapplies connection-local PRAGMAs
+// whenever database/sql replaces an interrupted connection.
 type Store struct {
 	db *sql.DB
 }
@@ -52,7 +54,16 @@ func Open(ctx context.Context, path string) (*Store, error) {
 		return nil, fmt.Errorf("protect state file: %w", err)
 	}
 
-	db, err := sql.Open("sqlite", path)
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return nil, fmt.Errorf("resolve state file path: %w", err)
+	}
+	uri := url.URL{Scheme: "file", Path: absPath}
+	params := uri.Query()
+	params.Set("_busy_timeout", "5000")
+	params.Set("_foreign_keys", "on")
+	uri.RawQuery = params.Encode()
+	db, err := sql.Open("sqlite", uri.String())
 	if err != nil {
 		return nil, fmt.Errorf("open SQLite: %w", err)
 	}
@@ -64,11 +75,18 @@ func Open(ctx context.Context, path string) (*Store, error) {
 		}
 	}()
 
-	if _, err := db.ExecContext(ctx, "PRAGMA busy_timeout = 5000"); err != nil {
-		return nil, fmt.Errorf("set SQLite busy timeout: %w", err)
+	var busyTimeout, foreignKeys int
+	if err := db.QueryRowContext(ctx, "PRAGMA busy_timeout").Scan(&busyTimeout); err != nil {
+		return nil, fmt.Errorf("verify SQLite busy timeout: %w", err)
 	}
-	if _, err := db.ExecContext(ctx, "PRAGMA foreign_keys = ON"); err != nil {
-		return nil, fmt.Errorf("enable SQLite foreign keys: %w", err)
+	if busyTimeout != 5000 {
+		return nil, fmt.Errorf("SQLite refused busy timeout: %d", busyTimeout)
+	}
+	if err := db.QueryRowContext(ctx, "PRAGMA foreign_keys").Scan(&foreignKeys); err != nil {
+		return nil, fmt.Errorf("verify SQLite foreign keys: %w", err)
+	}
+	if foreignKeys != 1 {
+		return nil, fmt.Errorf("SQLite refused foreign keys: %d", foreignKeys)
 	}
 	var mode string
 	if err := db.QueryRowContext(ctx, "PRAGMA journal_mode = WAL").Scan(&mode); err != nil {
