@@ -81,6 +81,14 @@ Each entry names the milestone it belongs to; see [docs/ROADMAP.md](docs/ROADMAP
   Amended in place rather than superseded, because no decision changed — only
   the text. ADR-0003 and ADR-0005 record their validation results.
 
+### Fixed
+
+- **M1 — daemon test connection cleanup.** Readiness/shutdown tests now own
+  their HTTP transports, consume responses, and close unused connections
+  before canceling the daemon. This removes an intermittent CI shutdown
+  timeout caused by a speculative connection with no request, without
+  relaxing readiness assertions or changing product shutdown behavior.
+
 ### Notes
 
 - M1 slices 1 and 2 are implemented and merged in PRs #3 and #4, establishing
