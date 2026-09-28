@@ -88,3 +88,36 @@ WHERE id = ? AND workspace_id = ? AND deletion_requested = 0;
 
 -- name: CountInstancesInSubnet :one
 SELECT COUNT(*) FROM instances WHERE subnet_id = ?;
+
+-- name: InsertInstance :exec
+INSERT INTO instances(id, workspace_id, subnet_id, short_index, name, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?);
+
+-- name: InsertENI :exec
+INSERT INTO enis(id, workspace_id, instance_id, subnet_id, short_index, private_ip, mac_address, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+-- name: GetInstance :one
+SELECT * FROM instances WHERE id = ? AND workspace_id = ?;
+
+-- name: GetInstanceByName :one
+SELECT * FROM instances WHERE workspace_id = ? AND name = ?;
+
+-- name: GetPrimaryENI :one
+SELECT * FROM enis WHERE instance_id = ? AND workspace_id = ?;
+
+-- name: ListInstancePage :many
+SELECT * FROM instances WHERE workspace_id = ? AND id > ? ORDER BY id LIMIT ?;
+
+-- name: ListENIAddresses :many
+SELECT private_ip FROM enis WHERE subnet_id = ? ORDER BY private_ip;
+
+-- name: MarkInstanceTerminating :exec
+UPDATE instances SET state = 'shutting-down', state_reason = '', deletion_requested = 1,
+    generation = generation + 1, updated_at = ?
+WHERE id = ? AND workspace_id = ? AND deletion_requested = 0;
+
+-- name: RecordRuntimeID :execrows
+UPDATE instances SET runtime_id = ?
+WHERE id = ? AND generation = ? AND deletion_requested = 0
+    AND (runtime_id IS NULL OR runtime_id = ?);

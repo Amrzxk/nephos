@@ -7,6 +7,7 @@ package sqlc
 
 import (
 	"context"
+	"database/sql"
 )
 
 const countInstancesInSubnet = `-- name: CountInstancesInSubnet :one
@@ -113,6 +114,96 @@ func (q *Queries) GetIdempotency(ctx context.Context, arg GetIdempotencyParams) 
 		&i.CreatedAt,
 		&i.ExpiresAt,
 		&i.ResponseJson,
+	)
+	return i, err
+}
+
+const getInstance = `-- name: GetInstance :one
+SELECT id, workspace_id, subnet_id, short_index, name, generation, observed_generation, state, state_reason, created_at, updated_at, deletion_requested, runtime_id FROM instances WHERE id = ? AND workspace_id = ?
+`
+
+type GetInstanceParams struct {
+	ID          string
+	WorkspaceID string
+}
+
+func (q *Queries) GetInstance(ctx context.Context, arg GetInstanceParams) (Instance, error) {
+	row := q.db.QueryRowContext(ctx, getInstance, arg.ID, arg.WorkspaceID)
+	var i Instance
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.SubnetID,
+		&i.ShortIndex,
+		&i.Name,
+		&i.Generation,
+		&i.ObservedGeneration,
+		&i.State,
+		&i.StateReason,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletionRequested,
+		&i.RuntimeID,
+	)
+	return i, err
+}
+
+const getInstanceByName = `-- name: GetInstanceByName :one
+SELECT id, workspace_id, subnet_id, short_index, name, generation, observed_generation, state, state_reason, created_at, updated_at, deletion_requested, runtime_id FROM instances WHERE workspace_id = ? AND name = ?
+`
+
+type GetInstanceByNameParams struct {
+	WorkspaceID string
+	Name        string
+}
+
+func (q *Queries) GetInstanceByName(ctx context.Context, arg GetInstanceByNameParams) (Instance, error) {
+	row := q.db.QueryRowContext(ctx, getInstanceByName, arg.WorkspaceID, arg.Name)
+	var i Instance
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.SubnetID,
+		&i.ShortIndex,
+		&i.Name,
+		&i.Generation,
+		&i.ObservedGeneration,
+		&i.State,
+		&i.StateReason,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletionRequested,
+		&i.RuntimeID,
+	)
+	return i, err
+}
+
+const getPrimaryENI = `-- name: GetPrimaryENI :one
+SELECT id, workspace_id, instance_id, subnet_id, short_index, private_ip, mac_address, generation, observed_generation, state, state_reason, created_at, updated_at FROM enis WHERE instance_id = ? AND workspace_id = ?
+`
+
+type GetPrimaryENIParams struct {
+	InstanceID  string
+	WorkspaceID string
+}
+
+func (q *Queries) GetPrimaryENI(ctx context.Context, arg GetPrimaryENIParams) (Eni, error) {
+	row := q.db.QueryRowContext(ctx, getPrimaryENI, arg.InstanceID, arg.WorkspaceID)
+	var i Eni
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.InstanceID,
+		&i.SubnetID,
+		&i.ShortIndex,
+		&i.PrivateIp,
+		&i.MacAddress,
+		&i.Generation,
+		&i.ObservedGeneration,
+		&i.State,
+		&i.StateReason,
+		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
@@ -237,6 +328,38 @@ func (q *Queries) GetVPCByName(ctx context.Context, arg GetVPCByNameParams) (Vpc
 	return i, err
 }
 
+const insertENI = `-- name: InsertENI :exec
+INSERT INTO enis(id, workspace_id, instance_id, subnet_id, short_index, private_ip, mac_address, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+`
+
+type InsertENIParams struct {
+	ID          string
+	WorkspaceID string
+	InstanceID  string
+	SubnetID    string
+	ShortIndex  int64
+	PrivateIp   string
+	MacAddress  string
+	CreatedAt   int64
+	UpdatedAt   int64
+}
+
+func (q *Queries) InsertENI(ctx context.Context, arg InsertENIParams) error {
+	_, err := q.db.ExecContext(ctx, insertENI,
+		arg.ID,
+		arg.WorkspaceID,
+		arg.InstanceID,
+		arg.SubnetID,
+		arg.ShortIndex,
+		arg.PrivateIp,
+		arg.MacAddress,
+		arg.CreatedAt,
+		arg.UpdatedAt,
+	)
+	return err
+}
+
 const insertEvent = `-- name: InsertEvent :exec
 INSERT INTO events (
     workspace_id, resource_type, resource_id, action, state, generation,
@@ -265,6 +388,34 @@ func (q *Queries) InsertEvent(ctx context.Context, arg InsertEventParams) error 
 		arg.Generation,
 		arg.Message,
 		arg.CreatedAt,
+	)
+	return err
+}
+
+const insertInstance = `-- name: InsertInstance :exec
+INSERT INTO instances(id, workspace_id, subnet_id, short_index, name, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?)
+`
+
+type InsertInstanceParams struct {
+	ID          string
+	WorkspaceID string
+	SubnetID    string
+	ShortIndex  int64
+	Name        string
+	CreatedAt   int64
+	UpdatedAt   int64
+}
+
+func (q *Queries) InsertInstance(ctx context.Context, arg InsertInstanceParams) error {
+	_, err := q.db.ExecContext(ctx, insertInstance,
+		arg.ID,
+		arg.WorkspaceID,
+		arg.SubnetID,
+		arg.ShortIndex,
+		arg.Name,
+		arg.CreatedAt,
+		arg.UpdatedAt,
 	)
 	return err
 }
@@ -330,6 +481,80 @@ func (q *Queries) InsertVPC(ctx context.Context, arg InsertVPCParams) error {
 		arg.UpdatedAt,
 	)
 	return err
+}
+
+const listENIAddresses = `-- name: ListENIAddresses :many
+SELECT private_ip FROM enis WHERE subnet_id = ? ORDER BY private_ip
+`
+
+func (q *Queries) ListENIAddresses(ctx context.Context, subnetID string) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, listENIAddresses, subnetID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var private_ip string
+		if err := rows.Scan(&private_ip); err != nil {
+			return nil, err
+		}
+		items = append(items, private_ip)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listInstancePage = `-- name: ListInstancePage :many
+SELECT id, workspace_id, subnet_id, short_index, name, generation, observed_generation, state, state_reason, created_at, updated_at, deletion_requested, runtime_id FROM instances WHERE workspace_id = ? AND id > ? ORDER BY id LIMIT ?
+`
+
+type ListInstancePageParams struct {
+	WorkspaceID string
+	ID          string
+	Limit       int64
+}
+
+func (q *Queries) ListInstancePage(ctx context.Context, arg ListInstancePageParams) ([]Instance, error) {
+	rows, err := q.db.QueryContext(ctx, listInstancePage, arg.WorkspaceID, arg.ID, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Instance
+	for rows.Next() {
+		var i Instance
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.SubnetID,
+			&i.ShortIndex,
+			&i.Name,
+			&i.Generation,
+			&i.ObservedGeneration,
+			&i.State,
+			&i.StateReason,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletionRequested,
+			&i.RuntimeID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listSubnetPage = `-- name: ListSubnetPage :many
@@ -474,6 +699,23 @@ func (q *Queries) ListVPCPage(ctx context.Context, arg ListVPCPageParams) ([]Vpc
 	return items, nil
 }
 
+const markInstanceTerminating = `-- name: MarkInstanceTerminating :exec
+UPDATE instances SET state = 'shutting-down', state_reason = '', deletion_requested = 1,
+    generation = generation + 1, updated_at = ?
+WHERE id = ? AND workspace_id = ? AND deletion_requested = 0
+`
+
+type MarkInstanceTerminatingParams struct {
+	UpdatedAt   int64
+	ID          string
+	WorkspaceID string
+}
+
+func (q *Queries) MarkInstanceTerminating(ctx context.Context, arg MarkInstanceTerminatingParams) error {
+	_, err := q.db.ExecContext(ctx, markInstanceTerminating, arg.UpdatedAt, arg.ID, arg.WorkspaceID)
+	return err
+}
+
 const markSubnetDeleting = `-- name: MarkSubnetDeleting :exec
 UPDATE subnets SET state = 'deleting', state_reason = '', deletion_requested = 1,
     generation = generation + 1, updated_at = ?
@@ -543,6 +785,32 @@ func (q *Queries) PutIdempotency(ctx context.Context, arg PutIdempotencyParams) 
 		arg.ExpiresAt,
 	)
 	return err
+}
+
+const recordRuntimeID = `-- name: RecordRuntimeID :execrows
+UPDATE instances SET runtime_id = ?
+WHERE id = ? AND generation = ? AND deletion_requested = 0
+    AND (runtime_id IS NULL OR runtime_id = ?)
+`
+
+type RecordRuntimeIDParams struct {
+	RuntimeID   sql.NullString
+	ID          string
+	Generation  int64
+	RuntimeID_2 sql.NullString
+}
+
+func (q *Queries) RecordRuntimeID(ctx context.Context, arg RecordRuntimeIDParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, recordRuntimeID,
+		arg.RuntimeID,
+		arg.ID,
+		arg.Generation,
+		arg.RuntimeID_2,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const updateSubnetStatus = `-- name: UpdateSubnetStatus :exec
