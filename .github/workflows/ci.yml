@@ -154,6 +154,12 @@ jobs:
       - name: Check CLI bootstrap and restart
         run: bash tests/appliance-cli-smoke.sh
 
+      - name: Install host nftables inspection tool
+        run: sudo apt-get update && sudo apt-get install -y nftables
+
+      - name: Check VPC and subnet resource path
+        run: bash tests/vpc-subnet-smoke.sh
+
       - name: Appliance logs on failure
         if: failure()
         run: docker logs nephos || true

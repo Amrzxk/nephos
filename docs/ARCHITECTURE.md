@@ -386,6 +386,15 @@ As in AWS, `running` means the machine has started, not that SSH is ready. Insta
 
 Behavior changes to the network plane must update this table in the same pull request.
 
+**Current M1 fidelity status:** slice 2 implements only VPC namespace
+isolation, the subnet base+1 `/32` gateway, the local-VPC policy rule, and a
+fail-closed unmatched rule. Its [connectivity matrix](tests/M1-connectivity-matrix.md)
+distinguishes these live-kernel observations from the slice-3 instance-packet
+tests. Other behavior in the table is the target architecture for its owning
+milestone, not a claim that it already ships. In particular, this slice has no
+ENI data path, SG/NACL packet enforcement, DNS/IMDS, default VPC, or internet
+edge.
+
 ## 6. API, CLI, and naming conventions
 
 The full API rules are in [ADR-0008](adr/0008-rest-openapi-api-not-aws-compatible.md). In short:

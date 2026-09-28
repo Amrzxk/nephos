@@ -76,6 +76,11 @@ Risks whose mitigation lands in **M0–M8** must be mitigated before v0.1.0 (see
   - A leak checker after every reset.
   - Chaos and leak tests in nightly CI.
   - `nephos reset --hard` as the guaranteed escape hatch.
+- **M1 slice-2 evidence:** controller tests cover missed enqueue, retry after
+  kernel failure, drift repair, namespace orphan cleanup, and deletion order.
+  The appliance smoke checks persisted VPC/subnet IDs, short indexes and
+  gateways across `down`/`up`. Instance recovery and the reset leak checker
+  remain in later M1 slices; this is not yet full T4 closure.
 - **Milestone:** M1, M8.
 - **Early warning:** nightly leak-checker failures; "stuck in pending" reports.
 
@@ -123,6 +128,12 @@ Risks whose mitigation lands in **M0–M8** must be mitigated before v0.1.0 (see
   - A thread that switched namespace is never returned to the scheduler; it exits.
   - Netlink handles are bound to namespace handles.
   - Stress tests run with the race detector, plus a lint rule forbidding `setns` elsewhere ([ADR-0002](adr/0002-go-for-control-plane-and-cli.md)).
+- **M1 slice-2 evidence:** privileged namespace integration tests exercise
+  concurrent entry and verify the caller stays in its original namespace.
+  The real-appliance smoke compares host namespace inode, links, routes,
+  policy rules and readable nftables before/after. Native CI requires the
+  nftables check; WSL2 reports explicitly if its host tool is unavailable.
+  Slice 3 must extend this evidence to instance ENIs and real packets.
 - **Milestone:** M0 (SP3), M1.
 - **Early warning:** flaky integration tests; objects appearing in the wrong namespace.
 

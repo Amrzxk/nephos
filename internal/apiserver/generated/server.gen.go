@@ -6,9 +6,33 @@
 package generated
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
+
+	"github.com/oapi-codegen/runtime"
 )
+
+// Defines values for CreateSubnetRequestAvailabilityZone.
+const (
+	CreateSubnetRequestAvailabilityZoneLocal1a CreateSubnetRequestAvailabilityZone = "local-1a"
+	CreateSubnetRequestAvailabilityZoneLocal1b CreateSubnetRequestAvailabilityZone = "local-1b"
+	CreateSubnetRequestAvailabilityZoneLocal1c CreateSubnetRequestAvailabilityZone = "local-1c"
+)
+
+// Valid indicates whether the value is a known member of the CreateSubnetRequestAvailabilityZone enum.
+func (e CreateSubnetRequestAvailabilityZone) Valid() bool {
+	switch e {
+	case CreateSubnetRequestAvailabilityZoneLocal1a:
+		return true
+	case CreateSubnetRequestAvailabilityZoneLocal1b:
+		return true
+	case CreateSubnetRequestAvailabilityZoneLocal1c:
+		return true
+	default:
+		return false
+	}
+}
 
 // Defines values for HealthResponseStatus.
 const (
@@ -28,6 +52,92 @@ func (e HealthResponseStatus) Valid() bool {
 	}
 }
 
+// Defines values for SubnetAvailabilityZone.
+const (
+	SubnetAvailabilityZoneLocal1a SubnetAvailabilityZone = "local-1a"
+	SubnetAvailabilityZoneLocal1b SubnetAvailabilityZone = "local-1b"
+	SubnetAvailabilityZoneLocal1c SubnetAvailabilityZone = "local-1c"
+)
+
+// Valid indicates whether the value is a known member of the SubnetAvailabilityZone enum.
+func (e SubnetAvailabilityZone) Valid() bool {
+	switch e {
+	case SubnetAvailabilityZoneLocal1a:
+		return true
+	case SubnetAvailabilityZoneLocal1b:
+		return true
+	case SubnetAvailabilityZoneLocal1c:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SubnetState.
+const (
+	SubnetStateAvailable SubnetState = "available"
+	SubnetStateDeleting  SubnetState = "deleting"
+	SubnetStateFailed    SubnetState = "failed"
+	SubnetStatePending   SubnetState = "pending"
+)
+
+// Valid indicates whether the value is a known member of the SubnetState enum.
+func (e SubnetState) Valid() bool {
+	switch e {
+	case SubnetStateAvailable:
+		return true
+	case SubnetStateDeleting:
+		return true
+	case SubnetStateFailed:
+		return true
+	case SubnetStatePending:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for VpcState.
+const (
+	VpcStateAvailable VpcState = "available"
+	VpcStateDeleting  VpcState = "deleting"
+	VpcStateFailed    VpcState = "failed"
+	VpcStatePending   VpcState = "pending"
+)
+
+// Valid indicates whether the value is a known member of the VpcState enum.
+func (e VpcState) Valid() bool {
+	switch e {
+	case VpcStateAvailable:
+		return true
+	case VpcStateDeleting:
+		return true
+	case VpcStateFailed:
+		return true
+	case VpcStatePending:
+		return true
+	default:
+		return false
+	}
+}
+
+// CreateSubnetRequest defines model for CreateSubnetRequest.
+type CreateSubnetRequest struct {
+	AvailabilityZone CreateSubnetRequestAvailabilityZone `json:"availability_zone"`
+	CidrBlock        string                              `json:"cidr_block"`
+	Name             string                              `json:"name"`
+	VpcId            string                              `json:"vpc_id"`
+}
+
+// CreateSubnetRequestAvailabilityZone defines model for CreateSubnetRequest.AvailabilityZone.
+type CreateSubnetRequestAvailabilityZone string
+
+// CreateVpcRequest defines model for CreateVpcRequest.
+type CreateVpcRequest struct {
+	CidrBlock string `json:"cidr_block"`
+	Name      string `json:"name"`
+}
+
 // Error defines model for Error.
 type Error struct {
 	Code       string  `json:"code"`
@@ -44,6 +154,31 @@ type HealthResponse struct {
 // HealthResponseStatus defines model for HealthResponse.Status.
 type HealthResponseStatus string
 
+// Subnet defines model for Subnet.
+type Subnet struct {
+	AvailabilityZone   SubnetAvailabilityZone `json:"availability_zone"`
+	CidrBlock          string                 `json:"cidr_block"`
+	Generation         int64                  `json:"generation"`
+	Id                 string                 `json:"id"`
+	Name               string                 `json:"name"`
+	ObservedGeneration int64                  `json:"observed_generation"`
+	State              SubnetState            `json:"state"`
+	StateReason        string                 `json:"state_reason"`
+	VpcId              string                 `json:"vpc_id"`
+}
+
+// SubnetAvailabilityZone defines model for Subnet.AvailabilityZone.
+type SubnetAvailabilityZone string
+
+// SubnetState defines model for Subnet.State.
+type SubnetState string
+
+// SubnetsPage defines model for SubnetsPage.
+type SubnetsPage struct {
+	Items         []Subnet `json:"items"`
+	NextPageToken *string  `json:"next_page_token,omitempty"`
+}
+
 // VersionResponse defines model for VersionResponse.
 type VersionResponse struct {
 	ApiVersion   string `json:"api_version"`
@@ -51,17 +186,126 @@ type VersionResponse struct {
 	BuildVersion string `json:"build_version"`
 }
 
+// Vpc defines model for Vpc.
+type Vpc struct {
+	CidrBlock          string   `json:"cidr_block"`
+	Generation         int64    `json:"generation"`
+	Id                 string   `json:"id"`
+	Name               string   `json:"name"`
+	ObservedGeneration int64    `json:"observed_generation"`
+	State              VpcState `json:"state"`
+	StateReason        string   `json:"state_reason"`
+}
+
+// VpcState defines model for Vpc.State.
+type VpcState string
+
+// VpcsPage defines model for VpcsPage.
+type VpcsPage struct {
+	Items         []Vpc   `json:"items"`
+	NextPageToken *string `json:"next_page_token,omitempty"`
+}
+
+// IdempotencyKey defines model for IdempotencyKey.
+type IdempotencyKey = string
+
+// LastEventID defines model for LastEventID.
+type LastEventID = string
+
+// Limit defines model for Limit.
+type Limit = int
+
+// PageToken defines model for PageToken.
+type PageToken = string
+
+// ResourceID defines model for ResourceID.
+type ResourceID = string
+
+// Workspace defines model for Workspace.
+type Workspace = string
+
+// BadRequest defines model for BadRequest.
+type BadRequest = Error
+
+// Conflict defines model for Conflict.
+type Conflict = Error
+
+// NotFound defines model for NotFound.
+type NotFound = Error
+
 // Unauthorized defines model for Unauthorized.
 type Unauthorized = Error
 
+// GetEventsParams defines parameters for GetEvents.
+type GetEventsParams struct {
+	LastEventID *LastEventID `json:"Last-Event-ID,omitempty"`
+}
+
+// ListSubnetsParams defines parameters for ListSubnets.
+type ListSubnetsParams struct {
+	Limit     *Limit     `form:"limit,omitempty" json:"limit,omitempty"`
+	PageToken *PageToken `form:"page_token,omitempty" json:"page_token,omitempty"`
+}
+
+// CreateSubnetParams defines parameters for CreateSubnet.
+type CreateSubnetParams struct {
+	// IdempotencyKey Replays identical creates for 24 hours
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// ListVpcsParams defines parameters for ListVpcs.
+type ListVpcsParams struct {
+	Limit     *Limit     `form:"limit,omitempty" json:"limit,omitempty"`
+	PageToken *PageToken `form:"page_token,omitempty" json:"page_token,omitempty"`
+}
+
+// CreateVpcParams defines parameters for CreateVpc.
+type CreateVpcParams struct {
+	// IdempotencyKey Replays identical creates for 24 hours
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// CreateSubnetJSONRequestBody defines body for CreateSubnet for application/json ContentType.
+type CreateSubnetJSONRequestBody = CreateSubnetRequest
+
+// CreateVpcJSONRequestBody defines body for CreateVpc for application/json ContentType.
+type CreateVpcJSONRequestBody = CreateVpcRequest
+
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+
+	// (GET /v1/events)
+	GetEvents(w http.ResponseWriter, r *http.Request, params GetEventsParams)
 
 	// (GET /v1/health)
 	GetHealth(w http.ResponseWriter, r *http.Request)
 
 	// (GET /v1/version)
 	GetVersion(w http.ResponseWriter, r *http.Request)
+
+	// (GET /v1/workspaces/{workspace}/subnets)
+	ListSubnets(w http.ResponseWriter, r *http.Request, workspace Workspace, params ListSubnetsParams)
+
+	// (POST /v1/workspaces/{workspace}/subnets)
+	CreateSubnet(w http.ResponseWriter, r *http.Request, workspace Workspace, params CreateSubnetParams)
+
+	// (DELETE /v1/workspaces/{workspace}/subnets/{id})
+	DeleteSubnet(w http.ResponseWriter, r *http.Request, workspace Workspace, id ResourceID)
+
+	// (GET /v1/workspaces/{workspace}/subnets/{id})
+	GetSubnet(w http.ResponseWriter, r *http.Request, workspace Workspace, id ResourceID)
+
+	// (GET /v1/workspaces/{workspace}/vpcs)
+	ListVpcs(w http.ResponseWriter, r *http.Request, workspace Workspace, params ListVpcsParams)
+
+	// (POST /v1/workspaces/{workspace}/vpcs)
+	CreateVpc(w http.ResponseWriter, r *http.Request, workspace Workspace, params CreateVpcParams)
+
+	// (DELETE /v1/workspaces/{workspace}/vpcs/{id})
+	DeleteVpc(w http.ResponseWriter, r *http.Request, workspace Workspace, id ResourceID)
+
+	// (GET /v1/workspaces/{workspace}/vpcs/{id})
+	GetVpc(w http.ResponseWriter, r *http.Request, workspace Workspace, id ResourceID)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -72,6 +316,47 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// GetEvents operation middleware
+func (siw *ServerInterfaceWrapper) GetEvents(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetEventsParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Last-Event-ID" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Last-Event-ID")]; found {
+		var LastEventID LastEventID
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Last-Event-ID", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Last-Event-ID", valueList[0], &LastEventID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Last-Event-ID", Err: err})
+			return
+		}
+
+		params.LastEventID = &LastEventID
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetEvents(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // GetHealth operation middleware
 func (siw *ServerInterfaceWrapper) GetHealth(w http.ResponseWriter, r *http.Request) {
@@ -92,6 +377,356 @@ func (siw *ServerInterfaceWrapper) GetVersion(w http.ResponseWriter, r *http.Req
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetVersion(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListSubnets operation middleware
+func (siw *ServerInterfaceWrapper) ListSubnets(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "workspace" -------------
+	var workspace Workspace
+
+	err = runtime.BindStyledParameterWithOptions("simple", "workspace", r.PathValue("workspace"), &workspace, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workspace", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListSubnetsParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "page_token" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "page_token", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "page_token"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "page_token", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListSubnets(w, r, workspace, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateSubnet operation middleware
+func (siw *ServerInterfaceWrapper) CreateSubnet(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "workspace" -------------
+	var workspace Workspace
+
+	err = runtime.BindStyledParameterWithOptions("simple", "workspace", r.PathValue("workspace"), &workspace, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workspace", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateSubnetParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateSubnet(w, r, workspace, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteSubnet operation middleware
+func (siw *ServerInterfaceWrapper) DeleteSubnet(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "workspace" -------------
+	var workspace Workspace
+
+	err = runtime.BindStyledParameterWithOptions("simple", "workspace", r.PathValue("workspace"), &workspace, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workspace", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "id" -------------
+	var id ResourceID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteSubnet(w, r, workspace, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetSubnet operation middleware
+func (siw *ServerInterfaceWrapper) GetSubnet(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "workspace" -------------
+	var workspace Workspace
+
+	err = runtime.BindStyledParameterWithOptions("simple", "workspace", r.PathValue("workspace"), &workspace, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workspace", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "id" -------------
+	var id ResourceID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetSubnet(w, r, workspace, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListVpcs operation middleware
+func (siw *ServerInterfaceWrapper) ListVpcs(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "workspace" -------------
+	var workspace Workspace
+
+	err = runtime.BindStyledParameterWithOptions("simple", "workspace", r.PathValue("workspace"), &workspace, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workspace", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListVpcsParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "page_token" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "page_token", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "page_token"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "page_token", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListVpcs(w, r, workspace, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateVpc operation middleware
+func (siw *ServerInterfaceWrapper) CreateVpc(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "workspace" -------------
+	var workspace Workspace
+
+	err = runtime.BindStyledParameterWithOptions("simple", "workspace", r.PathValue("workspace"), &workspace, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workspace", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateVpcParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateVpc(w, r, workspace, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteVpc operation middleware
+func (siw *ServerInterfaceWrapper) DeleteVpc(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "workspace" -------------
+	var workspace Workspace
+
+	err = runtime.BindStyledParameterWithOptions("simple", "workspace", r.PathValue("workspace"), &workspace, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workspace", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "id" -------------
+	var id ResourceID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteVpc(w, r, workspace, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetVpc operation middleware
+func (siw *ServerInterfaceWrapper) GetVpc(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "workspace" -------------
+	var workspace Workspace
+
+	err = runtime.BindStyledParameterWithOptions("simple", "workspace", r.PathValue("workspace"), &workspace, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workspace", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "id" -------------
+	var id ResourceID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetVpc(w, r, workspace, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -223,6 +858,15 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/health", wrapper.GetHealth)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/version", wrapper.GetVersion)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/workspaces/{workspace}/vpcs", wrapper.ListVpcs)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/workspaces/{workspace}/vpcs", wrapper.CreateVpc)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/workspaces/{workspace}/vpcs/{id}", wrapper.DeleteVpc)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/workspaces/{workspace}/vpcs/{id}", wrapper.GetVpc)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/workspaces/{workspace}/subnets", wrapper.ListSubnets)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/workspaces/{workspace}/subnets", wrapper.CreateSubnet)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/workspaces/{workspace}/subnets/{id}", wrapper.DeleteSubnet)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/workspaces/{workspace}/subnets/{id}", wrapper.GetSubnet)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/events", wrapper.GetEvents)
 
 	return m
 }

@@ -6,19 +6,24 @@ import (
 	"net/http"
 
 	"github.com/Amrzxk/nephos/internal/apiserver/generated"
+	"github.com/Amrzxk/nephos/internal/service"
+	"github.com/Amrzxk/nephos/internal/store"
 	"github.com/Amrzxk/nephos/internal/version"
 )
 
 type server struct {
-	build version.Info
-	ready func() bool
+	build     version.Info
+	ready     func() bool
+	resources *service.Network
+	events    *store.Store
 }
 
-// New returns the generated API routes with M1's localhost and bearer-token
-// boundary. The readiness callback allows later slices to include their
-// startup reconcile sweep without changing this API.
-func New(token string, build version.Info, ready func() bool) http.Handler {
-	h := generated.Handler(&server{build: build, ready: ready})
+// New returns the generated routes behind M1's localhost and bearer boundary.
+func New(token string, build version.Info, ready func() bool, resources *service.Network, events *store.Store) http.Handler {
+	h := generated.HandlerWithOptions(&server{build: build, ready: ready, resources: resources, events: events},
+		generated.StdHTTPServerOptions{ErrorHandlerFunc: func(w http.ResponseWriter, _ *http.Request, err error) {
+			writeAPIError(w, http.StatusBadRequest, "InvalidParameterValue", err.Error(), "")
+		}})
 	return localOnly(requireBearer(token, h))
 }
 

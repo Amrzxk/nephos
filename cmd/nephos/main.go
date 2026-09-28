@@ -1,10 +1,11 @@
 // Command nephos is the Nephos CLI. It runs on the learner's machine and talks
 // to nephosd inside the appliance over the REST API.
 //
-// M1 adds the appliance lifecycle; resource commands follow in later slices.
+// M1 includes appliance lifecycle and generated-client VPC/subnet commands.
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -25,11 +26,15 @@ func main() {
 }
 
 func run(args []string, stdout, stderr *os.File) int {
+	return runWithConfig(context.Background(), args, stdout, stderr, resourceConfig{})
+}
+
+func runWithConfig(ctx context.Context, args []string, stdout, stderr *os.File, cfg resourceConfig) int {
 	fs := flag.NewFlagSet("nephos", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	asJSON := fs.Bool("json", false, "print the version as JSON")
 	fs.Usage = func() {
-		fmt.Fprintf(stderr, "nephos %s\n\nUsage:\n  nephos version [--json]\n  nephos up [--memory=4g] [--cpus=2] [--pids-limit=4096]\n  nephos down\n  nephos status\n", version.Get().Version)
+		fmt.Fprintf(stderr, "nephos %s\n\nUsage:\n  nephos version [--json]\n  nephos up [--memory=4g] [--cpus=2] [--pids-limit=4096]\n  nephos down\n  nephos status\n  nephos vpc create|list|describe|delete ...\n  nephos subnet create|list|describe|delete ...\n", version.Get().Version)
 	}
 
 	if err := fs.Parse(args); err != nil {
@@ -58,6 +63,8 @@ func run(args []string, stdout, stderr *os.File) int {
 		return runDown(fs.Args()[1:], stdout, stderr)
 	case "status":
 		return runStatus(fs.Args()[1:], stdout, stderr)
+	case "vpc", "subnet":
+		return runResource(ctx, cmd, fs.Args()[1:], stdout, stderr, cfg)
 	default:
 		fmt.Fprintf(stderr, "nephos: unknown command %q\n", cmd)
 		fs.Usage()
