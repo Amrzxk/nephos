@@ -94,6 +94,13 @@ make clean
 
 ## M1 local appliance workflow
 
+Slices 1 and 2 are implemented and merged: appliance lifecycle, authenticated
+API access, and VPC/subnet state and topology. Instance and console commands,
+real cross-subnet ping, and reset are still pending. The
+[roadmap](ROADMAP.md#m1-thinnest-end-to-end-slice-two-instances-ping) tracks
+completion; the [slice-3 plan](superpowers/plans/2026-09-27-m1-slice-3-instances-ping.md)
+is the draft handoff for the next implementation session, not runnable behavior.
+
 Run these commands inside native Linux or WSL2, not PowerShell. Docker must be
 rootful, support cgroup v2 and privileged containers, expose a Linux 5.15+
 kernel, and have **at least 6 GiB** available so the default 4 GiB appliance
@@ -253,9 +260,10 @@ linter enforces for you:
 - `context.Context` is the first parameter, and `context.Background()` appears
   only in `main` and tests.
 
-A rule the linter cannot yet enforce, because the package does not exist: **only
-`internal/network/netns` may call `setns`**, and a thread that switched namespace
-is never returned to the scheduler.
+A rule that still needs explicit review beyond the linter: **only
+`internal/network/netns` may switch network namespaces**, and a thread that
+switched namespace is never returned to the scheduler. The package now exists;
+its unit and privileged integration tests cover the namespace boundary.
 
 ## Troubleshooting
 

@@ -15,7 +15,7 @@ for the product boundary.
 
 ## Current milestone
 
-M0 is complete. The next implementation milestone is M1 in
+M0 is complete. The active implementation milestone is M1 in
 [docs/ROADMAP.md](docs/ROADMAP.md): `nephos up`/`down`, the SQLite store and
 reconcile framework, the OpenAPI skeleton, and two instances in different
 subnets that can ping each other. The roadmap and its checkboxes are
@@ -36,13 +36,19 @@ workflow passes, and the native-Docker `Spikes` workflow passed all four spikes 
 M1 is now the active implementation milestone. Do not implement work from a
 later milestone unless the roadmap is updated first.
 
-M1 delivery slice 1 (appliance bootstrap) is on draft PR #3. Slice 2 adds
-SQLite-backed VPC/subnet CRUD, reconciliation, real namespaces and gateway
-addresses, and a guarded native-Docker smoke; see the
-[slice-2 plan](docs/superpowers/plans/2026-09-24-m1-slice-2-vpc-subnet.md) and
-[connectivity matrix](docs/tests/M1-connectivity-matrix.md). The next slice
-adds ENIs, instances, and real cross-subnet ping. M1 is **not** complete, and
-namespace/gateway checks must not be reported as packet connectivity.
+M1 slices 1 and 2 are implemented and merged in
+[PR #3](https://github.com/Amrzxk/nephos/pull/3) and
+[PR #4](https://github.com/Amrzxk/nephos/pull/4). They provide appliance
+bootstrap, SQLite-backed VPC/subnet CRUD, durable events, reconciliation,
+real namespaces and gateway addresses, and native-Docker smoke coverage.
+See the [roadmap progress](docs/ROADMAP.md#m1-thinnest-end-to-end-slice-two-instances-ping)
+and [connectivity matrix](docs/tests/M1-connectivity-matrix.md) for the evidence.
+The next work is slice 3: ENIs, instances, console, and real cross-subnet
+ping. Its [implementation plan](docs/superpowers/plans/2026-09-27-m1-slice-3-instances-ping.md)
+is a **draft awaiting review**, not approval to begin implementation.
+Slice 4 still owns instance restart recovery, reset and leak closure. M1 is
+**not** complete, and namespace/gateway checks must not be reported as packet
+connectivity. Do not repeat the completed slice-1/2 plan checklists.
 
 ## Start-of-task workflow
 

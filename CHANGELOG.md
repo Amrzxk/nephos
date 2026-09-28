@@ -23,7 +23,12 @@ Each entry names the milestone it belongs to; see [docs/ROADMAP.md](docs/ROADMAP
   events; generated OpenAPI server/client contracts; authenticated,
   paginated VPC/subnet API and CLI commands; level-triggered reconciliation;
   isolated VPC namespaces and subnet base+1 gateways. Native-Docker CI now
-  exercises overlapping VPCs, restart persistence, and host-network hygiene.
+  exercises overlapping VPC topology, VPC/subnet restart persistence, and
+  host-network hygiene; it does not yet test instance packets or root files.
+- **M1 — next-slice handoff.** A draft implementation plan for instances,
+  ENIs, the fail-closed OCI hook, authenticated console, and real cross-subnet
+  ping. The proposed process limit and console framing still await review;
+  no slice-3 product behavior is claimed.
 - **M0 — repository scaffold.** Go module pinned to go1.27.1, the `nephos`,
   `nephosd`, and `nephos-hook` binaries, `internal/version` with linker-injected
   build identity, and a `Makefile` covering build, test, lint, and the
@@ -78,9 +83,10 @@ Each entry names the milestone it belongs to; see [docs/ROADMAP.md](docs/ROADMAP
 
 ### Notes
 
-- M1 slices 1 and 2 establish appliance bootstrap and VPC/subnet state and
-  topology. Instance ENIs, actual ping, reset and leak closure remain in later
-  M1 slices. The milestone is not complete
+- M1 slices 1 and 2 are implemented and merged in PRs #3 and #4, establishing
+  appliance bootstrap and VPC/subnet state and topology. Instance ENIs,
+  console, actual ping, full instance restart recovery, reset and leak closure
+  remain in later M1 slices. The milestone is not complete
   ([roadmap](docs/ROADMAP.md#m1-thinnest-end-to-end-slice-two-instances-ping)).
 - The spikes carry six findings into M1 and M2: nested cgroup v2 controllers must
   be delegated (and the appliance must fail closed if they cannot be),

@@ -1,5 +1,11 @@
 # M1 Slice 2: VPC and Subnet Resource Path Implementation Plan
 
+**Status:** Implemented and merged in [PR #4](https://github.com/Amrzxk/nephos/pull/4)
+on 2026-09-28, including the SQLite reconnect constraint fix. This is the
+historical implementation plan, not an open task list to execute again.
+Current progress and remaining work are recorded in
+[ROADMAP](../../ROADMAP.md#m1-thinnest-end-to-end-slice-two-instances-ping).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** A contributor creates, lists, describes, waits for, and deletes VPCs and subnets through the Nephos CLI/API; SQLite remains authoritative while a reconciler creates real, isolated VPC router namespaces and subnet gateways inside the appliance.
@@ -10,7 +16,7 @@
 
 **Spec:** `docs/superpowers/specs/2026-09-23-m1-two-instances-ping-design.md`
 
-**Base:** Stack this branch on `codex/m1-implementation` at `412fe1303d956d71e94a17496e783e2bef6180f3`. PR #3 stays draft and unmerged. Do not merge or rewrite that branch.
+**Historical base:** This slice was stacked on `codex/m1-implementation` at `412fe1303d956d71e94a17496e783e2bef6180f3`. PRs #3 and #4 are now merged; the original execution instructions below are retained as history.
 
 ## Global Constraints
 
