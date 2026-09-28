@@ -7,8 +7,14 @@ ENV container=podman
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         systemd systemd-sysv dbus sudo \
-        iproute2 iputils-ping nftables ca-certificates \
+        iproute2 iputils-ping nftables ca-certificates libcap2-bin \
     && rm -rf /var/lib/apt/lists/*
+
+# Podman's defaults exclude CAP_NET_RAW. Ubuntu's ping file capability would
+# make exec fail before it can use an unprivileged ICMP socket. The runtime
+# enables ping_group_range only inside each isolated instance namespace.
+RUN setcap -r /usr/bin/ping \
+    && test -z "$(getcap /usr/bin/ping)"
 
 # Podman userns=auto prevents _apt from calling setgroups successfully.
 RUN printf 'APT::Sandbox::User "root";\n' > /etc/apt/apt.conf.d/99-nephos-userns

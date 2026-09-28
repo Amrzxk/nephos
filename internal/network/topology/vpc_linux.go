@@ -10,6 +10,7 @@ import (
 	"os"
 	"slices"
 	"strings"
+	"sync"
 
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
@@ -27,13 +28,15 @@ const (
 )
 
 // Engine owns only VPC namespaces and subnet gateway addresses in this slice.
-type Engine struct{}
+type Engine struct{ mu sync.Mutex }
 
 // New returns the Linux VPC topology engine.
 func New() *Engine { return &Engine{} }
 
 // EnsureVPC preserves an existing namespace and converges its router state.
 func (e *Engine) EnsureVPC(ctx context.Context, vpc model.VPC, subnets []model.Subnet) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	name, err := netns.Name(vpc.ShortIndex)
 	if err != nil {
 		return err
@@ -73,6 +76,8 @@ func (e *Engine) EnsureVPC(ctx context.Context, vpc model.VPC, subnets []model.S
 
 // DeleteVPC removes only the namespace named by this VPC's short index.
 func (e *Engine) DeleteVPC(ctx context.Context, vpc model.VPC) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	name, err := netns.Name(vpc.ShortIndex)
 	if err != nil {
 		return err
