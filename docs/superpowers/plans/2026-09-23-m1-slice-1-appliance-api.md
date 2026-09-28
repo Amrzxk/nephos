@@ -1,8 +1,13 @@
 # M1 Slice 1: Local Appliance and API Bootstrap Implementation Plan
 
+**Status:** Implemented and merged in [PR #3](https://github.com/Amrzxk/nephos/pull/3)
+on 2026-09-28. This is the historical implementation plan, not an open task
+list to execute again. Current progress and remaining work are recorded in
+[ROADMAP](../../ROADMAP.md#m1-thinnest-end-to-end-slice-two-instances-ping).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** A contributor builds the development AMI and appliance locally, runs `nephos up`, and reaches authenticated health and version endpoints.
+**Goal:** A contributor builds the development AMI and appliance locally, runs `nephos up`, and reaches public health and authenticated version endpoints.
 
 **Architecture:** The CLI manages one named appliance through the Docker Engine API and obtains its bearer token through Docker's archive API. The appliance imports a bundled OCI AMI into volume-backed Podman storage, delegates cgroup controllers, and starts `nephosd`; the daemon serves the first generated OpenAPI handlers. Later M1 slices add resources without changing this bootstrap boundary.
 

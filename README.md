@@ -2,7 +2,7 @@
 
 **A local cloud you can break, fix, and understand.** Nephos (Greek *νέφος*, "cloud") is an open source cloud simulator for **learning** infrastructure: real instances you can SSH into, and VPC networking that fails the way a real cloud fails.
 
-> **Status: early development.** [M0](docs/ROADMAP.md#m0-foundations-and-spikes) is done — the repository scaffold, CI, and four spikes that prove the design works on real kernels ([reports](docs/spikes/), [demo](docs/demos/M0.md)). There is no usable product yet: `nephos` prints its version and nothing else. [M1](docs/ROADMAP.md#m1-thinnest-end-to-end-slice-two-instances-ping) is the first milestone that does something.
+> **Status: early development.** [M0](docs/ROADMAP.md#m0-foundations-and-spikes) is complete. The first two [M1 delivery slices](docs/ROADMAP.md#m1-thinnest-end-to-end-slice-two-instances-ping) are implemented and merged: locally built appliance startup, authenticated API access, and SQLite-backed VPC/subnet commands with real isolated router namespaces. Instances, console access, cross-subnet ping, and reset are not implemented yet, so M1 is not complete. Follow the [development guide](docs/DEVELOPMENT.md#m1-local-appliance-workflow) to try the current foundation.
 
 ## What it will do
 
@@ -22,6 +22,8 @@ Nephos is **not** an AWS API emulator: `aws --endpoint-url` will never work agai
 Also out of scope: IAM, managed databases, multi-host clustering, and billing simulation. See [the vision](docs/VISION.md) for the full positioning.
 
 ## How it will feel
+
+This is a future MVP example, not a runnable example of today's feature set.
 
 ```bash
 nephos up

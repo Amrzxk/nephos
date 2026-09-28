@@ -69,11 +69,12 @@ func TestServeReportsStartingUntilInitialSweepCompletes(t *testing.T) {
 		t.Fatal("initial sweep did not start")
 	}
 	url := "http://" + ln.Addr().String() + "/v1/health"
-	client := &http.Client{Timeout: time.Second}
+	client := newTestHTTPClient(t)
 	response, err := client.Get(url)
 	if err != nil {
 		t.Fatal(err)
 	}
+	_, _ = io.Copy(io.Discard, response.Body)
 	_ = response.Body.Close()
 	if response.StatusCode != http.StatusServiceUnavailable {
 		t.Fatalf("health before sweep=%d", response.StatusCode)
@@ -83,6 +84,7 @@ func TestServeReportsStartingUntilInitialSweepCompletes(t *testing.T) {
 	for {
 		response, err = client.Get(url)
 		if err == nil {
+			_, _ = io.Copy(io.Discard, response.Body)
 			_ = response.Body.Close()
 			if response.StatusCode == http.StatusOK {
 				break
@@ -93,6 +95,10 @@ func TestServeReportsStartingUntilInitialSweepCompletes(t *testing.T) {
 		}
 		time.Sleep(time.Millisecond)
 	}
+	// Transport may have made an unused speculative dial. Close the test's
+	// connections before cancellation rather than wait for the server's
+	// five-second grace period for a connection with no first request.
+	client.CloseIdleConnections()
 	cancel()
 	select {
 	case err := <-done:
@@ -118,7 +124,7 @@ func TestServeCreatesTokenAndShutsDown(t *testing.T) {
 	engine := &blockingNetwork{entered: make(chan struct{}, 1), release: make(chan struct{})}
 	go func() { done <- serve(ctx, ln, path, dbPath, version.Get(), engine) }()
 
-	client := &http.Client{Timeout: time.Second}
+	client := newTestHTTPClient(t)
 	url := "http://" + ln.Addr().String() + "/v1/health"
 	deadline := time.Now().Add(3 * time.Second)
 	for {
@@ -138,6 +144,7 @@ func TestServeCreatesTokenAndShutsDown(t *testing.T) {
 	if data, err := os.ReadFile(path); err != nil || len(data) < 43 {
 		t.Fatalf("token not created: length=%d err=%v", len(data), err)
 	}
+	client.CloseIdleConnections()
 	cancel()
 	select {
 	case err := <-done:
@@ -147,4 +154,11 @@ func TestServeCreatesTokenAndShutsDown(t *testing.T) {
 	case <-time.After(3 * time.Second):
 		t.Fatal("serve did not stop on cancellation")
 	}
+}
+
+func newTestHTTPClient(t *testing.T) *http.Client {
+	t.Helper()
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	t.Cleanup(transport.CloseIdleConnections)
+	return &http.Client{Transport: transport, Timeout: time.Second}
 }

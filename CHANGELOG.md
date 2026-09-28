@@ -15,7 +15,7 @@ Each entry names the milestone it belongs to; see [docs/ROADMAP.md](docs/ROADMAP
 
 - **M1 — appliance bootstrap (first delivery slice).** Local Ubuntu 24.04
   development AMI and Debian/Podman appliance image builds, fail-closed
-  cgroup/network preflight, an authenticated OpenAPI health/version server,
+  cgroup/network preflight, public health and authenticated version endpoints,
   Docker Engine-backed `nephos up`/`down`/`status`, persistent token
   bootstrap, and native-Docker and CLI smoke tests.
 - **M1 — VPC/subnet resource path (second delivery slice).** A pure-Go SQLite
@@ -23,7 +23,12 @@ Each entry names the milestone it belongs to; see [docs/ROADMAP.md](docs/ROADMAP
   events; generated OpenAPI server/client contracts; authenticated,
   paginated VPC/subnet API and CLI commands; level-triggered reconciliation;
   isolated VPC namespaces and subnet base+1 gateways. Native-Docker CI now
-  exercises overlapping VPCs, restart persistence, and host-network hygiene.
+  exercises overlapping VPC topology, VPC/subnet restart persistence, and
+  host-network hygiene; it does not yet test instance packets or root files.
+- **M1 — next-slice handoff.** A draft implementation plan for instances,
+  ENIs, the fail-closed OCI hook, authenticated console, and real cross-subnet
+  ping. The proposed process limit and console framing still await review;
+  no slice-3 product behavior is claimed.
 - **M0 — repository scaffold.** Go module pinned to go1.27.1, the `nephos`,
   `nephosd`, and `nephos-hook` binaries, `internal/version` with linker-injected
   build identity, and a `Makefile` covering build, test, lint, and the
@@ -76,11 +81,20 @@ Each entry names the milestone it belongs to; see [docs/ROADMAP.md](docs/ROADMAP
   Amended in place rather than superseded, because no decision changed — only
   the text. ADR-0003 and ADR-0005 record their validation results.
 
+### Fixed
+
+- **M1 — daemon test connection cleanup.** Readiness/shutdown tests now own
+  their HTTP transports, consume responses, and close unused connections
+  before canceling the daemon. This removes an intermittent CI shutdown
+  timeout caused by a speculative connection with no request, without
+  relaxing readiness assertions or changing product shutdown behavior.
+
 ### Notes
 
-- M1 slices 1 and 2 establish appliance bootstrap and VPC/subnet state and
-  topology. Instance ENIs, actual ping, reset and leak closure remain in later
-  M1 slices. The milestone is not complete
+- M1 slices 1 and 2 are implemented and merged in PRs #3 and #4, establishing
+  appliance bootstrap and VPC/subnet state and topology. Instance ENIs,
+  console, actual ping, full instance restart recovery, reset and leak closure
+  remain in later M1 slices. The milestone is not complete
   ([roadmap](docs/ROADMAP.md#m1-thinnest-end-to-end-slice-two-instances-ping)).
 - The spikes carry six findings into M1 and M2: nested cgroup v2 controllers must
   be delegated (and the appliance must fail closed if they cannot be),
