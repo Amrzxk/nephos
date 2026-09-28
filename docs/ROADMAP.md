@@ -120,7 +120,7 @@ network rule is exposed or implied as enforced.
 
 | Slice | Scope | Current status |
 |---|---|---|
-| 1 | Locally built appliance, startup preflight, token bootstrap, and authenticated health | Implemented and merged in [PR #3](https://github.com/Amrzxk/nephos/pull/3); native-Docker bootstrap passed in [CI run 35920433115](https://github.com/Amrzxk/nephos/actions/runs/35920433115). |
+| 1 | Locally built appliance, startup preflight, token bootstrap, public health, and authenticated API access | Implemented and merged in [PR #3](https://github.com/Amrzxk/nephos/pull/3); native-Docker bootstrap passed in [CI run 35920433115](https://github.com/Amrzxk/nephos/actions/runs/35920433115). |
 | 2 | VPC/subnet CLI and API through SQLite, reconciliation, and real namespaces | Implemented and merged in [PR #4](https://github.com/Amrzxk/nephos/pull/4); native-Docker VPC/subnet smoke passed in [CI run 36327904611](https://github.com/Amrzxk/nephos/actions/runs/36327904611). |
 | 3 | Instance run, OCI hook, console, and cross-subnet ping | Not implemented. [Draft implementation plan](superpowers/plans/2026-09-27-m1-slice-3-instances-ping.md) awaits review, including its proposed process limit and console framing. |
 | 4 | Restart recovery, reset and leak checks, native-Docker e2e CI, and WSL2 manual QA | Not implemented. Full instance persistence and milestone closure remain here. |

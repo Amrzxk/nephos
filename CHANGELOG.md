@@ -15,7 +15,7 @@ Each entry names the milestone it belongs to; see [docs/ROADMAP.md](docs/ROADMAP
 
 - **M1 — appliance bootstrap (first delivery slice).** Local Ubuntu 24.04
   development AMI and Debian/Podman appliance image builds, fail-closed
-  cgroup/network preflight, an authenticated OpenAPI health/version server,
+  cgroup/network preflight, public health and authenticated version endpoints,
   Docker Engine-backed `nephos up`/`down`/`status`, persistent token
   bootstrap, and native-Docker and CLI smoke tests.
 - **M1 — VPC/subnet resource path (second delivery slice).** A pure-Go SQLite
