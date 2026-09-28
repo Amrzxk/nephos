@@ -2,18 +2,24 @@
 // container and owns the API server, the store, the reconcilers, and the
 // network and compute engines.
 //
-// M0 scope: this binary establishes the logging convention (structured
-// log/slog, ADR-0002) and the signal-handling shape that the real server will
-// use. The API server, store, and reconcilers arrive in M1.
+// M1 begins with authenticated health and version routes. Resource handlers,
+// the store, and reconcilers are added in later M1 slices.
 package main
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log/slog"
+	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
+	"github.com/Amrzxk/nephos/internal/apiserver"
+	"github.com/Amrzxk/nephos/internal/credentials"
 	"github.com/Amrzxk/nephos/internal/version"
 )
 
@@ -47,13 +53,44 @@ func run(ctx context.Context, logger *slog.Logger) error {
 		slog.String("platform", info.Platform),
 	)
 
-	// M1 wires the store, reconcilers, and API server here. Until then the
-	// process starts, reports its identity, and waits to be told to stop, so
-	// the appliance image and its signal handling can be exercised end to end.
-	logger.Warn("no subsystems are wired yet; this is the M0 scaffold (see docs/ROADMAP.md)")
-
-	<-ctx.Done()
+	var listenConfig net.ListenConfig
+	ln, err := listenConfig.Listen(ctx, "tcp", ":7788")
+	if err != nil {
+		return fmt.Errorf("listening for the API: %w", err)
+	}
+	defer ln.Close()
+	if err := serve(ctx, ln, "/var/lib/nephos/secrets/api-token", info); err != nil {
+		return err
+	}
 	logger.Info("nephosd shutting down", slog.String("reason", context.Cause(ctx).Error()))
+	return nil
+}
+
+func serve(ctx context.Context, ln net.Listener, tokenPath string, build version.Info) error {
+	token, err := credentials.LoadOrCreate(tokenPath)
+	if err != nil {
+		return fmt.Errorf("loading API token: %w", err)
+	}
+	h := apiserver.New(token, build, func() bool { return true })
+	srv := &http.Server{Handler: h, ReadHeaderTimeout: 5 * time.Second}
+	stopped := make(chan struct{})
+	go func() {
+		select {
+		case <-ctx.Done():
+			shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+			defer cancel()
+			_ = srv.Shutdown(shutdownCtx)
+		case <-stopped:
+		}
+	}()
+	err = srv.Serve(ln)
+	close(stopped)
+	if errors.Is(err, http.ErrServerClosed) && ctx.Err() != nil {
+		err = nil
+	}
+	if err != nil {
+		return fmt.Errorf("serving the API: %w", err)
+	}
 	return nil
 }
 

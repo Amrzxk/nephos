@@ -124,3 +124,49 @@ jobs:
         run: |
           go install golang.org/x/vuln/cmd/govulncheck@latest
           "$(go env GOPATH)/bin/govulncheck" ./...
+
+  appliance-smoke:
+    name: Appliance bootstrap (native Docker)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build local development AMI
+        run: make dev-ami
+
+      - name: Build local appliance and CLI
+        run: |
+          make appliance
+          make build
+
+      - name: Check failed-start cleanup
+        run: bash tests/appliance-smoke-failed-start.sh
+
+      - name: Check isolated appliance startup
+        run: bash tests/appliance-smoke.sh
+
+      - name: Check CLI bootstrap and restart
+        run: bash tests/appliance-cli-smoke.sh
+
+      - name: Appliance logs on failure
+        if: failure()
+        run: docker logs nephos || true
+
+      - name: Remove only Nephos-owned test objects
+        if: always()
+        run: |
+          if [ "$(docker inspect -f '{{index .Config.Labels "io.nephos.appliance"}}' nephos 2>/dev/null || true)" = true ]; then
+            docker rm -f nephos
+          fi
+          if [ "$(docker volume inspect -f '{{index .Labels "io.nephos.appliance"}}' nephos-data 2>/dev/null || true)" = true ]; then
+            docker volume rm nephos-data
+          fi
+          if [ "$(docker inspect -f '{{index .Config.Labels "io.nephos.test"}}' nephos-smoke-port-blocker 2>/dev/null || true)" = true ]; then
+            docker rm -f nephos-smoke-port-blocker
+          fi

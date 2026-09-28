@@ -13,6 +13,11 @@ Each entry names the milestone it belongs to; see [docs/ROADMAP.md](docs/ROADMAP
 
 ### Added
 
+- **M1 — appliance bootstrap (first delivery slice).** Local Ubuntu 24.04
+  development AMI and Debian/Podman appliance image builds, fail-closed
+  cgroup/network preflight, an authenticated OpenAPI health/version server,
+  Docker Engine-backed `nephos up`/`down`/`status`, persistent token
+  bootstrap, and native-Docker and CLI smoke tests.
 - **M0 — repository scaffold.** Go module pinned to go1.27.1, the `nephos`,
   `nephosd`, and `nephos-hook` binaries, `internal/version` with linker-injected
   build identity, and a `Makefile` covering build, test, lint, and the
@@ -67,9 +72,9 @@ Each entry names the milestone it belongs to; see [docs/ROADMAP.md](docs/ROADMAP
 
 ### Notes
 
-- Nephos is still pre-code in every functional sense: no API, no CLI commands
-  beyond `version`, no database, and no networking. M1 is the first milestone
-  that does something ([docs/ROADMAP.md](docs/ROADMAP.md#m1-thinnest-end-to-end-slice-two-instances-ping)).
+- M1's appliance bootstrap is implemented; resource CRUD, SQLite state,
+  networking, and compute remain in later M1 slices. The M1 milestone is not
+  complete ([roadmap](docs/ROADMAP.md#m1-thinnest-end-to-end-slice-two-instances-ping)).
 - The spikes carry six findings into M1 and M2: nested cgroup v2 controllers must
   be delegated (and the appliance must fail closed if they cannot be),
   `CAP_NET_ADMIN` must be added explicitly, AMIs need `APT::Sandbox::User "root"`

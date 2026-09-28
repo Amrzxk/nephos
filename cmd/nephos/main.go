@@ -1,9 +1,7 @@
 // Command nephos is the Nephos CLI. It runs on the learner's machine and talks
 // to nephosd inside the appliance over the REST API.
 //
-// M0 scope: this binary exists so the module, the linker stamping, and the
-// cross-compilation matrix are real and exercised by CI. Resource commands
-// arrive in M1 (see docs/ROADMAP.md).
+// M1 adds the appliance lifecycle; resource commands follow in later slices.
 package main
 
 import (
@@ -31,8 +29,7 @@ func run(args []string, stdout, stderr *os.File) int {
 	fs.SetOutput(stderr)
 	asJSON := fs.Bool("json", false, "print the version as JSON")
 	fs.Usage = func() {
-		fmt.Fprintf(stderr, "nephos %s\n\nUsage:\n  nephos version [--json]\n\n", version.Get().Version)
-		fmt.Fprintf(stderr, "Resource commands arrive in M1; see docs/ROADMAP.md.\n")
+		fmt.Fprintf(stderr, "nephos %s\n\nUsage:\n  nephos version [--json]\n  nephos up [--memory=4g] [--cpus=2] [--pids-limit=4096]\n  nephos down\n  nephos status\n", version.Get().Version)
 	}
 
 	if err := fs.Parse(args); err != nil {
@@ -41,7 +38,26 @@ func run(args []string, stdout, stderr *os.File) int {
 
 	switch cmd := fs.Arg(0); cmd {
 	case "", "version":
+		if fs.NArg() > 1 {
+			versionFlags := flag.NewFlagSet("version", flag.ContinueOnError)
+			versionFlags.SetOutput(stderr)
+			jsonAfter := versionFlags.Bool("json", false, "print the version as JSON")
+			if err := versionFlags.Parse(fs.Args()[1:]); err != nil {
+				return exitUsage
+			}
+			if versionFlags.NArg() != 0 {
+				fmt.Fprintln(stderr, "nephos version: unexpected arguments")
+				return exitUsage
+			}
+			*asJSON = *asJSON || *jsonAfter
+		}
 		return printVersion(stdout, stderr, *asJSON)
+	case "up":
+		return runUp(fs.Args()[1:], stdout, stderr)
+	case "down":
+		return runDown(fs.Args()[1:], stdout, stderr)
+	case "status":
+		return runStatus(fs.Args()[1:], stdout, stderr)
 	default:
 		fmt.Fprintf(stderr, "nephos: unknown command %q\n", cmd)
 		fs.Usage()
