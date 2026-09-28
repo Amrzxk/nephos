@@ -45,7 +45,10 @@ See the [roadmap progress](docs/ROADMAP.md#m1-thinnest-end-to-end-slice-two-inst
 and [connectivity matrix](docs/tests/M1-connectivity-matrix.md) for the evidence.
 The next work is slice 3: ENIs, instances, console, and real cross-subnet
 ping. Its [implementation plan](docs/superpowers/plans/2026-09-27-m1-slice-3-instances-ping.md)
-is a **draft awaiting review**, not approval to begin implementation.
+is **finalized for review**: the fixed 512-task safety ceiling and interactive
+PTY/non-PTY command console modes are agreed. Final plan review and an
+execution-method choice still precede implementation; no slice-3 behavior
+is implemented yet.
 Slice 4 still owns instance restart recovery, reset and leak closure. M1 is
 **not** complete, and namespace/gateway checks must not be reported as packet
 connectivity. Do not repeat the completed slice-1/2 plan checklists.
@@ -182,9 +185,10 @@ required by the changed area:
 - `make test-race` — tests under the race detector.
 - `make lint` — `golangci-lint` and formatting checks.
 - `make generate` — regenerate API-derived code.
-- `make ci` — the full pull-request suite. Its generated-code freshness step
-  expects a clean candidate tree; do not misreport an expected dirty-tree
-  failure as a product failure.
+- `make ci` — the Go pull-request suite (formatting, vet, lint, unit/race
+  tests, cross-builds). Run `make generate-check` separately for generated
+  freshness; it compares before/after snapshots and accepts a dirty candidate
+  tree. Docker smoke/e2e and vulnerability checks are also separate CI steps.
 - `make appliance`, `make e2e`, and spike scripts — require Docker and, where
   documented, a privileged container. Some targets intentionally remain
   unavailable until their owning milestone implements them.

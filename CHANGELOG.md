@@ -25,10 +25,11 @@ Each entry names the milestone it belongs to; see [docs/ROADMAP.md](docs/ROADMAP
   isolated VPC namespaces and subnet base+1 gateways. Native-Docker CI now
   exercises overlapping VPC topology, VPC/subnet restart persistence, and
   host-network hygiene; it does not yet test instance packets or root files.
-- **M1 — next-slice handoff.** A draft implementation plan for instances,
+- **M1 — next-slice handoff.** A finalized implementation plan for instances,
   ENIs, the fail-closed OCI hook, authenticated console, and real cross-subnet
-  ping. The proposed process limit and console framing still await review;
-  no slice-3 product behavior is claimed.
+  ping. The agreed 512-task safety ceiling, interactive PTY/non-PTY command
+  console modes, and their tests are specified. Final plan review and
+  execution-method selection remain; no slice-3 product behavior is claimed.
 - **M0 — repository scaffold.** Go module pinned to go1.27.1, the `nephos`,
   `nephosd`, and `nephos-hook` binaries, `internal/version` with linker-injected
   build identity, and a `Makefile` covering build, test, lint, and the

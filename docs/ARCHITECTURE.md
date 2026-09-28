@@ -412,6 +412,14 @@ does not change resource URLs. Arbitrary tags and broader list filters arrive
 in M3; the M1 list endpoints are still paginated. The M1 API token and
 localhost binding protect its resource, event, and console endpoints.
 
+**Planned M1 slice-3 console contract:** interactive console uses a PTY;
+one-shot commands use non-PTY stdin/stdout/stderr, preserving output bytes
+and the command's exit status. Both use authenticated WebSocket exec, with
+an explicit final exit message; loss of that message is failure. The CLI's
+out-of-band label goes to stderr, not command stdout. This is agreed design,
+not currently implemented behavior; see the [M1 design](superpowers/specs/2026-09-23-m1-two-instances-ping-design.md)
+and [slice-3 plan](superpowers/plans/2026-09-27-m1-slice-3-instances-ping.md).
+
 **CLI grammar:** `nephos <resource> <verb> [name-or-id] [flags]`. Flags are kebab-case versions of the API field names. Anywhere a resource is referenced, either its name or its ID works.
 
 ```bash
@@ -615,6 +623,7 @@ After the MVP (M11): VPC flow logs (nftables log group → NFLOG → `nephosd`, 
 | Setting | Default | Notes |
 |---|---|---|
 | Appliance limits | `--memory 4g --cpus 2 --pids-limit 4096` | Host with 8 GB RAM and 10 GB free disk recommended |
+| Planned M1 instance limits | Fixed `t3.micro`: 2 vCPU, 1 GiB, 512 tasks | Slice 3, not yet implemented. Tasks include threads; 512 is a Nephos safety ceiling, not an AWS attribute or a reservation. The appliance aggregate ceiling also applies. |
 | Running instances | 20 per appliance | |
 | Memory overcommit | 4× the appliance memory | Beyond this, launches fail with `InsufficientInstanceCapacity`, as a real region can |
 | VPCs | 5 per workspace | AWS default |

@@ -3,6 +3,12 @@
 **Status:** Approved, 2026-09-23. This is the M1 integration design;
 implementation plans will be written for its delivery slices.
 
+**Slice-3 refinements accepted, 2026-09-28:** fixed 512-task instance limit;
+PTY for interactive console, non-PTY streams for one-shot commands. These
+complete previously unspecified details, not a replacement of an accepted
+ADR. Slice 3 is still unimplemented; its finalized plan awaits final review
+and an execution-method choice.
+
 ## Intent and agreed boundaries
 
 M1 gives a contributor a locally built Nephos appliance that can create two
@@ -186,6 +192,19 @@ status, and labels the session out of band. The exec transport bypasses VPC
 access rules; packets sent by a command inside the instance still traverse
 the VPC router. The CLI never reaches into Podman from the host.
 
+Interactive `nephos console <instance>` allocates a PTY, supports terminal
+resize, and carries combined terminal output. It requires a local terminal;
+non-interactive callers use command mode. `nephos console <instance> --
+command ...` does not allocate a PTY: stdin, stdout, and stderr remain
+distinct, output bytes are not terminal-formatted, and the remote command's
+exit code becomes the CLI exit code. The out-of-band label goes to CLI
+stderr, never into command stdout. The versioned WebSocket protocol carries
+stdin EOF separately from session closure and sends an explicit final exit
+message after output is drained. A lost connection or protocol error without
+that message is failure, never an inferred exit code of zero. Both modes
+retain the same bearer authentication and Host/Origin protections; no token
+appears in a URL or session frame. See the slice-3 plan for the wire contract.
+
 ## Store and reconciliation
 
 The first embedded migration creates `workspaces` with the sole `default`
@@ -231,11 +250,21 @@ no claim that those later policies are enforced.
 
 The `compute.Runtime` adapter speaks to rootful Podman's local REST service.
 It creates system containers with `systemd=always`, `userns=auto`, the
-`t3.micro` CPU/memory/pids limits, default capabilities plus `CAP_NET_ADMIN`
+fixed `t3.micro` limits (2 vCPU quota, 1 GiB memory, 512 tasks), default
+capabilities plus `CAP_NET_ADMIN`
 inside the instance namespace, default seccomp, no devices, and Nephos labels.
 Its writable layer and cached image live on `nephos-data`. The development
 AMI contains systemd and `ping`; the M1 check does not depend on SSH, DNS,
 metadata, or user data.
+
+The pids controller counts processes and threads. The 512-task limit is a
+Nephos safety ceiling, not an AWS instance-type attribute and not a
+reservation. It matches the SP1 test configuration; it does not establish
+support for every future workload. The appliance's default 4096-task ceiling
+also applies to the aggregate, including control-plane processes. Reaching
+an instance limit denies new task creation rather than killing existing
+tasks. Slice 3 tests that ceiling in a bounded, isolated fixture; no
+unbounded fork bomb or claim of twenty simultaneously saturated instances.
 
 The OCI `createRuntime` hook applies only to Nephos-labeled containers. It
 reads Podman's state from stdin and calls `nephosd` over HTTP on the Unix
@@ -280,7 +309,11 @@ Unit tests cover CIDR and name validation, reserved addresses, concurrent
 IPAM, idempotency-key replay/conflict, migration startup, event ordering,
 reconcile backoff, and failures through fake network and compute engines.
 Linux integration tests exercise namespace and Podman adapters and confirm
-the hook fails closed. The e2e suite builds local images, runs the roadmap
+the hook fails closed, verify actual cgroup limits, and exercise PTY and
+non-PTY exec with separate output streams and exact command exit status.
+Overlapping-VPC packet tests target a remote-only address, not the sender's
+own duplicate IP, with an in-VPC positive control to exclude a broken target.
+The e2e suite builds local images, runs the roadmap
 demo on an Ubuntu 24.04 Docker runner, verifies the restart marker and IP,
 tests overlapping VPC isolation, injects a hook failure, and runs both reset
 levels. It checks that appliance actions never alter the host network

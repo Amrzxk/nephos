@@ -99,7 +99,9 @@ API access, and VPC/subnet state and topology. Instance and console commands,
 real cross-subnet ping, and reset are still pending. The
 [roadmap](ROADMAP.md#m1-thinnest-end-to-end-slice-two-instances-ping) tracks
 completion; the [slice-3 plan](superpowers/plans/2026-09-27-m1-slice-3-instances-ping.md)
-is the draft handoff for the next implementation session, not runnable behavior.
+is finalized for review and execution-method selection, not runnable behavior.
+It records the agreed 512-task instance ceiling and interactive PTY/non-PTY
+command console modes. These commands and limits do not ship until slice 3.
 
 Run these commands inside native Linux or WSL2, not PowerShell. Docker must be
 rootful, support cgroup v2 and privileged containers, expose a Linux 5.15+

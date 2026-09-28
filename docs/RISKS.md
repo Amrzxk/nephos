@@ -235,9 +235,13 @@ Risks whose mitigation lands in **M0–M8** must be mitigated before v0.1.0 (see
   - `SameSite=Strict` HttpOnly session cookies; no CORS.
   - Credentials file mode 0600, and `nephos token rotate`.
   - M1 tests cover bearer-token rejection and localhost binding for the
-    endpoints it ships. M6 adds browser-facing Host, Origin, cookie, and CORS
-    tests with the web console.
-- **Milestone:** M1 (token, localhost binding), M6 (browser protections).
+    endpoints it ships. Planned slice-3 console tests additionally reject
+    foreign Host, nonempty browser Origin, malformed/oversized frames, and
+    invalid instance state before opening exec in either console mode.
+    Tokens remain in the Authorization header, never URLs or frame payloads.
+    M6 adds browser-session cookies and browser-facing CORS tests with the
+    web console; M1 does not relax its no-browser-Origin policy.
+- **Milestone:** M1 (token, localhost binding, CLI console protections), M6 (browser sessions).
 - **Early warning:** any unauthenticated endpoint besides health; security reports.
 
 ### S6. Resource exhaustion
@@ -246,9 +250,15 @@ Risks whose mitigation lands in **M0–M8** must be mitigated before v0.1.0 (see
 - **Risk:** learners experiment. Fork bombs, memory hogs, and disks filled inside instances, or runaway reconcile loops, degrade the appliance or the host.
 - **Mitigation:**
   - pids, memory, and CPU limits per instance, and limits on the appliance itself.
+  - Planned M1 slice 3 fixes `t3.micro` at 2 vCPU, 1 GiB and 512 tasks
+    (processes plus threads). This Nephos ceiling is not a reservation; the
+    appliance's aggregate default of 4096 still applies. Tests inspect real
+    cgroup values and bound task creation in an isolated instance, verifying
+    creation fails at the ceiling, existing tasks survive, workers are
+    reaped, and the daemon stays responsive. No unbounded fork-bomb fixture.
   - Disk usage monitoring with warnings, and a per-instance soft quota: an instance exceeding it is stopped with a clear `state_reason`.
   - Reconcile backoff and log rotation.
-- **Milestone:** M2, M8.
+- **Milestone:** M1 (fixed instance limits), M2 (additional types/capacity), M8 (release hardening).
 - **Early warning:** appliance OOM events; rapid volume growth.
 
 ### S7. Supply chain: images, dependencies, and lab content
