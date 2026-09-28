@@ -19,3 +19,15 @@ func TestDevelopmentAMIPingDoesNotRequireNETRAW(t *testing.T) {
 		}
 	}
 }
+
+func TestAppliancePrivatePodmanService(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "images", "appliance", "entrypoint.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, required := range []string{"umask 077", "/run/podman", "podman system service --time 0 unix:///run/podman/podman.sock", "--unix-socket /run/podman/podman.sock", "trap cleanup 0"} {
+		if !strings.Contains(string(data), required) {
+			t.Errorf("missing private runtime startup contract %q", required)
+		}
+	}
+}

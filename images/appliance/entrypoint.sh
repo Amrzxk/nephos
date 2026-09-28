@@ -55,4 +55,49 @@ if ! podman image exists nephos-ubuntu:dev; then
 fi
 podman image exists nephos-ubuntu:dev || fail "development AMI has the wrong tag"
 
-exec "$@"
+# This socket is appliance-private: no TCP listener, host mount, or instance
+# mount. Supervise both children so runtime loss fails the appliance closed.
+umask 077
+mkdir -p /run/podman
+chmod 0700 /run/podman
+podman system service --time 0 unix:///run/podman/podman.sock &
+podman_pid=$!
+daemon_pid=""
+guard_pid=""
+cleanup() {
+    trap - 0 INT TERM
+    [ -z "$guard_pid" ] || kill "$guard_pid" 2>/dev/null || true
+    [ -z "$daemon_pid" ] || kill "$daemon_pid" 2>/dev/null || true
+    kill "$podman_pid" 2>/dev/null || true
+    [ -z "$guard_pid" ] || wait "$guard_pid" 2>/dev/null || true
+    [ -z "$daemon_pid" ] || wait "$daemon_pid" 2>/dev/null || true
+    wait "$podman_pid" 2>/dev/null || true
+}
+trap cleanup 0
+trap 'exit 143' TERM
+trap 'exit 130' INT
+runtime_ready=false
+for attempt in $(seq 1 20); do
+    if curl --max-time 1 --unix-socket /run/podman/podman.sock -fsS http://localhost/_ping >/dev/null 2>&1; then
+        runtime_ready=true
+        break
+    fi
+    sleep 0.5
+done
+[ "$runtime_ready" = true ] || fail "private Podman service did not become ready"
+chmod 0600 /run/podman/podman.sock
+"$@" &
+daemon_pid=$!
+(
+    while curl --max-time 5 --unix-socket /run/podman/podman.sock -fsS http://localhost/_ping >/dev/null 2>&1; do
+        sleep 1
+    done
+    echo "nephos appliance: private Podman service stopped responding" >&2
+    kill "$daemon_pid" 2>/dev/null || true
+) &
+guard_pid=$!
+set +e
+wait "$daemon_pid"
+daemon_status=$?
+set -e
+exit "$daemon_status"

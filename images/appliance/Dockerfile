@@ -25,7 +25,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN printf 'containers:200000:1048576\n' > /etc/subuid \
     && printf 'containers:200000:1048576\n' > /etc/subgid \
     && mkdir -p /var/lib/nephos/containers /var/lib/nephos/runroot \
-        /run/nephos /usr/local/share/nephos
+        /run/nephos /run/podman /usr/local/share/nephos
 
 COPY images/appliance/storage.conf /etc/containers/storage.conf
 COPY images/appliance/containers.conf /etc/containers/containers.conf
