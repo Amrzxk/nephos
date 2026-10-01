@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -25,7 +27,37 @@ func realInstance(t *testing.T) (context.Context, *Client, compute.RuntimeID) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	t.Cleanup(cancel)
-	c := New("/run/podman/podman.sock")
+	// This adapter contract deliberately runs without the production OCI hook:
+	// there is no SQLite desired instance in a runtime-only test. Launch a
+	// test-owned Unix service against the same local Podman store, with an
+	// explicit empty hooks directory. The final appliance retains its hook.
+	private := t.TempDir()
+	hooks := filepath.Join(private, "hooks")
+	if err := os.Mkdir(hooks, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	socket := filepath.Join(private, "podman.sock")
+	service := exec.CommandContext(ctx, "podman", "--hooks-dir="+hooks, "system", "service", "--time", "0", "unix://"+socket)
+	if err := service.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { service.Process.Kill(); _ = service.Wait() })
+	c := New(socket)
+	var ready error
+	for attempt := 0; attempt < 50; attempt++ {
+		ready = c.EnsureImage(ctx, image)
+		if ready == nil {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			t.Fatal(ctx.Err())
+		case <-time.After(100 * time.Millisecond):
+		}
+	}
+	if ready != nil {
+		t.Fatalf("test-owned Podman service not ready: %v", ready)
+	}
 	if err := c.EnsureImage(ctx, image); err != nil {
 		t.Fatal(err)
 	}
@@ -56,7 +88,7 @@ func realInstance(t *testing.T) (context.Context, *Client, compute.RuntimeID) {
 	}
 	return ctx, c, id
 }
-func realCommand(t *testing.T, ctx context.Context, c *Client, id compute.RuntimeID, command []string, input []byte, tty bool) ([]byte, []byte, int) {
+func realCommand(ctx context.Context, t *testing.T, c *Client, id compute.RuntimeID, command []string, input []byte, tty bool) (stdout, stderr []byte, status int) {
 	t.Helper()
 	req := compute.ExecRequest{Command: command, TTY: tty}
 	if tty {
@@ -96,11 +128,11 @@ func realCommand(t *testing.T, ctx context.Context, c *Client, id compute.Runtim
 }
 func TestPodmanAdapterReal(t *testing.T) {
 	ctx, c, id := realInstance(t)
-	out, errout, code := realCommand(t, ctx, c, id, []string{"/bin/sh", "-c", "cat; printf 'tail\\000'; printf 'error\\000' >&2; exit 7"}, []byte("input\x00"), false)
+	out, errout, code := realCommand(ctx, t, c, id, []string{"/bin/sh", "-c", "cat; printf 'tail\\000'; printf 'error\\000' >&2; exit 7"}, []byte("input\x00"), false)
 	if string(out) != "input\x00tail\x00" || string(errout) != "error\x00" || code != 7 {
 		t.Fatalf("real command %q %q %d", out, errout, code)
 	}
-	out, errout, code = realCommand(t, ctx, c, id, []string{"/bin/sh", "-c", "test -t 1; printf terminal; printf error >&2; exit 7"}, nil, true)
+	out, errout, code = realCommand(ctx, t, c, id, []string{"/bin/sh", "-c", "test -t 1; printf terminal; printf error >&2; exit 7"}, nil, true)
 	if string(out) != "terminalerror" || len(errout) != 0 || code != 7 {
 		t.Fatalf("real TTY %q %q %d", out, errout, code)
 	}
@@ -109,17 +141,17 @@ func TestPodmanAdapterReal(t *testing.T) {
 		if strings.HasPrefix(file, "/") {
 			path = file
 		}
-		got, _, code := realCommand(t, ctx, c, id, []string{"cat", path}, nil, false)
+		got, _, code := realCommand(ctx, t, c, id, []string{"cat", path}, nil, false)
 		if strings.Join(strings.Fields(string(got)), " ") != want || code != 0 {
 			t.Errorf("%s=%q exit=%d want %q", file, got, code, want)
 		}
 	}
-	out, _, code = realCommand(t, ctx, c, id, []string{"cat", "/proc/self/uid_map"}, nil, false)
+	out, _, code = realCommand(ctx, t, c, id, []string{"cat", "/proc/self/uid_map"}, nil, false)
 	fields := strings.Fields(string(out))
 	if len(fields) != 3 || fields[0] != "0" || fields[1] == "0" || fields[2] != "65536" || code != 0 {
 		t.Fatalf("user mapping=%q", out)
 	}
-	out, _, _ = realCommand(t, ctx, c, id, []string{"cat", "/proc/1/status"}, nil, false)
+	out, _, _ = realCommand(ctx, t, c, id, []string{"cat", "/proc/1/status"}, nil, false)
 	for _, line := range strings.Split(string(out), "\n") {
 		if value, ok := strings.CutPrefix(line, "CapBnd:"); ok {
 			caps, err := strconv.ParseUint(strings.TrimSpace(value), 16, 64)
@@ -170,14 +202,14 @@ func TestInstanceTaskLimit(t *testing.T) {
 	}
 	// Write through instance-scoped stdin to its shared writable root. PID 1
 	// and exec have different /tmp mounts after systemd boot; no host mounts.
-	_, errout, code := realCommand(t, ctx, c, id, []string{"/bin/sh", "-c", "cat > /root/nephos-task-limit-helper && chmod 0755 /root/nephos-task-limit-helper"}, helper, false)
+	_, errout, code := realCommand(ctx, t, c, id, []string{"/bin/sh", "-c", "cat > /root/nephos-task-limit-helper && chmod 0755 /root/nephos-task-limit-helper"}, helper, false)
 	if code != 0 {
 		t.Fatalf("install test helper: %d %s", code, errout)
 	}
 	// systemd's default init.scope limit is 15% of the aggregate limit (76).
 	// A test-owned scope removes that stricter per-unit limit, not the
 	// container's pids.max=512, so the aggregate boundary is exercised.
-	out, errout, code := realCommand(t, ctx, c, id, []string{"systemd-run", "--quiet", "--scope", "--property=TasksMax=infinity", "/root/nephos-task-limit-helper"}, nil, false)
+	out, errout, code := realCommand(ctx, t, c, id, []string{"systemd-run", "--quiet", "--scope", "--property=TasksMax=infinity", "/root/nephos-task-limit-helper"}, nil, false)
 	if code != 0 {
 		t.Fatalf("bounded task limit helper: exit=%d %s %s", code, out, errout)
 	}
@@ -194,7 +226,7 @@ func TestInstanceTaskLimit(t *testing.T) {
 	if status, err := c.Inspect(ctx, id); err != nil || !status.Running {
 		t.Fatalf("instance did not survive: %+v %v", status, err)
 	}
-	got, _, code := realCommand(t, ctx, c, id, []string{"/bin/echo", "responsive"}, nil, false)
+	got, _, code := realCommand(ctx, t, c, id, []string{"/bin/echo", "responsive"}, nil, false)
 	if strings.TrimSpace(string(got)) != "responsive" || code != 0 {
 		t.Fatal("daemon or exec unresponsive after limit test")
 	}

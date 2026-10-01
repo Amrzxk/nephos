@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/Amrzxk/nephos/internal/model"
+	"github.com/Amrzxk/nephos/internal/network/netns"
 	"github.com/Amrzxk/nephos/internal/service"
 	"github.com/Amrzxk/nephos/internal/store"
 	"github.com/Amrzxk/nephos/internal/version"
@@ -33,7 +34,10 @@ func (b *blockingNetwork) EnsureVPC(ctx context.Context, _ model.VPC, _ []model.
 		return ctx.Err()
 	}
 }
-func (b *blockingNetwork) DeleteVPC(context.Context, model.VPC) error     { return nil }
+func (b *blockingNetwork) DeleteVPC(context.Context, model.VPC) error { return nil }
+func (b *blockingNetwork) EnsureENI(context.Context, model.VPC, model.Subnet, model.ENI, *netns.InstanceTarget) error {
+	return nil
+}
 func (b *blockingNetwork) ListVPCNames(context.Context) ([]string, error) { return nil, nil }
 
 func TestServeReportsStartingUntilInitialSweepCompletes(t *testing.T) {
@@ -61,7 +65,7 @@ func TestServeReportsStartingUntilInitialSweepCompletes(t *testing.T) {
 	defer cancel()
 	done := make(chan error, 1)
 	go func() {
-		done <- serve(runCtx, ln, filepath.Join(t.TempDir(), "api-token"), dbPath, version.Get(), engine)
+		done <- serve(runCtx, ln, filepath.Join(t.TempDir(), "api-token"), dbPath, filepath.Join(t.TempDir(), "hook.sock"), version.Get(), engine)
 	}()
 	select {
 	case <-engine.entered:
@@ -122,7 +126,9 @@ func TestServeCreatesTokenAndShutsDown(t *testing.T) {
 	defer cancel()
 	done := make(chan error, 1)
 	engine := &blockingNetwork{entered: make(chan struct{}, 1), release: make(chan struct{})}
-	go func() { done <- serve(ctx, ln, path, dbPath, version.Get(), engine) }()
+	go func() {
+		done <- serve(ctx, ln, path, dbPath, filepath.Join(t.TempDir(), "hook.sock"), version.Get(), engine)
+	}()
 
 	client := newTestHTTPClient(t)
 	url := "http://" + ln.Addr().String() + "/v1/health"

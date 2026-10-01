@@ -20,6 +20,7 @@ import (
 
 const apiPath = "/v5.4.2/libpod"
 
+// Client speaks only to the appliance-private Podman Unix socket.
 type Client struct {
 	socket string
 	http   *http.Client
@@ -27,6 +28,7 @@ type Client struct {
 
 var _ compute.Runtime = (*Client)(nil)
 
+// New constructs a Podman client without a TCP fallback.
 func New(socketPath string) *Client {
 	c := &Client{socket: socketPath}
 	c.http = &http.Client{Transport: &http.Transport{
@@ -34,12 +36,12 @@ func New(socketPath string) *Client {
 		DialContext:           func(ctx context.Context, _, _ string) (net.Conn, error) { return c.dial(ctx) },
 		ResponseHeaderTimeout: 10 * time.Second,
 		IdleConnTimeout:       30 * time.Second,
-	}, CheckRedirect: func(*http.Request, []*http.Request) error { return fmt.Errorf("Podman redirects are forbidden") }}
+	}, CheckRedirect: func(*http.Request, []*http.Request) error { return fmt.Errorf("podman redirects are forbidden") }}
 	return c
 }
 func (c *Client) dial(ctx context.Context) (net.Conn, error) {
 	if !filepath.IsAbs(c.socket) || strings.Contains(c.socket, "://") {
-		return nil, fmt.Errorf("Podman requires an absolute Unix socket path")
+		return nil, fmt.Errorf("podman requires an absolute Unix socket path")
 	}
 	var dialer net.Dialer
 	conn, err := dialer.DialContext(ctx, "unix", c.socket)
@@ -49,6 +51,7 @@ func (c *Client) dial(ctx context.Context) (net.Conn, error) {
 	return conn, nil
 }
 
+// APIError retains the HTTP context of a rejected local runtime request.
 type APIError struct {
 	Status               int
 	Method, Path, Detail string
@@ -77,9 +80,9 @@ func (c *Client) request(ctx context.Context, method, path string, body, out any
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return fmt.Errorf("Podman %s %s: %w", method, path, err)
+		return fmt.Errorf("podman %s %s: %w", method, path, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 && resp.StatusCode != http.StatusNotModified {
 		detail, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 		return &APIError{Status: resp.StatusCode, Method: method, Path: path, Detail: strings.TrimSpace(string(detail))}

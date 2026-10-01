@@ -76,8 +76,8 @@ func (s *Store) ListInstancePage(ctx context.Context, workspaceID, afterID strin
 		if err != nil {
 			return fmt.Errorf("list instances: %w", err)
 		}
-		for _, row := range rows {
-			instance, err := tx.instanceFromRow(ctx, row)
+		for i := range rows {
+			instance, err := tx.instanceFromRow(ctx, rows[i])
 			if err != nil {
 				return err
 			}

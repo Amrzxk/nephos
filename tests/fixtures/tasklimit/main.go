@@ -3,6 +3,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -22,7 +23,7 @@ func readCount(name string) (int, error) {
 	}
 	return strconv.Atoi(strings.TrimSpace(string(b)))
 }
-func run() error {
+func run(ctx context.Context) error {
 	runtime.GOMAXPROCS(1)
 	limit, err := readCount("pids.max")
 	if err != nil {
@@ -54,7 +55,7 @@ func run() error {
 	deadline := time.Now().Add(10 * time.Second)
 	refused := false
 	for len(children) < 600 && time.Now().Before(deadline) {
-		child := exec.Command("/bin/sleep", "30")
+		child := exec.CommandContext(ctx, "/bin/sleep", "30")
 		if err := child.Start(); err != nil {
 			if !errors.Is(err, syscall.EAGAIN) {
 				return fmt.Errorf("child creation: %w", err)
@@ -80,7 +81,8 @@ func run() error {
 	}{limit, baseline, peak, after, len(children), refused, alive})
 }
 func main() {
-	if err := run(); err != nil {
+	//nolint:forbidigo // This test-only executable creates its root context in main.
+	if err := run(context.Background()); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}

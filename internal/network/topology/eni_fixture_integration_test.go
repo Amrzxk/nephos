@@ -106,7 +106,7 @@ func eniTestContainer(t *testing.T, subnet model.Subnet, privateIP string) eniTe
 			ShortIndex: index, PrivateIP: netip.MustParseAddr(privateIP), MACAddress: fmt.Sprintf("02:00:%02x:%02x:%02x:%02x", byte(index>>24), byte(index>>16), byte(index>>8), byte(index))}}
 }
 
-func ensureTestENI(t *testing.T, ctx context.Context, engine *Engine, vpc model.VPC, subnet model.Subnet, instance eniTestInstance) {
+func ensureTestENI(ctx context.Context, t *testing.T, engine *Engine, vpc model.VPC, subnet model.Subnet, instance eniTestInstance) {
 	t.Helper()
 	if err := engine.EnsureENI(ctx, vpc, subnet, instance.eni, instance.target); err != nil {
 		t.Fatal(err)

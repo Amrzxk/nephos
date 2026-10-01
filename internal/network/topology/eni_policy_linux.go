@@ -11,8 +11,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Amrzxk/nephos/internal/model"
 	"github.com/vishvananda/netlink"
+
+	"github.com/Amrzxk/nephos/internal/model"
 )
 
 const eniPolicyComment = "nephos:m1"

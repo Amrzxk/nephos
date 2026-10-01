@@ -48,6 +48,8 @@ func (c *Client) inspectOwned(ctx context.Context, id compute.RuntimeID) (contai
 	}
 	return doc, nil
 }
+
+// EnsureImage requires the locally built M1 development AMI.
 func (c *Client) EnsureImage(ctx context.Context, ref string) error {
 	if ref != image {
 		return fmt.Errorf("unsupported M1 image %q", ref)
@@ -57,6 +59,8 @@ func (c *Client) EnsureImage(ctx context.Context, ref string) error {
 	}
 	return nil
 }
+
+// Create creates or rediscovers one Nephos-owned instance container.
 func (c *Client) Create(ctx context.Context, instance model.Instance) (compute.RuntimeID, error) {
 	if !instanceIDPattern.MatchString(instance.ID) || instance.WorkspaceID != "default" || instance.InstanceType != "t3.micro" {
 		return "", fmt.Errorf("invalid M1 instance runtime request")
@@ -90,7 +94,7 @@ func (c *Client) Create(ctx context.Context, instance model.Instance) (compute.R
 		return "", err
 	}
 	if !runtimeIDPattern.MatchString(response.ID) {
-		return "", fmt.Errorf("Podman returned an invalid container ID")
+		return "", fmt.Errorf("podman returned an invalid container ID")
 	}
 	return compute.RuntimeID(response.ID), nil
 }
@@ -107,12 +111,16 @@ func (c *Client) discover(ctx context.Context, name string) (compute.RuntimeID, 
 	}
 	return compute.RuntimeID(doc.ID), nil
 }
+
+// Start starts a verified Nephos-owned instance container.
 func (c *Client) Start(ctx context.Context, id compute.RuntimeID) error {
 	if _, err := c.inspectOwned(ctx, id); err != nil {
 		return err
 	}
 	return c.request(ctx, http.MethodPost, "/containers/"+string(id)+"/start", nil, nil)
 }
+
+// Delete removes only a verified Nephos-owned instance container.
 func (c *Client) Delete(ctx context.Context, id compute.RuntimeID) error {
 	if _, err := c.inspectOwned(ctx, id); err != nil {
 		if isStatus(err, 404) {
@@ -126,6 +134,8 @@ func (c *Client) Delete(ctx context.Context, id compute.RuntimeID) error {
 	}
 	return err
 }
+
+// Inspect returns the observed state of a verified instance container.
 func (c *Client) Inspect(ctx context.Context, id compute.RuntimeID) (compute.Status, error) {
 	doc, err := c.inspectOwned(ctx, id)
 	return compute.Status{Running: doc.State.Running}, err

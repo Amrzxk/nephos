@@ -1,0 +1,6 @@
+{
+ "version": "1.0.0",
+ "hook": {"path": "/usr/local/bin/nephos-hook", "timeout": 10},
+ "when": {"annotations": {"io.nephos.instance-id": "^i-[0-9a-f]{17}$"}},
+ "stages": ["createRuntime"]
+}

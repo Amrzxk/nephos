@@ -5,6 +5,7 @@ import "net/netip"
 // InstanceState is an instance's persisted lifecycle state.
 type InstanceState string
 
+// Persisted instance lifecycle states.
 const (
 	InstancePending      InstanceState = "pending"
 	InstanceRunning      InstanceState = "running"

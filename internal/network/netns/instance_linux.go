@@ -36,7 +36,7 @@ func OpenInstance(ctx context.Context, pid int, runtimeID string) (*InstanceTarg
 	if err != nil {
 		return nil, fmt.Errorf("open instance process: %w", err)
 	}
-	defer process.Close()
+	defer func() { _ = process.Close() }()
 	open := func(path string) (*os.File, error) {
 		fd, err := unix.Openat(int(process.Fd()), path, unix.O_RDONLY|unix.O_CLOEXEC, 0)
 		if err != nil {
@@ -49,7 +49,7 @@ func OpenInstance(ctx context.Context, pid int, runtimeID string) (*InstanceTarg
 		if err != nil {
 			return nil, err
 		}
-		defer file.Close()
+		defer func() { _ = file.Close() }()
 		data, err := io.ReadAll(io.LimitReader(file, 65537))
 		if err != nil {
 			return nil, fmt.Errorf("read process %s: %w", path, err)
@@ -66,7 +66,7 @@ func OpenInstance(ctx context.Context, pid int, runtimeID string) (*InstanceTarg
 	accepted := false
 	defer func() {
 		if !accepted {
-			namespace.Close()
+			_ = namespace.Close()
 		}
 	}()
 	var fs unix.Statfs_t
@@ -104,7 +104,7 @@ func OpenInstance(ctx context.Context, pid int, runtimeID string) (*InstanceTarg
 	if err != nil {
 		return nil, err
 	}
-	defer user.Close()
+	defer func() { _ = user.Close() }()
 	if err := unix.Fstat(int(user.Fd()), &userStat); err != nil {
 		return nil, fmt.Errorf("inspect instance user namespace: %w", err)
 	}
@@ -118,7 +118,7 @@ func OpenInstance(ctx context.Context, pid int, runtimeID string) (*InstanceTarg
 	if err != nil {
 		return nil, fmt.Errorf("inspect network namespace owner: %w", err)
 	}
-	defer unix.Close(owner)
+	defer func() { _ = unix.Close(owner) }()
 	if err := unix.Fstat(owner, &ownerStat); err != nil {
 		return nil, fmt.Errorf("inspect owning user namespace: %w", err)
 	}
@@ -237,7 +237,7 @@ func (t *InstanceTarget) WithFD(ctx context.Context, fn func(int) error) error {
 	if err != nil {
 		return fmt.Errorf("duplicate instance namespace: %w", err)
 	}
-	defer unix.Close(fd)
+	defer func() { _ = unix.Close(fd) }()
 	return fn(fd)
 }
 

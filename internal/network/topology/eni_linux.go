@@ -143,7 +143,7 @@ func (e *Engine) EnsureENI(ctx context.Context, vpc model.VPC, subnet model.Subn
 				if peer.Type() != "veth" || peer.Attrs().ParentIndex != router.Attrs().Index || router.Attrs().ParentIndex != peer.Attrs().Index {
 					return fmt.Errorf("refusing unrelated instance link")
 				}
-				if peer.Attrs().Alias != alias && !(created && peer.Attrs().Alias == "") {
+				if peer.Attrs().Alias != alias && (!created || peer.Attrs().Alias != "") {
 					return fmt.Errorf("refusing foreign instance ENI")
 				}
 				if err := peerHandle.LinkSetDown(peer); err != nil {
@@ -269,7 +269,7 @@ func setENISysctls(name string) error {
 		return fmt.Errorf("invalid ENI sysctl target %q", name)
 	}
 	for key, value := range map[string]string{"proxy_arp": "1", "send_redirects": "0", "rp_filter": "0"} {
-		if err := os.WriteFile("/proc/sys/net/ipv4/conf/"+name+"/"+key, []byte(value), 0600); err != nil {
+		if err := os.WriteFile("/proc/sys/net/ipv4/conf/"+name+"/"+key, []byte(value), 0o600); err != nil {
 			return fmt.Errorf("set router ENI %s %s: %w", name, key, err)
 		}
 	}

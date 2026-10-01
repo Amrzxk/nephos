@@ -89,7 +89,9 @@ func execServer(t *testing.T, f execFixture) string {
 				header := make([]byte, 8)
 				header[0] = chunk.channel
 				binary.BigEndian.PutUint32(header[4:], uint32(len(chunk.data)))
-				payload := append(header, []byte(chunk.data)...)
+				payload := make([]byte, 0, len(header)+len(chunk.data))
+				payload = append(payload, header...)
+				payload = append(payload, []byte(chunk.data)...)
 				for _, b := range payload {
 					conn.Write([]byte{b})
 				}
@@ -117,7 +119,7 @@ func execServer(t *testing.T, f execFixture) string {
 		}
 	}))
 }
-func readExec(t *testing.T, s compute.ExecSession) ([]byte, []byte, error) {
+func readExec(t *testing.T, s compute.ExecSession) (stdout, stderr []byte, readErr error) {
 	t.Helper()
 	var out, errout []byte
 	var e1, e2 error

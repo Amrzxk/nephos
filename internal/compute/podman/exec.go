@@ -19,6 +19,7 @@ import (
 	"github.com/Amrzxk/nephos/internal/compute"
 )
 
+// Exec attaches one command to a verified running instance.
 func (c *Client) Exec(ctx context.Context, id compute.RuntimeID, req compute.ExecRequest) (compute.ExecSession, error) {
 	if err := validateExec(req); err != nil {
 		return nil, err
@@ -46,14 +47,14 @@ func (c *Client) Exec(ctx context.Context, id compute.RuntimeID, req compute.Exe
 	}
 	conn, err := c.dial(ctx)
 	if err != nil {
-		c.removeExec(ctx, created.ID)
+		_ = c.removeExec(ctx, created.ID)
 		return nil, err
 	}
 	cleanup := true
 	defer func() {
 		if cleanup {
-			conn.Close()
-			c.removeExec(ctx, created.ID)
+			_ = conn.Close()
+			_ = c.removeExec(ctx, created.ID)
 		}
 	}()
 	deadline := time.Now().Add(10 * time.Second)
@@ -63,7 +64,7 @@ func (c *Client) Exec(ctx context.Context, id compute.RuntimeID, req compute.Exe
 	if err := conn.SetDeadline(deadline); err != nil {
 		return nil, err
 	}
-	stop := context.AfterFunc(ctx, func() { conn.Close() })
+	stop := context.AfterFunc(ctx, func() { _ = conn.Close() })
 	defer stop()
 	raw, err := json.Marshal(struct {
 		Detach, Tty   bool
@@ -88,7 +89,7 @@ func (c *Client) Exec(ctx context.Context, id compute.RuntimeID, req compute.Exe
 		return nil, fmt.Errorf("read exec upgrade: %w", err)
 	}
 	if response.StatusCode != 101 {
-		defer response.Body.Close()
+		defer func() { _ = response.Body.Close() }()
 		detail, _ := io.ReadAll(io.LimitReader(response.Body, 4096))
 		return nil, &APIError{Status: response.StatusCode, Method: http.MethodPost, Path: request.URL.Path, Detail: string(detail)}
 	}
@@ -158,7 +159,7 @@ func (s *execSession) Stderr() io.Reader     { return s.stderr }
 func (s *execSession) readOutput(reader io.Reader) {
 	var err error
 	if s.tty {
-		s.errW.Close()
+		_ = s.errW.Close()
 		_, err = io.Copy(s.outW, reader)
 	} else {
 		err = demux(reader, s.outW, s.errW)
@@ -239,7 +240,7 @@ func (s *execSession) Wait(ctx context.Context) (int, error) {
 	}
 }
 func (s *execSession) closeIO(err error) {
-	s.conn.Close()
+	_ = s.conn.Close()
 	s.stdout.CloseWithError(err)
 	s.stderr.CloseWithError(err)
 	s.outW.CloseWithError(err)

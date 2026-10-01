@@ -11,9 +11,10 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/vishvananda/netlink"
+
 	"github.com/Amrzxk/nephos/internal/model"
 	"github.com/Amrzxk/nephos/internal/network/netns"
-	"github.com/vishvananda/netlink"
 )
 
 func TestENIConvergence(t *testing.T) {
@@ -42,8 +43,8 @@ func TestENIConvergence(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	ensureTestENI(t, ctx, engine, vpc, subnets[0], first)
-	ensureTestENI(t, ctx, engine, vpc, subnets[1], second)
+	ensureTestENI(ctx, t, engine, vpc, subnets[0], first)
+	ensureTestENI(ctx, t, engine, vpc, subnets[1], second)
 	var rootPeerIndex int
 	nsName, _ := netns.Name(vpc.ShortIndex)
 	linkName, _ := eniLinkName(first.eni.ShortIndex)
@@ -211,8 +212,8 @@ func TestENISourceCheck(t *testing.T) {
 	ctx, engine, vpc, subnets := eniTestWorld(t)
 	first := eniTestContainer(t, subnets[0], "10.0.1.4")
 	second := eniTestContainer(t, subnets[1], "10.0.2.4")
-	ensureTestENI(t, ctx, engine, vpc, subnets[0], first)
-	ensureTestENI(t, ctx, engine, vpc, subnets[1], second)
+	ensureTestENI(ctx, t, engine, vpc, subnets[0], first)
+	ensureTestENI(ctx, t, engine, vpc, subnets[1], second)
 	witnessStart(t, second)
 	eniMustCommand(t, "podman", "exec", first.runtimeID, "ping", "-c", "1", "-W", "2", "10.0.2.4")
 	before := witnessPackets(t, second)
@@ -269,8 +270,8 @@ func TestENIIsolation(t *testing.T) {
 	ctx, engine, vpc, subnets := eniTestWorld(t)
 	first := eniTestContainer(t, subnets[0], "10.0.1.4")
 	second := eniTestContainer(t, subnets[1], "10.0.2.4")
-	ensureTestENI(t, ctx, engine, vpc, subnets[0], first)
-	ensureTestENI(t, ctx, engine, vpc, subnets[1], second)
+	ensureTestENI(ctx, t, engine, vpc, subnets[0], first)
+	ensureTestENI(ctx, t, engine, vpc, subnets[1], second)
 	other := model.VPC{ID: fmt.Sprintf("vpc-%017x", unusedIndex(t)), WorkspaceID: "default", ShortIndex: unusedIndex(t), CIDRBlock: vpc.CIDRBlock}
 	otherSubnet := subnets[0]
 	otherSubnet.VPCID = other.ID
@@ -284,8 +285,8 @@ func TestENIIsolation(t *testing.T) {
 	})
 	otherSource := eniTestContainer(t, otherSubnet, "10.0.1.4")
 	remoteOnly := eniTestContainer(t, otherSubnet, "10.0.1.5")
-	ensureTestENI(t, ctx, engine, other, otherSubnet, otherSource)
-	ensureTestENI(t, ctx, engine, other, otherSubnet, remoteOnly)
+	ensureTestENI(ctx, t, engine, other, otherSubnet, otherSource)
+	ensureTestENI(ctx, t, engine, other, otherSubnet, remoteOnly)
 	witnessStart(t, remoteOnly)
 	eniMustCommand(t, "podman", "exec", otherSource.runtimeID, "ping", "-c", "1", "-W", "2", "10.0.1.5")
 	before := witnessPackets(t, remoteOnly)

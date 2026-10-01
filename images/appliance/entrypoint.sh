@@ -39,6 +39,10 @@ mount -t tmpfs -o mode=0755,nosuid,nodev,noexec tmpfs /run/netns \
     || fail "could not initialize ephemeral network namespace directory"
 mount --make-private /run/netns \
     || fail "could not make network namespace directory private"
+mount -t tmpfs -o mode=0700,nosuid,nodev,noexec tmpfs /run/nephos \
+    || fail "could not initialize private ephemeral hook directory"
+mount --make-private /run/nephos \
+    || fail "could not make hook directory private"
 
 # Functional probes run only inside the appliance's own namespace. No module
 # is explicitly loaded and no host network or firewall object is changed.
