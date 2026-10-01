@@ -97,7 +97,6 @@ func (s *server) GetInstanceConsole(w http.ResponseWriter, r *http.Request, work
 	if err := bridgeConsole(r.Context(), conn, session, start.TTY); err != nil {
 		return // The bridge reports the error before canceling its reader.
 	}
-	_ = conn.Close(websocket.StatusNormalClosure, "")
 }
 
 func writeConsoleError(ctx context.Context, conn *websocket.Conn, err error) {
@@ -270,7 +269,15 @@ func bridgeConsole(parent context.Context, conn *websocket.Conn, session compute
 				if err != nil {
 					return err
 				}
-				return writeConsoleMessage(ctx, conn, websocket.MessageText, raw)
+				if err := writeConsoleMessage(ctx, conn, websocket.MessageText, raw); err != nil {
+					return err
+				}
+				// Complete the normal close handshake while the input reader is
+				// still alive. Canceling Read first closes the socket abruptly.
+				if err := conn.Close(websocket.StatusNormalClosure, ""); err != nil {
+					return fmt.Errorf("close console connection: %w", err)
+				}
+				return nil
 			}
 			if tty && event.channel == 2 {
 				return fmt.Errorf("TTY emitted a separate stderr stream")

@@ -80,7 +80,9 @@ Risks whose mitigation lands in **M0–M8** must be mitigated before v0.1.0 (see
   kernel failure, drift repair, namespace orphan cleanup, and deletion order.
   The appliance smoke checks persisted VPC/subnet IDs, short indexes and
   gateways across `down`/`up`. Instance recovery and the reset leak checker
-  remain in later M1 slices; this is not yet full T4 closure.
+  remain in slice 4; this is not yet full T4 closure. Slice 3 tests generation
+  races, missed enqueue/resync, failed teardown retries with retained runtime
+  IDs/IP leases, and full instance/ENI/VPC deletion in the real appliance.
 - **Milestone:** M1, M8.
 - **Early warning:** nightly leak-checker failures; "stuck in pending" reports.
 
@@ -133,7 +135,10 @@ Risks whose mitigation lands in **M0–M8** must be mitigated before v0.1.0 (see
   The real-appliance smoke compares host namespace inode, links, routes,
   policy rules and readable nftables before/after. Native CI requires the
   nftables check; WSL2 reports explicitly if its host tool is unavailable.
-  Slice 3 must extend this evidence to instance ENIs and real packets.
+  Slice 3 extends this evidence to pinned instance ENIs, concurrent hooks,
+  real cross-subnet packets, overlapping-VPC isolation and source-spoof drops.
+  Local smoke snapshots pass for namespace, links, routes and rules;
+  the host nftables snapshot remains required by native Ubuntu CI.
 - **Milestone:** M0 (SP3), M1.
 - **Early warning:** flaky integration tests; objects appearing in the wrong namespace.
 
@@ -235,10 +240,13 @@ Risks whose mitigation lands in **M0–M8** must be mitigated before v0.1.0 (see
   - `SameSite=Strict` HttpOnly session cookies; no CORS.
   - Credentials file mode 0600, and `nephos token rotate`.
   - M1 tests cover bearer-token rejection and localhost binding for the
-    endpoints it ships. Planned slice-3 console tests additionally reject
+    endpoints it ships. Slice-3 console tests additionally reject
     foreign Host, nonempty browser Origin, malformed/oversized frames, and
     invalid instance state before opening exec in either console mode.
     Tokens remain in the Authorization header, never URLs or frame payloads.
+    The 5-second start deadline, assembled-message limits, 10-second pending
+    write deadline and disconnect cleanup bound each session. Protocol,
+    stream, cleanup and missing-final-exit errors cannot imply command success.
     M6 adds browser-session cookies and browser-facing CORS tests with the
     web console; M1 does not relax its no-browser-Origin policy.
 - **Milestone:** M1 (token, localhost binding, CLI console protections), M6 (browser sessions).
@@ -250,7 +258,7 @@ Risks whose mitigation lands in **M0–M8** must be mitigated before v0.1.0 (see
 - **Risk:** learners experiment. Fork bombs, memory hogs, and disks filled inside instances, or runaway reconcile loops, degrade the appliance or the host.
 - **Mitigation:**
   - pids, memory, and CPU limits per instance, and limits on the appliance itself.
-  - Planned M1 slice 3 fixes `t3.micro` at 2 vCPU, 1 GiB and 512 tasks
+  - M1 slice 3 enforces `t3.micro` at 2 vCPU, 1 GiB and 512 tasks
     (processes plus threads). This Nephos ceiling is not a reservation; the
     appliance's aggregate default of 4096 still applies. Tests inspect real
     cgroup values and bound task creation in an isolated instance, verifying

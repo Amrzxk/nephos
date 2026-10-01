@@ -58,6 +58,9 @@ func TestConsoleCommandStreams(t *testing.T) {
 	if stdout.String() != "x\x00ytail\x00" || stderr.String() != "error\x00" || runtime.count() != 1 {
 		t.Fatalf("streams stdout=%q stderr=%q exec=%d", stdout.String(), stderr.String(), runtime.count())
 	}
+	if _, _, err := conn.Read(ctx); websocket.CloseStatus(err) != websocket.StatusNormalClosure {
+		t.Fatalf("final exit must be followed by normal closure: %v", err)
+	}
 }
 
 func TestConsoleTerminalResize(t *testing.T) {

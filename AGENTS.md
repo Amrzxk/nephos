@@ -43,15 +43,19 @@ bootstrap, SQLite-backed VPC/subnet CRUD, durable events, reconciliation,
 real namespaces and gateway addresses, and native-Docker smoke coverage.
 See the [roadmap progress](docs/ROADMAP.md#m1-thinnest-end-to-end-slice-two-instances-ping)
 and [connectivity matrix](docs/tests/M1-connectivity-matrix.md) for the evidence.
-The next work is slice 3: ENIs, instances, console, and real cross-subnet
-ping. Its [implementation plan](docs/superpowers/plans/2026-09-27-m1-slice-3-instances-ping.md)
-is **finalized for review**: the fixed 512-task safety ceiling and interactive
-PTY/non-PTY command console modes are agreed. Final plan review and an
-execution-method choice still precede implementation; no slice-3 behavior
-is implemented yet.
-Slice 4 still owns instance restart recovery, reset and leak closure. M1 is
-**not** complete, and namespace/gateway checks must not be reported as packet
-connectivity. Do not repeat the completed slice-1/2 plan checklists.
+Slice 3 is implemented on `codex/m1-slice3-native`: durable ENI/IP allocation,
+instance reconciliation, a private fail-closed createRuntime hook, real veth
+networking and source checks, fixed `t3.micro` limits (2 vCPU, 1 GiB, 512
+tasks), and authenticated instance API/CLI and PTY/non-PTY console modes.
+Its [implementation plan](docs/superpowers/plans/2026-09-27-m1-slice-3-instances-ping.md)
+and [console protocol](api/console-v1.md) describe the contracts. The matrix
+records local WSL2/Docker Desktop packet evidence; native Ubuntu CI and merge
+are still pending for this branch.
+Slice 4 still owns retained-root instance restart recovery, orphan collection,
+reset and leak closure, the replayable demo/e2e target, and full platform QA.
+M1 is **not** complete. Prepare and review the slice-4 plan before execution;
+do not repeat the completed slice-1/2/3 implementation checklists. Namespace
+and gateway checks alone must never be reported as packet connectivity.
 
 ## Start-of-task workflow
 

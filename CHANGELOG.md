@@ -25,11 +25,15 @@ Each entry names the milestone it belongs to; see [docs/ROADMAP.md](docs/ROADMAP
   isolated VPC namespaces and subnet base+1 gateways. Native-Docker CI now
   exercises overlapping VPC topology, VPC/subnet restart persistence, and
   host-network hygiene; it does not yet test instance packets or root files.
-- **M1 — next-slice handoff.** A finalized implementation plan for instances,
-  ENIs, the fail-closed OCI hook, authenticated console, and real cross-subnet
-  ping. The agreed 512-task safety ceiling, interactive PTY/non-PTY command
-  console modes, and their tests are specified. Final plan review and
-  execution-method selection remain; no slice-3 product behavior is claimed.
+- **M1 — instances and real packets (third delivery slice, local branch).**
+  Transactional ENI/IP allocation, generation-aware instance reconciliation,
+  private fail-closed createRuntime plumbing before PID 1, routed veth ENIs
+  and anti-spoof rules; fixed `t3.micro` limits of 2 vCPU, 1 GiB and 512 tasks.
+  Authenticated instance CRUD and CLI commands, interactive PTY and exact-argv
+  command consoles with separate byte streams, stdin EOF, resize, cleanup and
+  real exit status. Local Docker smoke proves cross-subnet ICMP,
+  overlapping-VPC isolation, spoof drops, hook failure and task refusal;
+  native Ubuntu CI is wired after the existing smokes and awaits branch push.
 - **M0 — repository scaffold.** Go module pinned to go1.27.1, the `nephos`,
   `nephosd`, and `nephos-hook` binaries, `internal/version` with linker-injected
   build identity, and a `Makefile` covering build, test, lint, and the
@@ -93,9 +97,10 @@ Each entry names the milestone it belongs to; see [docs/ROADMAP.md](docs/ROADMAP
 ### Notes
 
 - M1 slices 1 and 2 are implemented and merged in PRs #3 and #4, establishing
-  appliance bootstrap and VPC/subnet state and topology. Instance ENIs,
-  console, actual ping, full instance restart recovery, reset and leak closure
-  remain in later M1 slices. The milestone is not complete
+  appliance bootstrap and VPC/subnet state and topology. Slice 3 is implemented
+  locally on `codex/m1-slice3-native`; native CI and merge are pending. Full
+  instance restart recovery, reset and leak closure remain in slice 4.
+  The milestone is not complete
   ([roadmap](docs/ROADMAP.md#m1-thinnest-end-to-end-slice-two-instances-ping)).
 - The spikes carry six findings into M1 and M2: nested cgroup v2 controllers must
   be delegated (and the appliance must fail closed if they cannot be),
