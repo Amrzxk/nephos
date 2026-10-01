@@ -2,10 +2,12 @@
 package apiserver
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 
 	"github.com/Amrzxk/nephos/internal/apiserver/generated"
+	"github.com/Amrzxk/nephos/internal/compute"
 	"github.com/Amrzxk/nephos/internal/service"
 	"github.com/Amrzxk/nephos/internal/store"
 	"github.com/Amrzxk/nephos/internal/version"
@@ -15,12 +17,18 @@ type server struct {
 	build     version.Info
 	ready     func() bool
 	resources *service.Network
+	instances *service.Instances
 	events    *store.Store
+	console   consoleRuntime
+}
+
+type consoleRuntime interface {
+	Exec(context.Context, compute.RuntimeID, compute.ExecRequest) (compute.ExecSession, error)
 }
 
 // New returns the generated routes behind M1's localhost and bearer boundary.
-func New(token string, build version.Info, ready func() bool, resources *service.Network, events *store.Store) http.Handler {
-	h := generated.HandlerWithOptions(&server{build: build, ready: ready, resources: resources, events: events},
+func New(token string, build version.Info, ready func() bool, resources *service.Network, instances *service.Instances, events *store.Store, console consoleRuntime) http.Handler {
+	h := generated.HandlerWithOptions(&server{build: build, ready: ready, resources: resources, instances: instances, events: events, console: console},
 		generated.StdHTTPServerOptions{ErrorHandlerFunc: func(w http.ResponseWriter, _ *http.Request, err error) {
 			writeAPIError(w, http.StatusBadRequest, "InvalidParameterValue", err.Error(), "")
 		}})

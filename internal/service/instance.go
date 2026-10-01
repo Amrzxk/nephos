@@ -165,8 +165,16 @@ func (s *Instances) List(ctx context.Context, limit int, token string) (Instance
 
 // Terminate records asynchronous deletion intent; the lease is not freed yet.
 func (s *Instances) Terminate(ctx context.Context, id string) error {
+	_, err := s.TerminateSnapshot(ctx, id)
+	return err
+}
+
+// TerminateSnapshot returns the committed transitional state even if a worker
+// removes the row immediately after this transaction commits.
+func (s *Instances) TerminateSnapshot(ctx context.Context, id string) (model.Instance, error) {
 	now := s.now().UTC()
 	changed := false
+	var result model.Instance
 	err := s.store.WithTx(ctx, func(tx *store.Tx) error {
 		current, err := tx.GetInstance(ctx, defaultWorkspace, id)
 		if errors.Is(err, sql.ErrNoRows) {
@@ -176,6 +184,7 @@ func (s *Instances) Terminate(ctx context.Context, id string) error {
 			return err
 		}
 		if current.DeletionRequested {
+			result = current
 			return nil
 		}
 		if err := tx.MarkInstanceTerminating(ctx, defaultWorkspace, id, now); err != nil {
@@ -185,13 +194,18 @@ func (s *Instances) Terminate(ctx context.Context, id string) error {
 			Action: "terminating", State: string(model.InstanceShuttingDown), Generation: current.Generation + 1, CreatedAt: now.Unix()}); err != nil {
 			return err
 		}
+		current.DeletionRequested = true
+		current.Generation++
+		current.State = model.InstanceShuttingDown
+		current.StateReason = ""
+		result = current
 		changed = true
 		return nil
 	})
 	if err == nil && changed && s.enqueue != nil {
 		s.enqueue(id)
 	}
-	return err
+	return result, err
 }
 
 func instanceNotFound(id string) error {

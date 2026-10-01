@@ -71,7 +71,7 @@ func realResourceAPI(t *testing.T) resourceConfig {
 	}
 	t.Cleanup(func() { _ = s.Close() })
 	token := testToken()
-	server := httptest.NewServer(apiserver.New(token, version.Get(), func() bool { return true }, service.NewNetwork(s, nil, nil), s))
+	server := httptest.NewServer(apiserver.New(token, version.Get(), func() bool { return true }, service.NewNetwork(s, nil, nil), service.NewInstances(s, nil, nil), s, nil))
 	t.Cleanup(server.Close)
 	return resourceConfig{endpoint: server.URL, credentialPath: tokenFile(t, token), pollInterval: time.Millisecond}
 }

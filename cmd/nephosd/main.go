@@ -102,8 +102,9 @@ func serve(ctx context.Context, ln net.Listener, tokenPath, dbPath, hookPath str
 	controller := reconcile.New(s, network, 60*time.Second)
 	instances := reconcile.NewInstances(s, instanceNetwork{store: s, engine: network}, runtime, 60*time.Second)
 	resources := service.NewNetwork(s, controller.Enqueue, nil)
+	instanceService := service.NewInstances(s, instances.Enqueue, nil)
 	var ready atomic.Bool
-	h := apiserver.New(token, build, ready.Load, resources, s)
+	h := apiserver.New(token, build, ready.Load, resources, instanceService, s, runtime)
 	srv := &http.Server{Handler: h, ReadHeaderTimeout: 5 * time.Second}
 	serverDone := make(chan error, 1)
 	go func() { serverDone <- srv.Serve(ln) }()

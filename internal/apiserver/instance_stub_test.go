@@ -8,8 +8,8 @@ import (
 	"github.com/Amrzxk/nephos/internal/version"
 )
 
-func TestInstanceContractStubsAreExplicitAndProtected(t *testing.T) {
-	h := New("secret", version.Get(), func() bool { return true }, nil, nil)
+func TestInstanceRoutesAreProtectedAndFailWithoutService(t *testing.T) {
+	h := New("secret", version.Get(), func() bool { return true }, nil, nil, nil, nil)
 	for _, tc := range []struct{ method, suffix string }{
 		{http.MethodPost, ""}, {http.MethodGet, ""},
 		{http.MethodGet, "/i-test"}, {http.MethodDelete, "/i-test"},
@@ -25,8 +25,8 @@ func TestInstanceContractStubsAreExplicitAndProtected(t *testing.T) {
 				t.Fatalf("unauthorized: %d %s", rec.Code, rec.Body.String())
 			}
 			rec = apiRequest(h, tc.method, path, "", "")
-			if rec.Code != 501 || readObject(t, rec)["code"] != "NotImplemented" {
-				t.Fatalf("stub: %d %s", rec.Code, rec.Body.String())
+			if rec.Code != 503 || readObject(t, rec)["code"] != "ServiceUnavailable" {
+				t.Fatalf("missing service: %d %s", rec.Code, rec.Body.String())
 			}
 			rec = apiRequest(h, tc.method, "/v1/workspaces/other/instances"+tc.suffix, "", "")
 			if rec.Code != 404 || readObject(t, rec)["code"] != "InvalidWorkspace.NotFound" {

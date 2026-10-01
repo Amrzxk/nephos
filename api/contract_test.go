@@ -3,7 +3,9 @@ package api
 import (
 	"context"
 	"net/http"
+	"os"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/getkin/kin-openapi/openapi3"
@@ -32,6 +34,23 @@ func operation(t *testing.T, doc *openapi3.T, path, method string) *openapi3.Ope
 		t.Fatalf("%s %s is absent", method, path)
 	}
 	return op
+}
+
+func TestConsoleWireDocumentation(t *testing.T) {
+	doc := contract(t)
+	op := operation(t, doc, "/v1/workspaces/{workspace}/instances/{id}/console", http.MethodGet)
+	if !strings.Contains(op.Description, "api/console-v1.md") {
+		t.Fatal("OpenAPI console endpoint does not link its wire protocol")
+	}
+	raw, err := os.ReadFile("console-v1.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, required := range []string{"nephos.console.v1", "stdin_eof", "exit_code", "64 KiB", "Authorization"} {
+		if !strings.Contains(string(raw), required) {
+			t.Errorf("console wire documentation lacks %q", required)
+		}
+	}
 }
 
 func hasParameter(op *openapi3.Operation, in, name string) bool {

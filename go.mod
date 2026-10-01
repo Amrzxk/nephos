@@ -8,6 +8,7 @@ tool (
 )
 
 require (
+	github.com/coder/websocket v1.8.15
 	github.com/containerd/errdefs v1.0.0
 	github.com/getkin/kin-openapi v0.142.0
 	github.com/moby/moby/api v1.56.0

@@ -471,7 +471,7 @@ type ClientInterface interface {
 
 	// GetInstanceConsole performs a GET /v1/workspaces/{workspace}/instances/{id}/console (the `GetInstanceConsole` operationId) request.
 	//
-	// Authenticated serial console WebSocket, the explicitly labeled exception to learner traffic entering through nx-edge. This is not SSH. Clients negotiate the nephos.console.v1 subprotocol.
+	// Authenticated serial console WebSocket, the explicitly labeled exception to learner traffic entering through nx-edge. This is not SSH. Clients negotiate the nephos.console.v1 subprotocol. The complete message framing, limits, and failure semantics are in api/console-v1.md.
 	GetInstanceConsole(ctx context.Context, workspace Workspace, id ResourceID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListSubnets performs a GET /v1/workspaces/{workspace}/subnets (the `ListSubnets` operationId) request.
@@ -617,7 +617,7 @@ func (c *Client) GetInstance(ctx context.Context, workspace Workspace, id Resour
 
 // GetInstanceConsole performs a GET /v1/workspaces/{workspace}/instances/{id}/console (the `GetInstanceConsole` operationId) request.
 //
-// Authenticated serial console WebSocket, the explicitly labeled exception to learner traffic entering through nx-edge. This is not SSH. Clients negotiate the nephos.console.v1 subprotocol.
+// Authenticated serial console WebSocket, the explicitly labeled exception to learner traffic entering through nx-edge. This is not SSH. Clients negotiate the nephos.console.v1 subprotocol. The complete message framing, limits, and failure semantics are in api/console-v1.md.
 func (c *Client) GetInstanceConsole(ctx context.Context, workspace Workspace, id ResourceID, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetInstanceConsoleRequest(c.Server, workspace, id)
 	if err != nil {
@@ -1638,7 +1638,7 @@ type ClientWithResponsesInterface interface {
 
 	// GetInstanceConsoleWithResponse performs a GET /v1/workspaces/{workspace}/instances/{id}/console (the `GetInstanceConsole` operationId) request.
 	//
-	// Authenticated serial console WebSocket, the explicitly labeled exception to learner traffic entering through nx-edge. This is not SSH. Clients negotiate the nephos.console.v1 subprotocol.
+	// Authenticated serial console WebSocket, the explicitly labeled exception to learner traffic entering through nx-edge. This is not SSH. Clients negotiate the nephos.console.v1 subprotocol. The complete message framing, limits, and failure semantics are in api/console-v1.md.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	GetInstanceConsoleWithResponse(ctx context.Context, workspace Workspace, id ResourceID, reqEditors ...RequestEditorFn) (*GetInstanceConsoleResponse, error)
@@ -2832,7 +2832,7 @@ func (c *ClientWithResponses) GetInstanceWithResponse(ctx context.Context, works
 
 // GetInstanceConsoleWithResponse performs a GET /v1/workspaces/{workspace}/instances/{id}/console (the `GetInstanceConsole` operationId) request.
 //
-// Authenticated serial console WebSocket, the explicitly labeled exception to learner traffic entering through nx-edge. This is not SSH. Clients negotiate the nephos.console.v1 subprotocol.
+// Authenticated serial console WebSocket, the explicitly labeled exception to learner traffic entering through nx-edge. This is not SSH. Clients negotiate the nephos.console.v1 subprotocol. The complete message framing, limits, and failure semantics are in api/console-v1.md.
 //
 // Returns a wrapper object for the known response body format(s).
 func (c *ClientWithResponses) GetInstanceConsoleWithResponse(ctx context.Context, workspace Workspace, id ResourceID, reqEditors ...RequestEditorFn) (*GetInstanceConsoleResponse, error) {
