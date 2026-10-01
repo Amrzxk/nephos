@@ -88,6 +88,13 @@ Each entry names the milestone it belongs to; see [docs/ROADMAP.md](docs/ROADMAP
 
 ### Fixed
 
+- **M1 — interrupted console backpressure.** Local stdout/stderr pipe and
+  terminal writes now observe cancellation and a bounded write deadline, so
+  a stalled consumer cannot strand session workers or leave the terminal raw.
+  Linux regressions use actual pipes and terminal settings; regular-file
+  output keeps its original offset/append semantics. Slice-3 plan/spec status
+  and the WebSocket dependency reference now match the implemented branch.
+
 - **M1 — daemon test connection cleanup.** Readiness/shutdown tests now own
   their HTTP transports, consume responses, and close unused connections
   before canceling the daemon. This removes an intermittent CI shutdown

@@ -4,7 +4,13 @@
 plan and chose native execution. Signed-off local commits and isolated
 privileged Docker tests with cleanup of only test-owned objects are
 authorized. Push, PR creation and merge are not authorized by this approval.
-Execution is in progress; check task evidence before claiming behavior ships.
+The nine tasks are implemented locally on `codex/m1-slice3-native`, with
+WSL2/Docker Desktop packet evidence and an independent whole-branch review.
+The final review fix and local verification are recorded in the
+[execution checkpoint](../../tests/M1-slice3-local-verification.md).
+Native execution here means inline plan execution, not native Ubuntu
+validation. Native Ubuntu CI, publishing and merge remain pending; M1 is
+not complete and slice 4 is not implemented. Do not repeat this checklist.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -12,7 +18,7 @@ Execution is in progress; check task evidence before claiming behavior ships.
 
 **Architecture:** SQLite owns instance and ENI desired state, including the private-IP lease; a separate instance reconciler waits for converged VPC topology and drives a thin client of Podman's rootful Unix-socket REST API. A filtered OCI `createRuntime` hook asks `nephosd` over a private Unix socket to move and configure the ENI before PID 1 starts. The API and CLI expose only the fixed M1 instance shape and an authenticated WebSocket exec path; slice 4 owns full restart recovery and reset.
 
-**Tech Stack:** Go 1.27.1 with `CGO_ENABLED=0`; existing OpenAPI 3.1/oapi-codegen v2.8.0, sqlc v1.31.1, `modernc.org/sqlite` v1.59.0, netlink v1.3.1, netns v0.0.5; Linux network namespaces and nftables; appliance-local Podman libpod REST over `/run/podman/podman.sock`; locally built `nephos-ubuntu:dev` image; `github.com/gorilla/websocket` v1.5.3 for authenticated console streaming (BSD-2-Clause, pure Go).
+**Tech Stack:** Go 1.27.1 with `CGO_ENABLED=0`; existing OpenAPI 3.1/oapi-codegen v2.8.0, sqlc v1.31.1, `modernc.org/sqlite` v1.59.0, netlink v1.3.1, netns v0.0.5; Linux network namespaces and nftables; appliance-local Podman libpod REST over `/run/podman/podman.sock`; locally built `nephos-ubuntu:dev` image; `github.com/coder/websocket` v1.8.15 for authenticated console streaming (ISC, pure Go). The implementation substitutes its context-aware API for the originally proposed gorilla dependency; the shared wire contract is unchanged.
 
 **Spec:** `docs/superpowers/specs/2026-09-23-m1-two-instances-ping-design.md`
 

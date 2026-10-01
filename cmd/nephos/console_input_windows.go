@@ -13,6 +13,12 @@ import (
 var cancelConsoleRead = windows.NewLazySystemDLL("kernel32.dll").NewProc("CancelSynchronousIo")
 
 func readConsoleFile(ctx context.Context, file *os.File, buf []byte) (int, error) {
+	return consoleFileIO(ctx, file, func() (int, error) { return file.Read(buf) })
+}
+
+// Keep synchronous console I/O on a pinned thread so cancellation interrupts
+// that operation; repeat cancellation across the check/ReadFile/WriteFile race.
+func consoleFileIO(ctx context.Context, file *os.File, operation func() (int, error)) (int, error) {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 	thread, err := windows.GetCurrentThread()
@@ -52,7 +58,7 @@ func readConsoleFile(ctx context.Context, file *os.File, buf []byte) (int, error
 	if err := ctx.Err(); err != nil {
 		return 0, err
 	}
-	n, err := file.Read(buf)
+	n, err := operation()
 	if ctx.Err() != nil {
 		return n, ctx.Err()
 	}

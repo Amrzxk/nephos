@@ -51,6 +51,8 @@ Its [implementation plan](docs/superpowers/plans/2026-09-27-m1-slice-3-instances
 and [console protocol](api/console-v1.md) describe the contracts. The matrix
 records local WSL2/Docker Desktop packet evidence; native Ubuntu CI and merge
 are still pending for this branch.
+The [slice-3 checkpoint](docs/tests/M1-slice3-local-verification.md) records
+the independent review, addressed findings, verification limits and rulings.
 Slice 4 still owns retained-root instance restart recovery, orphan collection,
 reset and leak closure, the replayable demo/e2e target, and full platform QA.
 M1 is **not** complete. Prepare and review the slice-4 plan before execution;

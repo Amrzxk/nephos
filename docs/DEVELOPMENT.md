@@ -185,7 +185,13 @@ on exit/error/interruption. Both use the same authenticated, instance-scoped
 [WebSocket protocol](../api/console-v1.md); packets sent inside the instance
 still traverse the VPC. A connection without a valid final exit and normal
 closure fails. Native Windows/macOS console runtime QA is not yet established;
-project commands remain supported inside Linux or WSL2.
+project commands remain supported inside Linux or WSL2. Pending pipe/terminal
+output writes are bounded to ten seconds and observe cancellation, including
+when stderr cannot accept diagnostics. Linux uses private nonblocking stream
+handles without changing caller flags; Darwin's best-effort implementation
+temporarily sets shared output nonblocking flags and restores them on normal
+session cleanup. Redirected regular files keep their offset/append behavior;
+blocking filesystem I/O is not a poller-cancellable stream.
 
 ### Activating rebuilt development images
 

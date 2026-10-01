@@ -6,8 +6,14 @@ implementation plans will be written for its delivery slices.
 **Slice-3 refinements accepted, 2026-09-28:** fixed 512-task instance limit;
 PTY for interactive console, non-PTY streams for one-shot commands. These
 complete previously unspecified details, not a replacement of an accepted
-ADR. Slice 3 is still unimplemented; its finalized plan awaits final review
-and an execution-method choice.
+ADR. Slice 3 is implemented locally on `codex/m1-slice3-native`, following
+the approved inline execution choice. Local WSL2/Docker Desktop tests and
+the independent review are recorded in the
+[execution checkpoint](../../tests/M1-slice3-local-verification.md).
+Native Ubuntu CI and merge remain pending; retained-root restart recovery,
+reset/leak closure, and the complete M1 demo remain slice 4. The
+[roadmap](../../ROADMAP.md#m1-thinnest-end-to-end-slice-two-instances-ping)
+acceptance criteria remain authoritative and unchecked.
 
 ## Intent and agreed boundaries
 

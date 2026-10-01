@@ -9,7 +9,9 @@ The executable rows are in `tests/vpc-subnet-smoke.sh`,
 tests. Slice 2 passed native Docker CI and WSL2. Slice-3 local privileged
 WSL2/Docker Desktop results are from 2026-10-01; native Ubuntu CI is wired
 after the earlier smokes but awaits branch push. Namespace and gateway
-existence alone is not proof that packets traverse them.
+existence alone is not proof that packets traverse them. The
+[local execution checkpoint](M1-slice3-local-verification.md) also records
+the independent review, console-cancellation regression, and remaining gates.
 
 | Case | AWS-style behavior / Nephos constraint | Slice and assertion |
 |---|---|---|

@@ -33,7 +33,11 @@ arbitrary idle timeout. stdout and stderr each preserve byte order; there is
 no total order between them. Clients must treat a lost connection, an error
 message, malformed or duplicate final result, or closure without a valid
 `exit` message as failure. A command's nonzero `exit_code` is its real exit
-status, not a transport error.
+status, not a transport error. The CLI also bounds each pending local stream
+write to ten seconds and interrupts pipe/terminal writes on cancellation;
+it restores the local terminal after its session workers have stopped.
+Redirected regular-file writes retain their original offset/append semantics
+and use the filesystem's normal I/O behavior rather than poller deadlines.
 
 The console is the explicitly labeled serial/exec exception to learner
 traffic entering through `nx-edge`: it does not provide direct host access

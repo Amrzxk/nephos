@@ -19,14 +19,33 @@ import (
 )
 
 func runConsole(ctx context.Context, args []string, stdin, stdout, stderr *os.File, cfg resourceConfig, terminal consoleTerminal) (code int) {
+	errOutput, err := newConsoleOutput(ctx, stderr)
+	if err != nil {
+		return 1
+	}
+	defer func() {
+		if err := errOutput.Close(); err != nil {
+			code = 1
+		}
+	}()
+	outOutput, err := newConsoleOutput(ctx, stdout)
+	if err != nil {
+		fmt.Fprintf(errOutput, "nephos console: %v\n", err)
+		return 1
+	}
+	defer func() {
+		if err := outOutput.Close(); err != nil {
+			code = 1
+		}
+	}()
 	if len(args) == 0 || args[0] == "" {
-		fmt.Fprintln(stderr, "nephos console: instance name or ID required")
+		fmt.Fprintln(errOutput, "nephos console: instance name or ID required")
 		return exitUsage
 	}
 	start := console.Start{Type: "start", Command: []string{"/bin/bash"}, TTY: true}
 	if len(args) > 1 {
 		if args[1] != "--" || len(args) < 3 {
-			fmt.Fprintln(stderr, "nephos console: use -- followed by a command")
+			fmt.Fprintln(errOutput, "nephos console: use -- followed by a command")
 			return exitUsage
 		}
 		start.Command, start.TTY = args[2:], false
@@ -36,12 +55,12 @@ func runConsole(ctx context.Context, args []string, stdin, stdout, stderr *os.Fi
 	}
 	if start.TTY {
 		if !terminal.IsTerminal(stdin) {
-			fmt.Fprintln(stderr, "nephos console: interactive mode requires a local terminal; use -- command for redirected I/O")
+			fmt.Fprintln(errOutput, "nephos console: interactive mode requires a local terminal; use -- command for redirected I/O")
 			return exitUsage
 		}
 		rows, cols, err := terminal.Size(stdin)
 		if err != nil {
-			fmt.Fprintf(stderr, "nephos console: %v\n", err)
+			fmt.Fprintf(errOutput, "nephos console: %v\n", err)
 			return 1
 		}
 		start.Rows, start.Cols = rows, cols
@@ -51,27 +70,27 @@ func runConsole(ctx context.Context, args []string, stdin, stdout, stderr *os.Fi
 		_, err = console.ParseClientText(raw)
 	}
 	if err != nil {
-		fmt.Fprintf(stderr, "nephos console: invalid command: %v\n", err)
+		fmt.Fprintf(errOutput, "nephos console: invalid command: %v\n", err)
 		return exitUsage
 	}
 	api, cfg, err := newResourceClient(cfg)
 	if err != nil {
-		fmt.Fprintf(stderr, "nephos console: %v\n", err)
+		fmt.Fprintf(errOutput, "nephos console: %v\n", err)
 		return 1
 	}
 	id, err := resolveInstance(ctx, api, args[0])
 	if err != nil {
-		fmt.Fprintf(stderr, "nephos console: %v\n", err)
+		fmt.Fprintf(errOutput, "nephos console: %v\n", err)
 		return 1
 	}
 	token, err := loadCredential(cfg.credentialPath)
 	if err != nil {
-		fmt.Fprintf(stderr, "nephos console: %v\n", err)
+		fmt.Fprintf(errOutput, "nephos console: %v\n", err)
 		return 1
 	}
 	endpoint, err := url.Parse(cfg.endpoint)
 	if err != nil {
-		fmt.Fprintln(stderr, "nephos console: invalid API endpoint")
+		fmt.Fprintln(errOutput, "nephos console: invalid API endpoint")
 		return 1
 	}
 	endpoint.Scheme = "ws"
@@ -87,37 +106,37 @@ func runConsole(ctx context.Context, args []string, stdin, stdout, stderr *os.Fi
 	}
 	if err != nil {
 		if response != nil {
-			fmt.Fprintf(stderr, "nephos console: handshake HTTP %d\n", response.StatusCode)
+			fmt.Fprintf(errOutput, "nephos console: handshake HTTP %d\n", response.StatusCode)
 		} else {
-			fmt.Fprintln(stderr, "nephos console: connection failed")
+			fmt.Fprintln(errOutput, "nephos console: connection failed")
 		}
 		return 1
 	}
 	defer func() { _ = conn.CloseNow() }()
 	if conn.Subprotocol() != console.Subprotocol {
-		fmt.Fprintln(stderr, "nephos console: required subprotocol missing")
+		fmt.Fprintln(errOutput, "nephos console: required subprotocol missing")
 		return 1
 	}
 	conn.SetReadLimit(console.MaxDataBytes)
 	if start.TTY {
 		restore, err := terminal.Raw(stdin)
 		if err != nil {
-			fmt.Fprintf(stderr, "nephos console: %v\n", err)
+			fmt.Fprintf(errOutput, "nephos console: %v\n", err)
 			return 1
 		}
 		defer func() {
 			if err := restore(); err != nil {
-				fmt.Fprintf(stderr, "nephos console: restore terminal: %v\n", err)
+				fmt.Fprintf(errOutput, "nephos console: restore terminal: %v\n", err)
 				code = 1
 			}
 		}()
 	}
-	if _, err := fmt.Fprintln(stderr, "Nephos serial/exec console (authenticated network-access exception)"); err != nil {
+	if _, err := fmt.Fprintln(errOutput, "Nephos serial/exec console (authenticated network-access exception)"); err != nil {
 		return 1
 	}
-	code, err = consoleSession(ctx, conn, raw, start, stdin, stdout, stderr, terminal)
+	code, err = consoleSession(ctx, conn, raw, start, stdin, outOutput, errOutput, terminal)
 	if err != nil {
-		fmt.Fprintf(stderr, "nephos console: %v\n", err)
+		fmt.Fprintf(errOutput, "nephos console: %v\n", err)
 		return 1
 	}
 	return code
