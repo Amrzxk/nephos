@@ -21,6 +21,34 @@ func (q *Queries) CountInstancesInSubnet(ctx context.Context, subnetID string) (
 	return count, err
 }
 
+const deleteInstance = `-- name: DeleteInstance :exec
+DELETE FROM instances WHERE id = ? AND workspace_id = ?
+`
+
+type DeleteInstanceParams struct {
+	ID          string
+	WorkspaceID string
+}
+
+func (q *Queries) DeleteInstance(ctx context.Context, arg DeleteInstanceParams) error {
+	_, err := q.db.ExecContext(ctx, deleteInstance, arg.ID, arg.WorkspaceID)
+	return err
+}
+
+const deleteInstanceENI = `-- name: DeleteInstanceENI :exec
+DELETE FROM enis WHERE id = ? AND workspace_id = ?
+`
+
+type DeleteInstanceENIParams struct {
+	ID          string
+	WorkspaceID string
+}
+
+func (q *Queries) DeleteInstanceENI(ctx context.Context, arg DeleteInstanceENIParams) error {
+	_, err := q.db.ExecContext(ctx, deleteInstanceENI, arg.ID, arg.WorkspaceID)
+	return err
+}
+
 const deleteSubnet = `-- name: DeleteSubnet :exec
 DELETE FROM subnets WHERE id = ? AND workspace_id = ?
 `
@@ -811,6 +839,76 @@ func (q *Queries) RecordRuntimeID(ctx context.Context, arg RecordRuntimeIDParams
 		return 0, err
 	}
 	return result.RowsAffected()
+}
+
+const retainTerminatingRuntimeID = `-- name: RetainTerminatingRuntimeID :execrows
+UPDATE instances SET runtime_id = ?
+WHERE id = ? AND deletion_requested = 1 AND runtime_id IS NULL
+`
+
+type RetainTerminatingRuntimeIDParams struct {
+	RuntimeID sql.NullString
+	ID        string
+}
+
+func (q *Queries) RetainTerminatingRuntimeID(ctx context.Context, arg RetainTerminatingRuntimeIDParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, retainTerminatingRuntimeID, arg.RuntimeID, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const updateInstanceENIStatus = `-- name: UpdateInstanceENIStatus :exec
+UPDATE enis SET state = ?, state_reason = ?, observed_generation = ?, updated_at = ?
+WHERE id = ? AND workspace_id = ?
+`
+
+type UpdateInstanceENIStatusParams struct {
+	State              string
+	StateReason        string
+	ObservedGeneration int64
+	UpdatedAt          int64
+	ID                 string
+	WorkspaceID        string
+}
+
+func (q *Queries) UpdateInstanceENIStatus(ctx context.Context, arg UpdateInstanceENIStatusParams) error {
+	_, err := q.db.ExecContext(ctx, updateInstanceENIStatus,
+		arg.State,
+		arg.StateReason,
+		arg.ObservedGeneration,
+		arg.UpdatedAt,
+		arg.ID,
+		arg.WorkspaceID,
+	)
+	return err
+}
+
+const updateInstanceStatus = `-- name: UpdateInstanceStatus :exec
+UPDATE instances SET state = ?, state_reason = ?, observed_generation = ?, updated_at = ?
+WHERE id = ? AND workspace_id = ?
+`
+
+type UpdateInstanceStatusParams struct {
+	State              string
+	StateReason        string
+	ObservedGeneration int64
+	UpdatedAt          int64
+	ID                 string
+	WorkspaceID        string
+}
+
+func (q *Queries) UpdateInstanceStatus(ctx context.Context, arg UpdateInstanceStatusParams) error {
+	_, err := q.db.ExecContext(ctx, updateInstanceStatus,
+		arg.State,
+		arg.StateReason,
+		arg.ObservedGeneration,
+		arg.UpdatedAt,
+		arg.ID,
+		arg.WorkspaceID,
+	)
+	return err
 }
 
 const updateSubnetStatus = `-- name: UpdateSubnetStatus :exec

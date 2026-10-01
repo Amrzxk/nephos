@@ -20,8 +20,11 @@ import (
 	"time"
 
 	"github.com/Amrzxk/nephos/internal/apiserver"
+	"github.com/Amrzxk/nephos/internal/compute"
+	"github.com/Amrzxk/nephos/internal/compute/podman"
 	"github.com/Amrzxk/nephos/internal/credentials"
 	"github.com/Amrzxk/nephos/internal/hook"
+	"github.com/Amrzxk/nephos/internal/model"
 	"github.com/Amrzxk/nephos/internal/network/topology"
 	"github.com/Amrzxk/nephos/internal/reconcile"
 	"github.com/Amrzxk/nephos/internal/service"
@@ -65,7 +68,7 @@ func run(ctx context.Context, logger *slog.Logger) error {
 		return fmt.Errorf("listening for the API: %w", err)
 	}
 	defer ln.Close()
-	if err := serve(ctx, ln, "/var/lib/nephos/secrets/api-token", "/var/lib/nephos/state/nephos.db", hook.SocketPath, info, topology.New()); err != nil {
+	if err := serve(ctx, ln, "/var/lib/nephos/secrets/api-token", "/var/lib/nephos/state/nephos.db", hook.SocketPath, info, topology.New(), podman.New("/run/podman/podman.sock")); err != nil {
 		return err
 	}
 	logger.Info("nephosd shutting down")
@@ -75,9 +78,10 @@ func run(ctx context.Context, logger *slog.Logger) error {
 type networkEngine interface {
 	reconcile.NetworkEngine
 	hook.ENIPlumber
+	DeleteENI(context.Context, model.VPC, model.ENI) error
 }
 
-func serve(ctx context.Context, ln net.Listener, tokenPath, dbPath, hookPath string, build version.Info, network networkEngine) error {
+func serve(ctx context.Context, ln net.Listener, tokenPath, dbPath, hookPath string, build version.Info, network networkEngine, runtime compute.Runtime) error {
 	token, err := credentials.LoadOrCreate(tokenPath)
 	if err != nil {
 		return fmt.Errorf("loading API token: %w", err)
@@ -96,6 +100,7 @@ func serve(ctx context.Context, ln net.Listener, tokenPath, dbPath, hookPath str
 	hookDone := make(chan error, 1)
 	go func() { hookDone <- hookServer.Serve(hookListener) }()
 	controller := reconcile.New(s, network, 60*time.Second)
+	instances := reconcile.NewInstances(s, instanceNetwork{store: s, engine: network}, runtime, 60*time.Second)
 	resources := service.NewNetwork(s, controller.Enqueue, nil)
 	var ready atomic.Bool
 	h := apiserver.New(token, build, ready.Load, resources, s)
@@ -114,19 +119,29 @@ func serve(ctx context.Context, ln net.Listener, tokenPath, dbPath, hookPath str
 		<-hookDone
 		return fmt.Errorf("initial VPC reconcile sweep: %w", err)
 	}
+	if err := instances.Sweep(ctx); err != nil {
+		shutdown()
+		<-serverDone
+		<-hookDone
+		return fmt.Errorf("initial instance reconcile sweep: %w", err)
+	}
 	ready.Store(true)
 	runCtx, stop := context.WithCancel(ctx)
 	defer stop()
 	controllerDone := make(chan error, 1)
 	go func() { controllerDone <- controller.Run(runCtx) }()
-	var serveErr, controllerErr, hookErr error
-	serverExited, controllerExited, hookExited := false, false, false
+	instanceDone := make(chan error, 1)
+	go func() { instanceDone <- instances.Run(runCtx) }()
+	var serveErr, controllerErr, instanceErr, hookErr error
+	serverExited, controllerExited, instanceExited, hookExited := false, false, false, false
 	select {
 	case <-ctx.Done():
 	case serveErr = <-serverDone:
 		serverExited = true
 	case controllerErr = <-controllerDone:
 		controllerExited = true
+	case instanceErr = <-instanceDone:
+		instanceExited = true
 	case hookErr = <-hookDone:
 		hookExited = true
 	}
@@ -139,6 +154,9 @@ func serve(ctx context.Context, ln net.Listener, tokenPath, dbPath, hookPath str
 	if !controllerExited {
 		controllerErr = <-controllerDone
 	}
+	if !instanceExited {
+		instanceErr = <-instanceDone
+	}
 	if !hookExited {
 		hookErr = <-hookDone
 	}
@@ -150,6 +168,9 @@ func serve(ctx context.Context, ln net.Listener, tokenPath, dbPath, hookPath str
 	}
 	if controllerErr != nil && !errors.Is(controllerErr, context.Canceled) {
 		return fmt.Errorf("running VPC reconciler: %w", controllerErr)
+	}
+	if instanceErr != nil && !errors.Is(instanceErr, context.Canceled) {
+		return fmt.Errorf("running instance reconciler: %w", instanceErr)
 	}
 	return nil
 }

@@ -7,9 +7,12 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/Amrzxk/nephos/internal/compute"
+	"github.com/Amrzxk/nephos/internal/compute/podman"
 	"github.com/Amrzxk/nephos/internal/model"
 	"github.com/Amrzxk/nephos/internal/network/netns"
 	"github.com/Amrzxk/nephos/internal/service"
@@ -38,7 +41,107 @@ func (b *blockingNetwork) DeleteVPC(context.Context, model.VPC) error { return n
 func (b *blockingNetwork) EnsureENI(context.Context, model.VPC, model.Subnet, model.ENI, *netns.InstanceTarget) error {
 	return nil
 }
-func (b *blockingNetwork) ListVPCNames(context.Context) ([]string, error) { return nil, nil }
+func (b *blockingNetwork) DeleteENI(context.Context, model.VPC, model.ENI) error { return nil }
+func (b *blockingNetwork) ListVPCNames(context.Context) ([]string, error)        { return nil, nil }
+
+type blockingInstanceRuntime struct {
+	entered chan struct{}
+	release chan struct{}
+}
+
+func (r *blockingInstanceRuntime) EnsureImage(context.Context, string) error { return nil }
+func (r *blockingInstanceRuntime) Create(ctx context.Context, _ model.Instance) (compute.RuntimeID, error) {
+	select {
+	case r.entered <- struct{}{}:
+	default:
+	}
+	select {
+	case <-r.release:
+		return compute.RuntimeID(strings.Repeat("a", 64)), nil
+	case <-ctx.Done():
+		return "", ctx.Err()
+	}
+}
+func (r *blockingInstanceRuntime) Start(context.Context, compute.RuntimeID) error  { return nil }
+func (r *blockingInstanceRuntime) Delete(context.Context, compute.RuntimeID) error { return nil }
+func (r *blockingInstanceRuntime) Inspect(context.Context, compute.RuntimeID) (compute.Status, error) {
+	return compute.Status{Running: true}, nil
+}
+func (r *blockingInstanceRuntime) Exec(context.Context, compute.RuntimeID, compute.ExecRequest) (compute.ExecSession, error) {
+	return nil, nil
+}
+
+func TestServeWaitsForInitialInstanceSweep(t *testing.T) {
+	ctx := context.Background()
+	dbPath := filepath.Join(t.TempDir(), "state.db")
+	s, err := store.Open(ctx, dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	network := service.NewNetwork(s, nil, nil)
+	vpc, err := network.CreateVPC(ctx, service.CreateVPCInput{Name: "vpc", CIDRBlock: "10.0.0.0/16"}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	subnet, err := network.CreateSubnet(ctx, service.CreateSubnetInput{Name: "subnet", VPCID: vpc.ID, CIDRBlock: "10.0.1.0/24", AvailabilityZone: "local-1a"}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.NewInstances(s, nil, nil).Run(ctx, service.RunInstanceInput{Name: "first", SubnetID: subnet.ID}, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	var config net.ListenConfig
+	ln, err := config.Listen(ctx, "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	engine := &blockingNetwork{entered: make(chan struct{}, 1), release: make(chan struct{})}
+	close(engine.release)
+	runtime := &blockingInstanceRuntime{entered: make(chan struct{}, 1), release: make(chan struct{})}
+	runCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	done := make(chan error, 1)
+	go func() {
+		done <- serve(runCtx, ln, filepath.Join(t.TempDir(), "token"), dbPath, filepath.Join(t.TempDir(), "hook.sock"), version.Get(), engine, runtime)
+	}()
+	select {
+	case <-runtime.entered:
+	case <-time.After(3 * time.Second):
+		t.Fatal("initial instance sweep did not start")
+	}
+	url := "http://" + ln.Addr().String() + "/v1/health"
+	client := newTestHTTPClient(t)
+	response, err := client.Get(url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = response.Body.Close()
+	if response.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("health before instance sweep=%d", response.StatusCode)
+	}
+	close(runtime.release)
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		response, err = client.Get(url)
+		if err == nil {
+			_ = response.Body.Close()
+			if response.StatusCode == http.StatusOK {
+				break
+			}
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("daemon did not become ready after instance sweep")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	cancel()
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+}
 
 func TestServeReportsStartingUntilInitialSweepCompletes(t *testing.T) {
 	ctx := context.Background()
@@ -65,7 +168,7 @@ func TestServeReportsStartingUntilInitialSweepCompletes(t *testing.T) {
 	defer cancel()
 	done := make(chan error, 1)
 	go func() {
-		done <- serve(runCtx, ln, filepath.Join(t.TempDir(), "api-token"), dbPath, filepath.Join(t.TempDir(), "hook.sock"), version.Get(), engine)
+		done <- serve(runCtx, ln, filepath.Join(t.TempDir(), "api-token"), dbPath, filepath.Join(t.TempDir(), "hook.sock"), version.Get(), engine, podman.New(filepath.Join(t.TempDir(), "podman.sock")))
 	}()
 	select {
 	case <-engine.entered:
@@ -127,7 +230,7 @@ func TestServeCreatesTokenAndShutsDown(t *testing.T) {
 	done := make(chan error, 1)
 	engine := &blockingNetwork{entered: make(chan struct{}, 1), release: make(chan struct{})}
 	go func() {
-		done <- serve(ctx, ln, path, dbPath, filepath.Join(t.TempDir(), "hook.sock"), version.Get(), engine)
+		done <- serve(ctx, ln, path, dbPath, filepath.Join(t.TempDir(), "hook.sock"), version.Get(), engine, podman.New(filepath.Join(t.TempDir(), "podman.sock")))
 	}()
 
 	client := newTestHTTPClient(t)
