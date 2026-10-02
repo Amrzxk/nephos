@@ -126,10 +126,11 @@ func hookWorld(t *testing.T, forceError bool) hookFixture {
 	if err := runtime.EnsureImage(ctx, "nephos-ubuntu:dev"); err != nil {
 		t.Fatal(err)
 	}
-	id, err := runtime.Create(ctx, instance)
+	created, err := runtime.Create(ctx, instance)
 	if err != nil {
 		t.Fatal(err)
 	}
+	id := created.Reference
 	t.Cleanup(func() {
 		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 		defer cancel()
@@ -137,22 +138,23 @@ func hookWorld(t *testing.T, forceError bool) hookFixture {
 			t.Error(err)
 		}
 	})
-	if err := s.RecordRuntimeID(ctx, instance.ID, instance.Generation, string(id)); err != nil {
+	if err := s.RecordRuntimeID(ctx, instance.ID, instance.Generation, string(id.ID)); err != nil {
 		t.Fatal(err)
 	}
-	instance.RuntimeID = string(id)
+	instance.RuntimeID = string(id.ID)
 	return hookFixture{ctx: ctx, store: s, runtime: runtime, instance: instance, vpc: vpc, plumber: plumber}
 }
 func TestHookPlumbingBeforePID1(t *testing.T) {
 	w := hookWorld(t, false)
 	ctx, s, runtime, instance, plumber := w.ctx, w.store, w.runtime, w.instance, w.plumber
-	if err := runtime.Start(ctx, compute.RuntimeID(instance.RuntimeID)); err != nil {
+	ref := compute.Reference{Identity: compute.Identity{WorkspaceID: instance.WorkspaceID, InstanceID: instance.ID}, ID: compute.RuntimeID(instance.RuntimeID)}
+	if err := runtime.Start(ctx, ref); err != nil {
 		t.Fatal(err)
 	}
 	if plumber.calls.Load() != 1 || !plumber.beforePID1.Load() {
 		t.Fatalf("hook calls=%d before PID1=%t", plumber.calls.Load(), plumber.beforePID1.Load())
 	}
-	status, err := runtime.Inspect(ctx, compute.RuntimeID(instance.RuntimeID))
+	status, err := runtime.Inspect(ctx, ref)
 	if err != nil || !status.Running {
 		t.Fatalf("container %+v %v", status, err)
 	}
@@ -164,13 +166,14 @@ func TestHookPlumbingBeforePID1(t *testing.T) {
 func TestHookFailureBeforePID1(t *testing.T) {
 	w := hookWorld(t, true)
 	ctx, s, runtime, instance, vpc, plumber := w.ctx, w.store, w.runtime, w.instance, w.vpc, w.plumber
-	if err := runtime.Start(ctx, compute.RuntimeID(instance.RuntimeID)); err == nil {
+	ref := compute.Reference{Identity: compute.Identity{WorkspaceID: instance.WorkspaceID, InstanceID: instance.ID}, ID: compute.RuntimeID(instance.RuntimeID)}
+	if err := runtime.Start(ctx, ref); err == nil {
 		t.Fatal("failed hook started PID 1")
 	}
 	if plumber.calls.Load() != 1 || plumber.beforePID1.Load() {
 		t.Fatalf("failure plumbing calls=%d beforePID1=%t", plumber.calls.Load(), plumber.beforePID1.Load())
 	}
-	status, err := runtime.Inspect(ctx, compute.RuntimeID(instance.RuntimeID))
+	status, err := runtime.Inspect(ctx, ref)
 	if err != nil || status.Running {
 		t.Fatalf("false running %+v %v", status, err)
 	}

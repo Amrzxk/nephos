@@ -4,6 +4,7 @@ package compute
 
 import (
 	"context"
+	"errors"
 	"io"
 
 	"github.com/Amrzxk/nephos/internal/model"
@@ -12,8 +13,33 @@ import (
 // RuntimeID is an opaque identity supplied by the local container runtime.
 type RuntimeID string
 
+// Identity is the desired instance identity against which observations are checked.
+type Identity struct {
+	WorkspaceID string
+	InstanceID  string
+}
+
+// Reference binds an observed, immutable runtime ID to its expected owner.
+type Reference struct {
+	Identity Identity
+	ID       RuntimeID
+}
+
+// CreateResult distinguishes a newly allocated root from retained discovery.
+type CreateResult struct {
+	Reference Reference
+	Created   bool
+}
+
+// ErrNotFound means authoritative inspection found no expected container.
+// Inspection failures and ownership collisions must never return this error.
+var ErrNotFound = errors.New("expected runtime container not found")
+
 // Status is the observed runtime state, not desired SQLite state.
-type Status struct{ Running bool }
+type Status struct {
+	Running bool
+	PID     int
+}
 
 // ExecRequest describes a command attached to an instance console.
 type ExecRequest struct {
@@ -35,9 +61,10 @@ type ExecSession interface {
 // Runtime is the small container lifecycle boundary used by reconciliation.
 type Runtime interface {
 	EnsureImage(ctx context.Context, ref string) error
-	Create(ctx context.Context, instance model.Instance) (RuntimeID, error)
-	Start(ctx context.Context, id RuntimeID) error
-	Delete(ctx context.Context, id RuntimeID) error
-	Inspect(ctx context.Context, id RuntimeID) (Status, error)
-	Exec(ctx context.Context, id RuntimeID, req ExecRequest) (ExecSession, error)
+	Lookup(ctx context.Context, identity Identity) (Reference, error)
+	Create(ctx context.Context, instance model.Instance) (CreateResult, error)
+	Start(ctx context.Context, ref Reference) error
+	Delete(ctx context.Context, ref Reference) error
+	Inspect(ctx context.Context, ref Reference) (Status, error)
+	Exec(ctx context.Context, ref Reference, req ExecRequest) (ExecSession, error)
 }

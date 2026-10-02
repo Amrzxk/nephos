@@ -50,24 +50,27 @@ type blockingInstanceRuntime struct {
 }
 
 func (r *blockingInstanceRuntime) EnsureImage(context.Context, string) error { return nil }
-func (r *blockingInstanceRuntime) Create(ctx context.Context, _ model.Instance) (compute.RuntimeID, error) {
+func (r *blockingInstanceRuntime) Lookup(context.Context, compute.Identity) (compute.Reference, error) {
+	return compute.Reference{}, compute.ErrNotFound
+}
+func (r *blockingInstanceRuntime) Create(ctx context.Context, instance model.Instance) (compute.CreateResult, error) {
 	select {
 	case r.entered <- struct{}{}:
 	default:
 	}
 	select {
 	case <-r.release:
-		return compute.RuntimeID(strings.Repeat("a", 64)), nil
+		return compute.CreateResult{Reference: compute.Reference{Identity: compute.Identity{WorkspaceID: instance.WorkspaceID, InstanceID: instance.ID}, ID: compute.RuntimeID(strings.Repeat("a", 64))}, Created: true}, nil
 	case <-ctx.Done():
-		return "", ctx.Err()
+		return compute.CreateResult{}, ctx.Err()
 	}
 }
-func (r *blockingInstanceRuntime) Start(context.Context, compute.RuntimeID) error  { return nil }
-func (r *blockingInstanceRuntime) Delete(context.Context, compute.RuntimeID) error { return nil }
-func (r *blockingInstanceRuntime) Inspect(context.Context, compute.RuntimeID) (compute.Status, error) {
+func (r *blockingInstanceRuntime) Start(context.Context, compute.Reference) error  { return nil }
+func (r *blockingInstanceRuntime) Delete(context.Context, compute.Reference) error { return nil }
+func (r *blockingInstanceRuntime) Inspect(context.Context, compute.Reference) (compute.Status, error) {
 	return compute.Status{Running: true}, nil
 }
-func (r *blockingInstanceRuntime) Exec(context.Context, compute.RuntimeID, compute.ExecRequest) (compute.ExecSession, error) {
+func (r *blockingInstanceRuntime) Exec(context.Context, compute.Reference, compute.ExecRequest) (compute.ExecSession, error) {
 	return nil, nil
 }
 

@@ -87,7 +87,8 @@ func (s *server) GetInstanceConsole(w http.ResponseWriter, r *http.Request, work
 		return
 	}
 	start := control.Start
-	session, err := s.console.Exec(r.Context(), compute.RuntimeID(instance.RuntimeID), compute.ExecRequest{
+	ref := compute.Reference{Identity: compute.Identity{WorkspaceID: instance.WorkspaceID, InstanceID: instance.ID}, ID: compute.RuntimeID(instance.RuntimeID)}
+	session, err := s.console.Exec(r.Context(), ref, compute.ExecRequest{
 		Command: start.Command, TTY: start.TTY, Rows: start.Rows, Cols: start.Cols,
 	})
 	if err != nil {

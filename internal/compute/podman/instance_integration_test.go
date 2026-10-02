@@ -20,7 +20,7 @@ import (
 	"github.com/Amrzxk/nephos/internal/model"
 )
 
-func realInstance(t *testing.T) (context.Context, *Client, compute.RuntimeID) {
+func realInstance(t *testing.T) (context.Context, *Client, compute.Reference) {
 	t.Helper()
 	if os.Getenv("NEPHOS_IN_APPLIANCE") != "1" {
 		t.Skip("requires the isolated privileged test appliance with its private Podman socket")
@@ -62,10 +62,11 @@ func realInstance(t *testing.T) (context.Context, *Client, compute.RuntimeID) {
 		t.Fatal(err)
 	}
 	instance := model.Instance{ID: fmt.Sprintf("i-%017x", time.Now().UnixNano()), WorkspaceID: "default", InstanceType: "t3.micro"}
-	id, err := c.Create(ctx, instance)
+	created, err := c.Create(ctx, instance)
 	if err != nil {
 		t.Fatal(err)
 	}
+	id := created.Reference
 	t.Cleanup(func() {
 		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 		defer cancel()
@@ -73,8 +74,8 @@ func realInstance(t *testing.T) (context.Context, *Client, compute.RuntimeID) {
 			t.Error(err)
 		}
 	})
-	if again, err := c.Create(ctx, instance); err != nil || again != id {
-		t.Fatalf("repeated create %q %v", again, err)
+	if again, err := c.Create(ctx, instance); err != nil || again.Reference != id || again.Created || !created.Created {
+		t.Fatalf("repeated create %+v %v", again, err)
 	}
 	if err := c.Start(ctx, id); err != nil {
 		t.Fatal(err)
@@ -88,7 +89,7 @@ func realInstance(t *testing.T) (context.Context, *Client, compute.RuntimeID) {
 	}
 	return ctx, c, id
 }
-func realCommand(ctx context.Context, t *testing.T, c *Client, id compute.RuntimeID, command []string, input []byte, tty bool) (stdout, stderr []byte, status int) {
+func realCommand(ctx context.Context, t *testing.T, c *Client, id compute.Reference, command []string, input []byte, tty bool) (stdout, stderr []byte, status int) {
 	t.Helper()
 	req := compute.ExecRequest{Command: command, TTY: tty}
 	if tty {

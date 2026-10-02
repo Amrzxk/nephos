@@ -178,7 +178,7 @@ func (c *InstanceController) reconcileLocked(ctx context.Context, id string) err
 		return nil // the next hint or durable resync checks prerequisites again
 	}
 	if instance.State == model.InstanceRunning && instance.ObservedGeneration == instance.Generation && instance.RuntimeID != "" {
-		status, err := c.runtime.Inspect(ctx, compute.RuntimeID(instance.RuntimeID))
+		status, err := c.runtime.Inspect(ctx, runtimeReference(instance))
 		if err == nil && status.Running {
 			c.clearRetry(id)
 			return nil
@@ -190,12 +190,13 @@ func (c *InstanceController) reconcileLocked(ctx context.Context, id string) err
 	if err := c.runtime.EnsureImage(ctx, "nephos-ubuntu:dev"); err != nil {
 		return c.fail(ctx, instance, err)
 	}
-	runtimeID, err := c.runtime.Create(ctx, instance)
+	created, err := c.runtime.Create(ctx, instance)
 	if err != nil {
 		return c.fail(ctx, instance, err)
 	}
-	if err := c.store.RecordRuntimeID(ctx, instance.ID, instance.Generation, string(runtimeID)); err != nil {
-		return c.createdDuringStateChange(ctx, instance, runtimeID, err)
+	ref := created.Reference
+	if err := c.store.RecordRuntimeID(ctx, instance.ID, instance.Generation, string(ref.ID)); err != nil {
+		return c.createdDuringStateChange(ctx, instance, created, err)
 	}
 	// Read the committed runtime ID and desired generation again before Start;
 	// createRuntime then sees exactly this identity in SQLite.
@@ -207,10 +208,10 @@ func (c *InstanceController) reconcileLocked(ctx context.Context, id string) err
 		c.Enqueue(id)
 		return nil
 	}
-	if err := c.runtime.Start(ctx, runtimeID); err != nil {
+	if err := c.runtime.Start(ctx, ref); err != nil {
 		return c.fail(ctx, instance, err)
 	}
-	status, err := c.runtime.Inspect(ctx, runtimeID)
+	status, err := c.runtime.Inspect(ctx, ref)
 	if err != nil {
 		return c.fail(ctx, instance, err)
 	}
@@ -228,12 +229,26 @@ func (c *InstanceController) reconcileLocked(ctx context.Context, id string) err
 	return nil
 }
 
-func (c *InstanceController) createdDuringStateChange(ctx context.Context, instance model.Instance, runtimeID compute.RuntimeID, recordErr error) error {
+func runtimeReference(instance model.Instance) compute.Reference {
+	return compute.Reference{Identity: compute.Identity{WorkspaceID: instance.WorkspaceID, InstanceID: instance.ID}, ID: compute.RuntimeID(instance.RuntimeID)}
+}
+
+func (c *InstanceController) createdDuringStateChange(ctx context.Context, instance model.Instance, created compute.CreateResult, recordErr error) error {
+	ref := created.Reference
+	if !created.Created {
+		// Discovery is not allocation: a failed cache write cannot authorize
+		// destroying a retained root. A later sweep reconciles current intent.
+		if !errors.Is(recordErr, store.ErrStaleSnapshot) {
+			return fmt.Errorf("record retained runtime %s: %w", instance.ID, recordErr)
+		}
+		c.Enqueue(instance.ID)
+		return nil
+	}
 	if errors.Is(recordErr, store.ErrStaleSnapshot) {
 		// A concurrent Terminate may have advanced the desired generation.
 		// Retain the owned ID so a failed immediate Delete is retryable.
-		if err := c.store.RetainTerminatingRuntimeID(ctx, instance.ID, string(runtimeID)); err == nil {
-			if err := c.runtime.Delete(ctx, runtimeID); err != nil {
+		if err := c.store.RetainTerminatingRuntimeID(ctx, instance.ID, string(ref.ID)); err == nil {
+			if err := c.runtime.Delete(ctx, ref); err != nil {
 				current, loadErr := c.store.GetInstance(ctx, "default", instance.ID)
 				if loadErr != nil {
 					return fmt.Errorf("cleanup raced runtime %s: %w (load: %w)", instance.ID, err, loadErr)
@@ -244,7 +259,7 @@ func (c *InstanceController) createdDuringStateChange(ctx context.Context, insta
 			return nil
 		}
 	}
-	if err := c.runtime.Delete(ctx, runtimeID); err != nil {
+	if err := c.runtime.Delete(ctx, ref); err != nil {
 		return fmt.Errorf("record runtime %s: %w; cleanup failed: %w", instance.ID, recordErr, err)
 	}
 	c.Enqueue(instance.ID)
@@ -253,7 +268,7 @@ func (c *InstanceController) createdDuringStateChange(ctx context.Context, insta
 
 func (c *InstanceController) terminate(ctx context.Context, instance model.Instance) error {
 	if instance.RuntimeID != "" {
-		if err := c.runtime.Delete(ctx, compute.RuntimeID(instance.RuntimeID)); err != nil {
+		if err := c.runtime.Delete(ctx, runtimeReference(instance)); err != nil {
 			return c.fail(ctx, instance, err)
 		}
 	}

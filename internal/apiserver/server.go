@@ -23,7 +23,7 @@ type server struct {
 }
 
 type consoleRuntime interface {
-	Exec(context.Context, compute.RuntimeID, compute.ExecRequest) (compute.ExecSession, error)
+	Exec(context.Context, compute.Reference, compute.ExecRequest) (compute.ExecSession, error)
 }
 
 // New returns the generated routes behind M1's localhost and bearer boundary.

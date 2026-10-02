@@ -20,11 +20,11 @@ import (
 )
 
 // Exec attaches one command to a verified running instance.
-func (c *Client) Exec(ctx context.Context, id compute.RuntimeID, req compute.ExecRequest) (compute.ExecSession, error) {
+func (c *Client) Exec(ctx context.Context, ref compute.Reference, req compute.ExecRequest) (compute.ExecSession, error) {
 	if err := validateExec(req); err != nil {
 		return nil, err
 	}
-	doc, err := c.inspectOwned(ctx, id)
+	doc, err := c.inspectOwned(ctx, ref)
 	if err != nil {
 		return nil, err
 	}
@@ -39,7 +39,7 @@ func (c *Client) Exec(ctx context.Context, id compute.RuntimeID, req compute.Exe
 		Tty, AttachStdin, AttachStdout, AttachStderr bool
 	}{
 		Cmd: req.Command, Tty: req.TTY, AttachStdin: true, AttachStdout: true, AttachStderr: true}
-	if err := c.request(ctx, http.MethodPost, "/containers/"+string(id)+"/exec", config, &created); err != nil {
+	if err := c.request(ctx, http.MethodPost, "/containers/"+string(ref.ID)+"/exec", config, &created); err != nil {
 		return nil, err
 	}
 	if created.ID == "" || strings.ContainsAny(created.ID, "/?#\x00") {

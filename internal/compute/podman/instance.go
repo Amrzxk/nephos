@@ -2,6 +2,7 @@ package podman
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -21,7 +22,10 @@ type containerInspect struct {
 	ID     string `json:"Id"`
 	Name   string
 	Config struct{ Labels, Annotations map[string]string }
-	State  struct{ Running bool }
+	State  struct {
+		Running bool
+		PID     int `json:"Pid"`
+	}
 }
 
 func owned(doc containerInspect) error {
@@ -32,18 +36,41 @@ func owned(doc containerInspect) error {
 	}
 	return nil
 }
-func (c *Client) inspectOwned(ctx context.Context, id compute.RuntimeID) (containerInspect, error) {
-	var doc containerInspect
-	if !runtimeIDPattern.MatchString(string(id)) {
-		return doc, fmt.Errorf("invalid runtime ID")
+func validIdentity(identity compute.Identity) error {
+	if !instanceIDPattern.MatchString(identity.InstanceID) || identity.WorkspaceID != "default" {
+		return fmt.Errorf("invalid expected M1 instance identity")
 	}
-	if err := c.request(ctx, http.MethodGet, "/containers/"+string(id)+"/json", nil, &doc); err != nil {
-		return doc, err
+	return nil
+}
+
+func expected(doc containerInspect, identity compute.Identity) error {
+	if err := validIdentity(identity); err != nil {
+		return err
 	}
 	if err := owned(doc); err != nil {
+		return err
+	}
+	if doc.Name != identity.InstanceID || doc.Config.Labels["io.nephos.workspace-id"] != identity.WorkspaceID {
+		return fmt.Errorf("refusing foreign runtime identity: expected %s/%s, observed %q", identity.WorkspaceID, identity.InstanceID, doc.Name)
+	}
+	return nil
+}
+
+func (c *Client) inspectOwned(ctx context.Context, ref compute.Reference) (containerInspect, error) {
+	var doc containerInspect
+	if err := validIdentity(ref.Identity); err != nil {
 		return doc, err
 	}
-	if doc.ID != string(id) {
+	if !runtimeIDPattern.MatchString(string(ref.ID)) {
+		return doc, fmt.Errorf("invalid runtime ID")
+	}
+	if err := c.request(ctx, http.MethodGet, "/containers/"+string(ref.ID)+"/json", nil, &doc); err != nil {
+		return doc, err
+	}
+	if err := expected(doc, ref.Identity); err != nil {
+		return doc, err
+	}
+	if doc.ID != string(ref.ID) {
 		return doc, fmt.Errorf("runtime identity changed")
 	}
 	return doc, nil
@@ -61,14 +88,15 @@ func (c *Client) EnsureImage(ctx context.Context, ref string) error {
 }
 
 // Create creates or rediscovers one Nephos-owned instance container.
-func (c *Client) Create(ctx context.Context, instance model.Instance) (compute.RuntimeID, error) {
+func (c *Client) Create(ctx context.Context, instance model.Instance) (compute.CreateResult, error) {
+	identity := compute.Identity{WorkspaceID: instance.WorkspaceID, InstanceID: instance.ID}
 	if !instanceIDPattern.MatchString(instance.ID) || instance.WorkspaceID != "default" || instance.InstanceType != "t3.micro" {
-		return "", fmt.Errorf("invalid M1 instance runtime request")
+		return compute.CreateResult{}, fmt.Errorf("invalid M1 instance runtime request")
 	}
-	if id, err := c.discover(ctx, instance.ID); err == nil {
-		return id, nil
-	} else if !isStatus(err, http.StatusNotFound) {
-		return "", err
+	if ref, err := c.Lookup(ctx, identity); err == nil {
+		return compute.CreateResult{Reference: ref}, nil
+	} else if !errors.Is(err, compute.ErrNotFound) {
+		return compute.CreateResult{}, err
 	}
 	spec := map[string]any{
 		"name": instance.ID, "image": image, "systemd": "always",
@@ -89,46 +117,56 @@ func (c *Client) Create(ctx context.Context, instance model.Instance) (compute.R
 	}
 	if err := c.request(ctx, http.MethodPost, "/containers/create", spec, &response); err != nil {
 		if isStatus(err, http.StatusConflict) {
-			return c.discover(ctx, instance.ID)
+			ref, lookupErr := c.Lookup(ctx, identity)
+			return compute.CreateResult{Reference: ref}, lookupErr
 		}
-		return "", err
+		return compute.CreateResult{}, err
 	}
 	if !runtimeIDPattern.MatchString(response.ID) {
-		return "", fmt.Errorf("podman returned an invalid container ID")
+		return compute.CreateResult{}, fmt.Errorf("podman returned an invalid container ID")
 	}
-	return compute.RuntimeID(response.ID), nil
+	ref := compute.Reference{Identity: identity, ID: compute.RuntimeID(response.ID)}
+	if _, err := c.inspectOwned(ctx, ref); err != nil {
+		return compute.CreateResult{}, fmt.Errorf("verify created container: %w", err)
+	}
+	return compute.CreateResult{Reference: ref, Created: true}, nil
 }
-func (c *Client) discover(ctx context.Context, name string) (compute.RuntimeID, error) {
+
+// Lookup discovers the retained container by its exact desired name and ownership.
+func (c *Client) Lookup(ctx context.Context, identity compute.Identity) (compute.Reference, error) {
+	if err := validIdentity(identity); err != nil {
+		return compute.Reference{}, err
+	}
 	var doc containerInspect
-	if err := c.request(ctx, http.MethodGet, "/containers/"+name+"/json", nil, &doc); err != nil {
-		return "", err
+	if err := c.request(ctx, http.MethodGet, "/containers/"+identity.InstanceID+"/json", nil, &doc); err != nil {
+		if isStatus(err, http.StatusNotFound) {
+			return compute.Reference{}, fmt.Errorf("lookup %s: %w", identity.InstanceID, compute.ErrNotFound)
+		}
+		return compute.Reference{}, err
 	}
-	if err := owned(doc); err != nil {
-		return "", err
+	if err := expected(doc, identity); err != nil {
+		return compute.Reference{}, err
 	}
-	if doc.Name != name {
-		return "", fmt.Errorf("foreign container name collision")
-	}
-	return compute.RuntimeID(doc.ID), nil
+	return compute.Reference{Identity: identity, ID: compute.RuntimeID(doc.ID)}, nil
 }
 
 // Start starts a verified Nephos-owned instance container.
-func (c *Client) Start(ctx context.Context, id compute.RuntimeID) error {
-	if _, err := c.inspectOwned(ctx, id); err != nil {
+func (c *Client) Start(ctx context.Context, ref compute.Reference) error {
+	if _, err := c.inspectOwned(ctx, ref); err != nil {
 		return err
 	}
-	return c.request(ctx, http.MethodPost, "/containers/"+string(id)+"/start", nil, nil)
+	return c.request(ctx, http.MethodPost, "/containers/"+string(ref.ID)+"/start", nil, nil)
 }
 
 // Delete removes only a verified Nephos-owned instance container.
-func (c *Client) Delete(ctx context.Context, id compute.RuntimeID) error {
-	if _, err := c.inspectOwned(ctx, id); err != nil {
+func (c *Client) Delete(ctx context.Context, ref compute.Reference) error {
+	if _, err := c.inspectOwned(ctx, ref); err != nil {
 		if isStatus(err, 404) {
 			return nil
 		}
 		return err
 	}
-	err := c.request(ctx, http.MethodDelete, "/containers/"+string(id)+"?force=true&v=true&timeout=0", nil, nil)
+	err := c.request(ctx, http.MethodDelete, "/containers/"+string(ref.ID)+"?force=true&v=true&timeout=0", nil, nil)
 	if isStatus(err, 404) {
 		return nil
 	}
@@ -136,7 +174,10 @@ func (c *Client) Delete(ctx context.Context, id compute.RuntimeID) error {
 }
 
 // Inspect returns the observed state of a verified instance container.
-func (c *Client) Inspect(ctx context.Context, id compute.RuntimeID) (compute.Status, error) {
-	doc, err := c.inspectOwned(ctx, id)
-	return compute.Status{Running: doc.State.Running}, err
+func (c *Client) Inspect(ctx context.Context, ref compute.Reference) (compute.Status, error) {
+	doc, err := c.inspectOwned(ctx, ref)
+	if err != nil {
+		return compute.Status{}, err
+	}
+	return compute.Status{Running: doc.State.Running, PID: doc.State.PID}, nil
 }
