@@ -123,20 +123,22 @@ network rule is exposed or implied as enforced.
 | 1 | Locally built appliance, startup preflight, token bootstrap, public health, and authenticated API access | Implemented and merged in [PR #3](https://github.com/Amrzxk/nephos/pull/3); native-Docker bootstrap passed in [CI run 35920433115](https://github.com/Amrzxk/nephos/actions/runs/35920433115). |
 | 2 | VPC/subnet CLI and API through SQLite, reconciliation, and real namespaces | Implemented and merged in [PR #4](https://github.com/Amrzxk/nephos/pull/4); native-Docker VPC/subnet smoke passed in [CI run 36327904611](https://github.com/Amrzxk/nephos/actions/runs/36327904611). |
 | 3 | Instance run, OCI hook, console, and cross-subnet ping | Implemented and merged in [PR #6](https://github.com/Amrzxk/nephos/pull/6), with fixed 512-task limits and both console modes. WSL2/Docker Desktop and native Ubuntu packet/failure evidence is recorded in the [matrix](tests/M1-connectivity-matrix.md); all native checks passed in [CI run 36973066755](https://github.com/Amrzxk/nephos/actions/runs/36973066755). [Execution plan](superpowers/plans/2026-09-27-m1-slice-3-instances-ping.md). |
-| 4 | Restart recovery, reset and leak checks, native-Docker e2e CI, and WSL2 manual QA | Not implemented. [Design](superpowers/specs/2026-10-02-m1-slice-4-recovery-reset-design.md) and [implementation plan](superpowers/plans/2026-10-02-m1-slice-4-recovery-reset.md) approved for native execution on 2026-10-02, starting with 4A and independent reviews at each delivery boundary. Full instance persistence and milestone closure remain here. |
+| 4 | Restart recovery, reset and leak checks, native-Docker e2e CI, and WSL2 manual QA | Partly implemented locally: 4A identity-safe retained-root recovery and running ENI repair on `codex/m1-slice4-native`; [checkpoint](tests/M1-slice4a-local-verification.md). Not pushed/merged; native Ubuntu CI pending. 4B–4E remain planned under the approved [design](superpowers/specs/2026-10-02-m1-slice-4-recovery-reset-design.md) and [plan](superpowers/plans/2026-10-02-m1-slice-4-recovery-reset.md), with independent boundary reviews. |
 
 Slices 1–3 provide appliance bootstrap, resource state, and real instance
 connectivity. Slice 3 adds packet-level evidence beyond namespace/gateway
-checks. Retained instance roots across appliance restart, reset/leak closure,
-and the full native/WSL2 demo still require slice 4; the milestone acceptance
+checks. Local 4A proves retained roots and identities across appliance restart;
+native verification, reset/leak closure, and the full native/WSL2 demo still
+require the rest of slice 4. The milestone acceptance
 criteria below remain unchecked until that evidence exists.
 
 **Slice-4 delivery order:** the [design](superpowers/specs/2026-10-02-m1-slice-4-recovery-reset-design.md)
 and [plan](superpowers/plans/2026-10-02-m1-slice-4-recovery-reset.md) define five
-increments, all still unimplemented:
+increments:
 
 1. **4A:** runtime identity/provenance and retained-root restart recovery,
-   including repair of ENIs on already-running instances.
+   including repair of ENIs on already-running instances. Implemented locally;
+   native CI and publication pending (see checkpoint).
 2. **4B:** console/session and graceful shutdown lifecycle, ownership
    inventory, orphan collection, and leak-check foundations.
 3. **4C:** durable SQLite soft-reset coordination and API/CLI wait behavior.

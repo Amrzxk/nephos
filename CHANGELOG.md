@@ -13,6 +13,19 @@ Each entry names the milestone it belongs to; see [docs/ROADMAP.md](docs/ROADMAP
 
 ### Added
 
+- **M1 — retained-root recovery (slice 4A; local implementation).**
+  Runtime operations bind the expected workspace/instance and full container
+  ID; discovery carries creation provenance. Generation/old-ID/deletion CAS
+  repairs runtime caches without deleting rediscovered roots. Schema 5 adds
+  monotonic provisioning history, committed with the first running event;
+  missing provisioned roots fail visibly instead of booting a fresh AMI.
+  Private runroot, libpod and crun state are refreshed only on whole-appliance
+  startup, preserving graphroot. Running reconciliation verifies/repairs ENIs
+  in pinned instance namespaces; healthy observation preserves carrier state
+  and source-check counters. Local WSL2/Docker smoke proves four retained
+  markers/identities and real ping after restart and ENI drift repair. See the
+  [4A checkpoint](docs/tests/M1-slice4a-local-verification.md); native CI,
+  implementation publication, reset and M1 closure remain pending.
 - **M1 — recovery and reset planning (fourth delivery slice).**
   A [design](docs/superpowers/specs/2026-10-02-m1-slice-4-recovery-reset-design.md)
   and [implementation plan](docs/superpowers/plans/2026-10-02-m1-slice-4-recovery-reset.md)
@@ -121,7 +134,9 @@ Each entry names the milestone it belongs to; see [docs/ROADMAP.md](docs/ROADMAP
   closure remain in slice 4, whose
   [design](docs/superpowers/specs/2026-10-02-m1-slice-4-recovery-reset-design.md)
   and [plan](docs/superpowers/plans/2026-10-02-m1-slice-4-recovery-reset.md)
-  are approved for native execution. Slice-4 behavior is not implemented.
+  are approved for native execution. 4A is implemented and independently
+  reviewed locally; 4B–4E, implementation publication and native 4A CI remain
+  outstanding. See the [4A checkpoint](docs/tests/M1-slice4a-local-verification.md).
   The milestone is not complete
   ([roadmap](docs/ROADMAP.md#m1-thinnest-end-to-end-slice-two-instances-ping)).
 - The spikes carry six findings into M1 and M2: nested cgroup v2 controllers must

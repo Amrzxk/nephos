@@ -267,11 +267,15 @@ locally and copied only into the test-owned appliance; they are never shipped.
 Failure evidence stays in the printed `/tmp/nephos-instance-smoke.*` directory;
 cleanup verifies container identity and volume creation time/ownership labels.
 The [M1 connectivity matrix](tests/M1-connectivity-matrix.md) records the
-exact packet paths and keeps restart/reset cases assigned to slice 4.
+exact packet paths and distinguishes local 4A restart proof from pending reset.
 
-### Planned slice-4 recovery and reset workflow
+### Slice-4 recovery progress and planned reset workflow
 
-**Design only; not implemented or run.** The slice-4
+**4A is implemented locally; 4B–4E remain planned.** The
+[4A checkpoint](tests/M1-slice4a-local-verification.md) records unit/race,
+privileged integration, and WSL2/Docker Desktop retained-root/ENI/ping proof.
+Implementation has not been pushed or merged; native Ubuntu CI is pending.
+The slice-4
 [design](superpowers/specs/2026-10-02-m1-slice-4-recovery-reset-design.md),
 [implementation plan](superpowers/plans/2026-10-02-m1-slice-4-recovery-reset.md),
 and [verification plan](tests/M1-slice4-verification-plan.md) describe the next
@@ -281,7 +285,7 @@ are future deliverables. The examples below specify future behavior and are
 not a runnable acceptance procedure for the current tree:
 
 ```text
-# Future slice-4 workflow; unavailable until implementation and review.
+# Full future acceptance workflow; reset/e2e are not yet implemented.
 make dev-ami
 make appliance
 make build
@@ -292,16 +296,18 @@ nephos reset --hard   # remove verified old container/volume, then start fresh
 make e2e             # replay the demo using freshly built images/binaries above
 ```
 
-The planned recovery keeps the original Podman container and writable root;
-it must fail the instance visibly if that root is missing, rather than boot
-an empty replacement. Fresh private Podman runtime directories at
-`/var/lib/nephos/runroot` and `/run/libpod` are prepared before the first
-Podman call on each whole-appliance start, after validating the built
-configuration, while graphroot is retained. A daemon-only restart must
+4A recovery keeps the original Podman container and writable root;
+it fails the instance visibly if a provisioned root is missing, rather than
+booting an empty replacement. Fresh private runtime directories at
+`/var/lib/nephos/runroot`, `/run/libpod`, and `/run/crun` are prepared before
+the first Podman call on each whole-appliance start. The configured durable
+and runroot paths are validated before serving the daemon; graphroot is
+retained. A daemon-only restart must
 preserve the live runtime directories.
 An already-running instance needs verified ENI plumbing before it is reported
-running. Shutdown must join console cleanup and gracefully stop nested
-instances before stopping Podman.
+running; healthy observation must not flap links or reset source-check counters.
+4B will join console cleanup and gracefully stop nested instances before
+stopping Podman; the current 4A restart smoke does not prove graceful shutdown.
 
 Soft reset is planned as a durable SQLite operation. Its transaction fences
 resource creation, and its worker deletes instances before subnets before

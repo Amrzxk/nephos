@@ -26,6 +26,13 @@ and privileged isolated-appliance tests, cleaning only test-owned objects.
 Implementation pushes and merges remain separate decisions; slice-3
 authorization is not inherited.
 
+**Execution checkpoint:** 4A (Tasks 1–2) is implemented and independently
+reviewed locally on `codex/m1-slice4-native`, product head `25a455c`.
+The [4A report](../../tests/M1-slice4a-local-verification.md) records tests,
+the crun refinement and the resolved healthy-resync review finding. No
+implementation push/merge or native Ubuntu CI result is claimed. Continue
+with 4B; Tasks 3–11 remain unimplemented.
+
 **Base:** merged main `84462f8` (PR #6). Reuse a suitable managed worktree
 and prepare a dedicated `codex/` branch at execution time. The preserved
 dirty `codex/m1-slice3-plan` checkout is not the execution base. Follow the
@@ -100,11 +107,11 @@ authoritatively absent expected containers. `Create(ctx, model.Instance)
 `Exec(ctx, Reference, ExecRequest) (ExecSession,error)` replace ID-only calls.
 Every adapter operation validates current observed metadata against the reference.
 
-- [ ] **Step 1: Add `TestRuntimeExpectedIdentity` and `TestCreateProvenance`.** Table cases: correct full ID/name/all labels/annotation accepted; ID of another owned instance, wrong workspace, missing/contradictory marker or name collision rejected by inspect/start/delete/exec; existing expected container returns `Created:false`, fresh create `true`. Assert zero mutating calls in rejection cases. Task 3 adds Stop to this same method matrix.
-- [ ] **Step 2: Run `go test ./internal/compute/podman -run 'TestRuntimeExpectedIdentity|TestCreateProvenance' -count=1`.** Expected FAIL on old ID-only/provenance behavior, not an unrelated fixture error.
-- [ ] **Step 3: Implement the exact interfaces above and adapt every caller/fake atomically.** Split metadata validation/discovery from mutation; do not trust a label subset or turn inspection errors into absence.
-- [ ] **Step 4: Run `go test ./internal/compute/... ./internal/reconcile ./internal/apiserver ./cmd/nephosd -count=1` and `make cross`.** Expected PASS with unchanged console wire behavior and no added platform-only import in shared code.
-- [ ] **Step 5: Review the diff and commit when authorized:** `git commit -s -m "fix(compute): bind runtime operations to expected instances"` after staging only this task's files.
+- [x] **Step 1: Add `TestRuntimeExpectedIdentity` and `TestCreateProvenance`.** Table cases: correct full ID/name/all labels/annotation accepted; ID of another owned instance, wrong workspace, missing/contradictory marker or name collision rejected by inspect/start/delete/exec; existing expected container returns `Created:false`, fresh create `true`. Assert zero mutating calls in rejection cases. Task 3 adds Stop to this same method matrix.
+- [x] **Step 2: Run `go test ./internal/compute/podman -run 'TestRuntimeExpectedIdentity|TestCreateProvenance' -count=1`.** Observed FAIL on old ID-only/provenance behavior, not an unrelated fixture error.
+- [x] **Step 3: Implement the exact interfaces above and adapt every caller/fake atomically.** Split metadata validation/discovery from mutation; do not trust a label subset or turn inspection errors into absence.
+- [x] **Step 4: Run `go test ./internal/compute/... ./internal/reconcile ./internal/apiserver ./cmd/nephosd -count=1` and `make cross`.** Observed PASS with unchanged console wire behavior and no added platform-only import in shared code.
+- [x] **Step 5: Review the diff and commit when authorized:** `git commit -s -m "fix(compute): bind runtime operations to expected instances"` after staging only this task's files (`8a1acd2`).
 
 ### Task 2: Recover retained roots and live ENIs without destructive re-create
 
@@ -125,11 +132,11 @@ Extend `InstanceNetwork` with `EnsureRunning(ctx context.Context,
 instance model.Instance, ref compute.Reference, status compute.Status) error`;
 wire it to `netns.OpenInstance` and existing `Engine.EnsureENI`.
 
-- [ ] **Step 1: Add `TestRediscoveredRootSurvivesStaleRuntimeID`, `TestRuntimeRebindTerminateRace`, `TestProvisionedRootMissingFails`, and `TestRunningInstanceRepairsENI`.** Use runtime/store fakes with a retained marker witness: stale nonempty/empty cache rebinds expected existing container with zero deletes; another instance's cache does not mutate it; concurrent terminate only removes expected identity; missing provisioned container creates zero replacement roots. Include pre-running retry and conservative migration cases. Running state with missing ENI repairs before observed-running success.
-- [ ] **Step 2: Run `go test ./internal/reconcile ./internal/store -run 'TestRediscovered|TestRuntimeRebind|TestProvisioned|TestRunningInstance|TestMigration' -count=1`.** Expected FAIL demonstrating old destructive stale-cache behavior or missing preservation/repair assertions.
-- [ ] **Step 3: Implement CAS/provenance-aware reconciliation and migration, regenerate store code.** An ID-write failure alone never deletes a rediscovered root. Add topology tests for obsolete owned inode replacement versus foreign/ambiguous refusal. Add entrypoint fresh private tmpfs at current runroot/libpod tmpdir/crun state before first Podman command, preserving graphroot and never refreshing on daemon-only restart. Keep admission and hook pre-PID-1 behavior unchanged.
-- [ ] **Step 4: Run `go test ./internal/store ./internal/reconcile ./tests -count=1`, `make generate-check`, and the existing privileged ENI/Podman integration tests inside a test-owned appliance.** Add a retained-file/IP/ENI/MAC/runtime-identity down/up scenario to `tests/instance-ping-smoke.sh`; build images and run it when authorized. Expected preserved marker and real ping, including already-running drift repair; report the exact platform/versions. A runtime absence/collision test must fail closed, not silently pass with a new root.
-- [ ] **Step 5: Commit when authorized:** `git commit -s -m "fix(reconcile): preserve instance roots during restart recovery"` with only reviewed task files staged.
+- [x] **Step 1: Add `TestRediscoveredRootSurvivesStaleRuntimeID`, `TestRuntimeRebindTerminateRace`, `TestProvisionedRootMissingFails`, and `TestRunningInstanceRepairsENI`.** Use runtime/store fakes with a retained marker witness: stale nonempty/empty cache rebinds expected existing container with zero deletes; another instance's cache does not mutate it; concurrent terminate only removes expected identity; missing provisioned container creates zero replacement roots. Include pre-running retry and conservative migration cases. Running state with missing ENI repairs before observed-running success.
+- [x] **Step 2: Run `go test ./internal/reconcile ./internal/store -run 'TestRediscovered|TestRuntimeRebind|TestProvisioned|TestRunningInstance|TestMigration' -count=1`.** Observed FAIL demonstrating old destructive stale-cache behavior or missing preservation/repair assertions.
+- [x] **Step 3: Implement CAS/provenance-aware reconciliation and migration, regenerate store code.** An ID-write failure alone never deletes a rediscovered root. Add topology tests for obsolete owned inode replacement versus foreign/ambiguous refusal. Add entrypoint fresh private tmpfs at current runroot/libpod tmpdir/crun state before first Podman command, preserving graphroot and never refreshing on daemon-only restart. Keep admission and hook pre-PID-1 behavior unchanged. Healthy resync now observes without link/counter mutation; drift still repairs fail-closed.
+- [x] **Step 4: Run `go test ./internal/store ./internal/reconcile ./tests -count=1`, `make generate-check`, and the existing privileged ENI/Podman integration tests inside a test-owned appliance.** Retained-file/IP/ENI/MAC/runtime-identity down/up and running drift scenarios pass in `tests/instance-ping-smoke.sh`. Runtime absence/collision unit tests fail closed. Exact platform/versions and independent review are in the 4A report; native CI remains pending.
+- [x] **Step 5: Commit when authorized:** `git commit -s -m "fix(reconcile): preserve instance roots during restart recovery"` with only reviewed task files staged (`81141f1`, plus reviewed non-disruptive-observation fix `25a455c`).
 
 ### Task 3: Own and drain daemon effects, consoles, and nested stop
 

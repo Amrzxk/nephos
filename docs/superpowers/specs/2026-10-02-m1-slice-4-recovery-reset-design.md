@@ -3,8 +3,9 @@
 **Status:** Recommendations accepted on 2026-10-02: option A and the
 recommended delivery order. This document and its companion plan are the
 requested written elaboration, approved for native execution with independent
-4A–4E delivery-boundary reviews on 2026-10-02. Slice 4 is not
-implemented; no new runtime or platform test result is claimed here.
+4A–4E delivery-boundary reviews on 2026-10-02. 4A is implemented locally on
+`codex/m1-slice4-native`; its [checkpoint](../../tests/M1-slice4a-local-verification.md)
+records review, actual tests and limits. 4B–4E remain planned; M1 is not complete.
 
 **Intent:** finish M1's reliability boundary without adding M2 features.
 Contributors must retain instance files and identity across appliance

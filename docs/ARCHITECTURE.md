@@ -382,6 +382,7 @@ As in AWS, `running` means the machine has started, not that SSH is ready. Insta
 | **DNS and IMDS** | Resolver at base+2 and 169.254.169.253; IMDSv1 and v2; user data; public keys | No Route 53 hosted zones in the MVP; no IAM credential paths |
 | **Instances** | Lifecycle states; vCPU and memory per instance type; user data; key pairs; serial console | Shared kernel; no raw block devices; `free` and `nproc` show appliance totals; reboot is a container restart; no CPU credits |
 | **M1 ENIs and source check** | Primary private IP, routed local-VPC packets, rejection of forged IPv4 sources | One primary ENI per instance; fixed source check with no disable toggle. Additional ENIs, public/internet routing and SG/NACL policies belong to later milestones. |
+| **M1 restart and ENI recovery (4A)** | Retained private addressing, MAC/ENI identity and instance data; repaired local routing after appliance restart | Local appliance down/up is not an AWS stop/start API. Missing provisioned roots fail rather than reset silently. Existing veth repair requires reciprocal ownership and attachment to the verified pinned namespace; ambiguous attachment is refused. Local WSL2 proof exists; native CI is pending. |
 | **Regions and AZs** | AZ names and subnet placement | Logical only; one region |
 | **Names** | `Name` tag | Unique per resource type within a workspace |
 
@@ -403,6 +404,10 @@ VPC or internet edge. Those rows in the table remain the target architecture
 for their owning milestones. Ping uses unprivileged ICMP with the instance
 `ping_group_range` set to `0 65535` and no `CAP_NET_RAW` file capability;
 the approved runtime capability policy stays unchanged.
+The local [4A checkpoint](tests/M1-slice4a-local-verification.md) adds retained
+root/ENI/IP/MAC/runtime identity and bidirectional-ping evidence through a
+whole-appliance restart, plus already-running ENI drift repair. It does not
+extend the historical native CI result above to new recovery code.
 
 ## 6. API, CLI, and naming conventions
 
@@ -495,18 +500,30 @@ The full design is in [ADR-0007](adr/0007-sqlite-state-and-reconciliation.md). O
   the default VPC arrive in M3; NAT gateways arrive in M5.
 - **Resync:** every 60 seconds, reconcilers compare observed kernel and runtime state with desired state and repair drift. For example, a namespace deleted by hand gets recreated.
 
-**M1 slice-4 refinement (accepted recommendations; not implemented):**
+**M1 slice-4 refinement (4A implemented locally; 4B–4E planned):**
 the [design](superpowers/specs/2026-10-02-m1-slice-4-recovery-reset-design.md)
 and [plan](superpowers/plans/2026-10-02-m1-slice-4-recovery-reset.md) define
 retained-root recovery, owned-lifetime cleanup and reset closure. Runtime
-IDs remain observation caches: inspect/start/stop/delete/exec must bind the
+IDs remain observation caches: inspect/start/delete/exec bind the
 expected workspace and instance identity. Rediscovery has separate creation
 provenance; stale-ID repair uses generation/old-ID compare-and-swap and never
 deletes an existing retained root merely because recording failed. A missing
 previously provisioned root is visible failure, not silent AMI replacement.
+Schema 5 backfills provisioning history for running or previously observed
+rows; first observed running status, that monotonic fact, and its event commit
+atomically. Stop joins the same expected-identity contract in 4B.
 Whole-appliance startup refreshes private ephemeral runtime directories at
-their existing paths while retaining Podman graphroot/container state; an
+`/var/lib/nephos/runroot`, `/run/libpod`, and `/run/crun` before the first
+Podman call, retaining graphroot `/var/lib/nephos/containers` and its container
+database/roots. A controlled restart proved stale crun status otherwise
+rejects a retained full ID; refreshing only `/run/crun` retained its marker.
+Daemon-only restarts must not refresh live runtime directories. An
 already-running instance still needs verified ENI observation and repair.
+Healthy resync verifies links, MAC/IP/routes/sysctls and the complete owned
+source-check policy without taking links down or replacing its counters.
+Detected drift is quiesced and repaired; unverifiable policy fails closed.
+See the [4A checkpoint](tests/M1-slice4a-local-verification.md) for proof and
+limits. The following reset and lifetime behavior remains planned.
 
 Option A uses a SQLite reset operation and creation fence, with atomic
 instance→subnet→VPC phase decisions, automatic continuation after
@@ -673,7 +690,9 @@ After the MVP (M11): VPC flow logs (nftables log group → NFLOG → `nephosd`, 
 - **Nightly:** the full e2e and lab suites; chaos tests from M8.
 - **Release checklist** (manual until automated): quickstart on Windows with WSL2 + Docker Desktop, and on macOS with Docker Desktop and OrbStack.
 
-**M1 slice-4 subset (planned):** deterministic identity/retained-root,
+**M1 slice-4 subset:** 4A identity/retained-root and running ENI fixtures are
+implemented with local unit/race, privileged integration and smoke evidence;
+native CI is pending. The remaining planned fixtures cover
 shutdown/hook-child, reset phase/fence/replay, namespace-reference, foreign-
 ownership and partial-purge fixtures. The full local-build demo/e2e must pass
 on native Ubuntu 24.04 and manually on Windows 10/WSL2/Docker Desktop; no

@@ -65,8 +65,13 @@ automatic continuation after interruption and a synchronous caller wait;
 runtime identity and ownership checks protect retained roots, and leak checks
 must verify cleanup before reset succeeds. Delivery proceeds through
 retained-root recovery, lifecycle/leak-check foundations, durable soft reset, hard purge,
-then demo/e2e and platform closure. No slice-4 behavior is implemented yet.
-M1 is **not** complete. Begin with 4A; do not repeat the completed
+then demo/e2e and platform closure. 4A is implemented locally on
+`codex/m1-slice4-native`: expected runtime identity/provenance, guarded cache
+repair, durable provisioning history, retained-root restart and running ENI
+repair. The [4A checkpoint](docs/tests/M1-slice4a-local-verification.md)
+records independent review and local evidence; native Ubuntu CI is still
+pending and implementation has not been pushed or merged. 4B–4E remain planned.
+M1 is **not** complete. Next is 4B; do not repeat the completed
 slice-1/2/3 checklists or inherit permission to push/merge implementation.
 Namespace and gateway checks alone must never be reported as packet connectivity.
 

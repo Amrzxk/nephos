@@ -1,8 +1,9 @@
 # M1 slice-4 verification plan
 
-Date: 2026-10-02. **Planned; no slice-4 checks have run.** This document is a
-test design, not a verification checkpoint or M1 sign-off. Slice 4 is not
-implemented; M1 roadmap acceptance boxes remain unchecked.
+Date: 2026-10-02. This document is the test contract, not M1 sign-off.
+4A has local implementation/evidence in its
+[checkpoint](M1-slice4a-local-verification.md); 4B–4E remain planned and native
+4A CI is pending. M1 roadmap acceptance boxes remain unchecked.
 
 Canonical inputs are the [slice-4 design](../superpowers/specs/2026-10-02-m1-slice-4-recovery-reset-design.md),
 [implementation plan](../superpowers/plans/2026-10-02-m1-slice-4-recovery-reset.md),
@@ -17,7 +18,8 @@ closure.
 
 ## Delivery and evidence map
 
-Every row below is **planned / not run**. Execution records must add the
+Rows below specify required behavior; only the 4A checkpoint records checks
+actually run. The other rows remain **planned / not run**. Execution records must add the
 candidate commit, exact commands, platform, result and artifact links before
 claiming a pass. A skipped check must state its exact reason.
 
@@ -36,6 +38,11 @@ public product API. Deterministic restarts at named boundaries are M1 work;
 randomized `SIGKILL` chaos/soak and repeated 100-cycle reset testing remain M8.
 
 ## 4A/4B: recovery and graceful shutdown
+
+4A local execution results and the resolved independent-review finding are in
+the [4A checkpoint](M1-slice4a-local-verification.md). This document remains
+the verification contract, not evidence that every row below has run. 4B
+and native Ubuntu 4A CI are still outstanding.
 
 | Fixture | Required result |
 |---|---|

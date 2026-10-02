@@ -38,14 +38,19 @@ Risks whose mitigation lands in **M0–M8** must be mitigated before v0.1.0 (see
   - A published support matrix; e2e CI on Ubuntu 24.04; manual release QA on WSL2 and macOS.
   - The containerd fallback in [ADR-0004](adr/0004-instances-as-system-containers.md).
 - **Milestone:** M0, then M8.
-- **M1 slice-4 plan, not yet mitigation evidence:** verify private fresh
-  runroot/libpod runtime state at whole-appliance startup without clearing
-  retained graphroot or writable layers. Test actual preserved container,
+- **M1 slice-4 mitigation (partial local evidence):** 4A mounts fresh private
+  runroot/libpod/crun state at whole-appliance startup without clearing
+  retained graphroot or writable layers. Controlled Podman 5.4.2/crun 1.21
+  testing found stale `/run/crun` status blocked retained-ID Start; refreshing
+  only that temporary state preserved the original root/marker. WSL2 smoke
+  passes four retained roots/identities and bidirectional ping. Native CI for
+  4A is pending; this does not close platform risk. Continue testing container,
   marker/IP/ENI/MAC and packet behavior on native Ubuntu and WSL2; record
   built-image IDs and actual runtime/tool versions. Current unversioned apt
   inputs do not establish reproducible userspace builds. Preserve the
   fail-closed whole-appliance policy; no transparent daemon respawn.
   See the [slice-4 design](superpowers/specs/2026-10-02-m1-slice-4-recovery-reset-design.md).
+  Actual versions and evidence are in the [4A checkpoint](tests/M1-slice4a-local-verification.md).
 - **Early warning:** SP1 fails on WSL2; issues mentioning cgroup or overlay mount errors.
 
 ### T2. systemd and cloud-init quirks inside containers
@@ -87,15 +92,19 @@ Risks whose mitigation lands in **M0–M8** must be mitigated before v0.1.0 (see
 - **M1 slice-2 evidence:** controller tests cover missed enqueue, retry after
   kernel failure, drift repair, namespace orphan cleanup, and deletion order.
   The appliance smoke checks persisted VPC/subnet IDs, short indexes and
-  gateways across `down`/`up`. Instance recovery and the reset leak checker
-  remain in slice 4; this is not yet full T4 closure. Slice 3 tests generation
+  gateways across `down`/`up`. Instance recovery now has local 4A evidence;
+  native recovery and the reset leak checker remain outstanding. This is not
+  full T4 closure. Slice 3 tests generation
   races, missed enqueue/resync, failed teardown retries with retained runtime
   IDs/IP leases, and full instance/ENI/VPC deletion in the real appliance.
 - **Milestone:** M1, M8.
-- **M1 slice-4 plan, not yet closure:** bind every runtime operation to its
-  expected instance and workspace; distinguish new creation from discovery
-  and CAS-rebind stale cached IDs without deleting retained roots. A missing
-  previously provisioned root must fail visibly. Persist reset phase/fence
+- **M1 slice-4 progress, not closure:** 4A binds inspect/start/delete/exec to the
+  expected instance and workspace, distinguishes new creation from discovery,
+  and CAS-rebinds stale cached IDs without deleting retained roots. Unit tests
+  cover cache/delete races, conservative migration and missing provisioned
+  roots failing without replacement; privileged ENI tests reject foreign or
+  ambiguous peers. Local smoke preserves files and repairs running ENI drift.
+  Stop identity/lifetime accounting joins this in 4B. Persist reset phase/fence
   decisions in SQLite and automatically continue interrupted operations;
   failed ownership/inspection/leak proof retains the fence for explicit
   retry. Drain uncertain effects before success, preserve events/replay/index
