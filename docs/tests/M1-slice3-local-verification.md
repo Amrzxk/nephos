@@ -1,9 +1,24 @@
 # M1 slice-3 local verification checkpoint
 
 Date: 2026-10-01. Branch: `codex/m1-slice3-native`, based on `9c6d8ee`.
-This is a local execution record, not native Ubuntu CI or milestone sign-off.
+The original sections below are a local execution record, not milestone sign-off.
 The approved [plan](../superpowers/plans/2026-09-27-m1-slice-3-instances-ping.md)
 has nine implemented tasks; do not repeat their implementation checklists.
+
+## Integration update — 2026-10-02
+
+The user authorized publishing and merging slice 3 after passing checks.
+[PR #6](https://github.com/Amrzxk/nephos/pull/6) publishes the reviewed
+implementation and console fix. All CI jobs passed for `80038af` in
+[native Ubuntu run 36973066755](https://github.com/Amrzxk/nephos/actions/runs/36973066755),
+and DCO passed in
+[run 36973066745](https://github.com/Amrzxk/nephos/actions/runs/36973066745).
+The authenticated native log confirms every packet/console/limits/failure
+assertion and test-owned teardown. The required host nftables snapshot passed
+on native Ubuntu; its absence in the historical WSL run is not hidden.
+Evidence/routing documentation is updated in the same PR. Merge still requires
+all checks on its final head; the PR itself records integration status.
+Slice 4 remains unimplemented and M1 acceptance boxes stay unchecked.
 
 ## Implemented and verified locally
 
@@ -69,11 +84,11 @@ nonblocking flags and restores them at cleanup; native runtime QA is pending.
 
 ## Next gates and authority
 
-Signed-off local commits and isolated privileged tests/owned-object cleanup
-were authorized. No branch push, pull-request creation or merge has occurred.
-The next integration gate is an authorized branch push and draft PR against
-`main`, followed by the native Ubuntu workflow. Do not claim native CI green
-or merge without its evidence and user direction.
+At the 2026-10-01 local checkpoint, only signed-off local commits and isolated
+privileged tests/owned-object cleanup were authorized; no branch push, PR or
+merge had occurred. The later integration update above records publication
+authorization and native CI evidence. Use the live PR status for the merge;
+do not treat the historical local checkpoint as its current status.
 
 Slice 4 requires its own reviewed plan: retained-root restart/marker recovery,
 automatic orphan collection, whole-appliance active-console shutdown checks,
@@ -83,7 +98,8 @@ quotas/capacity discovery remain M2. M1 roadmap acceptance boxes remain
 unchecked.
 
 The primary checkout's pre-existing planning changes were preserved.
-Implementation and review fixes live only on the isolated branch.
+Implementation and review fixes were prepared on the isolated branch and
+published through PR #6, without overwriting those primary-checkout changes.
 
 ## Rulings I made
 

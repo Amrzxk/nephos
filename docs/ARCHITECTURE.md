@@ -393,8 +393,10 @@ ENIs with instance `eth0`, router proxy ARP and destination `/32` routes.
 The [connectivity matrix](tests/M1-connectivity-matrix.md) records real
 bidirectional cross-subnet ICMP; independent overlapping IP spaces with a
 remote-only destination witness; and forged-source rejection with an nftables
-drop counter and no request at the destination. These are local privileged
-WSL2/Docker Desktop results; native Ubuntu CI for slice 3 is pending.
+drop counter and no request at the destination. These pass locally on
+WSL2/Docker Desktop and on native Ubuntu 24.04 in
+[CI run 36973066755](https://github.com/Amrzxk/nephos/actions/runs/36973066755),
+including native host nftables hygiene.
 The source check permits only each ENI's assigned IPv4 source. Its fixed
 policy has no public disable toggle, SG/NACL enforcement, DNS/IMDS, default
 VPC or internet edge. Those rows in the table remain the target architecture

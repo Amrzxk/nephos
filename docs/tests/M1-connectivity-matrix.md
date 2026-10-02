@@ -7,8 +7,10 @@ The source behavior is
 The executable rows are in `tests/vpc-subnet-smoke.sh`,
 `tests/instance-ping-smoke.sh`, and privileged runtime/hook/network integration
 tests. Slice 2 passed native Docker CI and WSL2. Slice-3 local privileged
-WSL2/Docker Desktop results are from 2026-10-01; native Ubuntu CI is wired
-after the earlier smokes but awaits branch push. Namespace and gateway
+WSL2/Docker Desktop results are from 2026-10-01. Native Ubuntu 24.04 also passes
+all slice-3 cases, including the mandatory host nftables snapshot, in
+[CI run 36973066755](https://github.com/Amrzxk/nephos/actions/runs/36973066755)
+on 2026-10-02. Namespace and gateway
 existence alone is not proof that packets traverse them. The
 [local execution checkpoint](M1-slice3-local-verification.md) also records
 the independent review, console-cancellation regression, and remaining gates.
@@ -24,7 +26,7 @@ the independent review, console-cancellation regression, and remaining gates.
 | Instance source spoof | Only the assigned private IP may source packets | Slice 3: after the correct-source positive control, A/one adds forged `.1.5` and sends 2 requests to A/two. Ping fails, the VPC anti-spoof counter advances by at least 2, and two's request count is unchanged. Removing the forged address restores successful ping. |
 | Failed hook | Missing plumbing must fail closed | Slice 3: an instance-scoped test fault is recorded before the production hook executes; API reports `failed`, an unobserved generation and a hook-specific reason; Podman confirms PID 1 is not running. |
 | Exec streams and safety ceiling | Console is labeled out-of-band; resource limits protect the appliance | Slice 3: non-TTY console preserves NUL bytes on separate stdout/stderr, stdin EOF/trailing output and exit 7. Bounded task creation reaches `pids.max=512`, is refused while existing tasks survive, releases its workers, and subsequent exec remains responsive. |
-| Instance/ENI teardown | Termination frees resources only after runtime/network removal | Slice 3: terminate all instances through CLI, confirm no rows or managed Podman containers, then delete subnets/VPCs and confirm no namespaces. Test-owned Docker objects are removed and host namespace/links/routes/rules snapshots match. Native CI requires the additional host nftables snapshot; it was unavailable in this local WSL2 run. |
+| Instance/ENI teardown | Termination frees resources only after runtime/network removal | Slice 3: terminate all instances through CLI, confirm no rows or managed Podman containers, then delete subnets/VPCs and confirm no namespaces. Test-owned Docker objects are removed and host namespace/links/routes/rules snapshots match. The additional mandatory host nftables snapshot passes on native Ubuntu; it was unavailable in the local WSL2 run. |
 | Retained-root instance restart | SQLite and retained roots restore instances/addresses/files across appliance restart | Slice 4: pending; the slice-2 VPC/subnet restart does not prove this. |
 | Soft/hard reset and leak closure | Reset leaves an empty default workspace and no owned kernel/runtime leaks | Slice 4: pending, including the replayable full e2e demo and platform QA. |
 

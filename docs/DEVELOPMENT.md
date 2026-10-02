@@ -94,10 +94,12 @@ make clean
 
 ## M1 local appliance workflow
 
-Slices 1 and 2 are implemented and merged. Slice 3 is implemented locally on
-`codex/m1-slice3-native`: instance/ENI state, fail-closed boot plumbing, real
+Slices 1 and 2 are implemented and merged. Slice 3 is implemented in
+[PR #6](https://github.com/Amrzxk/nephos/pull/6): instance/ENI state, fail-closed boot plumbing, real
 cross-subnet ping, a 512-task instance ceiling, and interactive PTY/non-PTY
-command consoles. Native Ubuntu CI and merge are pending. The
+command consoles. WSL2/Docker Desktop tests and native Ubuntu
+[CI run 36973066755](https://github.com/Amrzxk/nephos/actions/runs/36973066755)
+pass, including the native host nftables check. The
 [roadmap](ROADMAP.md#m1-thinnest-end-to-end-slice-two-instances-ping) tracks
 completion. Retained instance-root restart recovery, reset, leak closure and
 the full replayable e2e demo remain slice 4; do not use the roadmap's complete

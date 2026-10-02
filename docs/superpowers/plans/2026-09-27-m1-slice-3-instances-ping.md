@@ -3,14 +3,17 @@
 **Status:** Approved for native execution, 2026-09-28. The user reviewed this
 plan and chose native execution. Signed-off local commits and isolated
 privileged Docker tests with cleanup of only test-owned objects are
-authorized. Push, PR creation and merge are not authorized by this approval.
-The nine tasks are implemented locally on `codex/m1-slice3-native`, with
-WSL2/Docker Desktop packet evidence and an independent whole-branch review.
+authorized by that approval. The user additionally authorized publishing and
+merging slice 3 after passing checks on 2026-10-02.
+The nine tasks are implemented in [PR #6](https://github.com/Amrzxk/nephos/pull/6),
+with WSL2/Docker Desktop packet evidence and an independent whole-branch review.
 The final review fix and local verification are recorded in the
 [execution checkpoint](../../tests/M1-slice3-local-verification.md).
 Native execution here means inline plan execution, not native Ubuntu
-validation. Native Ubuntu CI, publishing and merge remain pending; M1 is
-not complete and slice 4 is not implemented. Do not repeat this checklist.
+validation. Actual native Ubuntu validation also passes in
+[CI run 36973066755](https://github.com/Amrzxk/nephos/actions/runs/36973066755),
+including host nftables hygiene. M1 is not complete and slice 4 is not
+implemented. Do not repeat this checklist.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

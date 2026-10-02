@@ -137,8 +137,9 @@ Risks whose mitigation lands in **M0–M8** must be mitigated before v0.1.0 (see
   nftables check; WSL2 reports explicitly if its host tool is unavailable.
   Slice 3 extends this evidence to pinned instance ENIs, concurrent hooks,
   real cross-subnet packets, overlapping-VPC isolation and source-spoof drops.
-  Local smoke snapshots pass for namespace, links, routes and rules;
-  the host nftables snapshot remains required by native Ubuntu CI.
+  Local smoke snapshots pass for namespace, links, routes and rules.
+  Native Ubuntu [CI run 36973066755](https://github.com/Amrzxk/nephos/actions/runs/36973066755)
+  also passes the required host nftables snapshot and the real packet cases.
 - **Milestone:** M0 (SP3), M1.
 - **Early warning:** flaky integration tests; objects appearing in the wrong namespace.
 

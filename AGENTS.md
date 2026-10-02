@@ -43,14 +43,15 @@ bootstrap, SQLite-backed VPC/subnet CRUD, durable events, reconciliation,
 real namespaces and gateway addresses, and native-Docker smoke coverage.
 See the [roadmap progress](docs/ROADMAP.md#m1-thinnest-end-to-end-slice-two-instances-ping)
 and [connectivity matrix](docs/tests/M1-connectivity-matrix.md) for the evidence.
-Slice 3 is implemented on `codex/m1-slice3-native`: durable ENI/IP allocation,
+Slice 3 is implemented in [PR #6](https://github.com/Amrzxk/nephos/pull/6): durable ENI/IP allocation,
 instance reconciliation, a private fail-closed createRuntime hook, real veth
 networking and source checks, fixed `t3.micro` limits (2 vCPU, 1 GiB, 512
 tasks), and authenticated instance API/CLI and PTY/non-PTY console modes.
 Its [implementation plan](docs/superpowers/plans/2026-09-27-m1-slice-3-instances-ping.md)
 and [console protocol](api/console-v1.md) describe the contracts. The matrix
-records local WSL2/Docker Desktop packet evidence; native Ubuntu CI and merge
-are still pending for this branch.
+records local WSL2/Docker Desktop and native Ubuntu packet evidence. All
+checks passed in [CI run 36973066755](https://github.com/Amrzxk/nephos/actions/runs/36973066755),
+including the required native host nftables snapshot.
 The [slice-3 checkpoint](docs/tests/M1-slice3-local-verification.md) records
 the independent review, addressed findings, verification limits and rulings.
 Slice 4 still owns retained-root instance restart recovery, orphan collection,
