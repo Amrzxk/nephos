@@ -77,6 +77,15 @@ func (e *Engine) EnsureENI(ctx context.Context, vpc model.VPC, subnet model.Subn
 				if err := verifyExistingENI(ctx, handle, router, eni, target, fd); err != nil {
 					return fmt.Errorf("verify retained ENI %s: %w", name, err)
 				}
+				converged, err := observeENI(ctx, handle, router, subnet, eni, target, alias)
+				if err != nil {
+					// Ownership is proven, but safe policy could not be observed.
+					// Quiesce this pair rather than leave unverifiable traffic live.
+					return errors.Join(err, handle.LinkSetDown(router))
+				}
+				if converged {
+					return nil // Healthy resync must not flap links or reset counters.
+				}
 			}
 			if created {
 				err = netns.WithInstanceHandle(ctx, target, func(peerHandle *netlink.Handle) error {

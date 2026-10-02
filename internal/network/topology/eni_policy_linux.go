@@ -116,10 +116,10 @@ func renderENISourceChecks(records map[string]eniIdentity, exists bool) (string,
 	return b.String(), nil
 }
 
-func applyENISourceChecks(ctx context.Context, handle *netlink.Handle) error {
+func eniSourceRecords(handle *netlink.Handle) (map[string]eniIdentity, error) {
 	links, err := handle.LinkList()
 	if err != nil {
-		return fmt.Errorf("list router ENIs: %w", err)
+		return nil, fmt.Errorf("list router ENIs: %w", err)
 	}
 	records := make(map[string]eniIdentity)
 	for _, link := range links {
@@ -127,19 +127,23 @@ func applyENISourceChecks(ctx context.Context, handle *netlink.Handle) error {
 			continue
 		}
 		if !canonicalENILink(link.Attrs().Name) || link.Type() != "veth" {
-			return fmt.Errorf("refusing foreign ENI link %q", link.Attrs().Name)
+			return nil, fmt.Errorf("refusing foreign ENI link %q", link.Attrs().Name)
 		}
 		record, err := parseENIAlias(link.Attrs().Alias)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		records[link.Attrs().Name] = record
 	}
+	return records, nil
+}
+
+func inspectENISourcePolicy(ctx context.Context) (output []byte, exists bool, err error) {
 	// This runs only inside the VPC namespace on netns' disposable thread.
 	command := exec.CommandContext(ctx, "nft", "-j", "list", "ruleset")
-	output, err := command.Output()
+	output, err = command.Output()
 	if err != nil {
-		return fmt.Errorf("inspect VPC nftables: %w", err)
+		return nil, false, fmt.Errorf("inspect VPC nftables: %w", err)
 	}
 	var rules struct {
 		Nftables []struct {
@@ -147,22 +151,37 @@ func applyENISourceChecks(ctx context.Context, handle *netlink.Handle) error {
 		}
 	}
 	if err := json.Unmarshal(output, &rules); err != nil {
-		return fmt.Errorf("decode VPC nftables: %w", err)
+		return nil, false, fmt.Errorf("decode VPC nftables: %w", err)
 	}
-	exists := false
+	exists = false
 	for _, entry := range rules.Nftables {
 		if entry.Table != nil && entry.Table.Family == "inet" && entry.Table.Name == "nephos" {
 			if entry.Table.Comment != eniPolicyComment {
-				return fmt.Errorf("refusing foreign nftables table inet nephos")
+				return nil, false, fmt.Errorf("refusing foreign nftables table inet nephos")
 			}
 			exists = true
 		}
+	}
+	return output, exists, nil
+}
+
+func applyENISourceChecks(ctx context.Context, handle *netlink.Handle) error {
+	records, err := eniSourceRecords(handle)
+	if err != nil {
+		return err
+	}
+	output, exists, err := inspectENISourcePolicy(ctx)
+	if err != nil {
+		return err
+	}
+	if exists && eniPolicyMatches(records, output) {
+		return nil // Address/link repair need not reset an already correct policy.
 	}
 	script, err := renderENISourceChecks(records, exists)
 	if err != nil {
 		return err
 	}
-	command = exec.CommandContext(ctx, "nft", "-f", "-")
+	command := exec.CommandContext(ctx, "nft", "-f", "-")
 	command.Stdin = strings.NewReader(script)
 	output, err = command.CombinedOutput()
 	if err != nil {
