@@ -495,6 +495,45 @@ The full design is in [ADR-0007](adr/0007-sqlite-state-and-reconciliation.md). O
   the default VPC arrive in M3; NAT gateways arrive in M5.
 - **Resync:** every 60 seconds, reconcilers compare observed kernel and runtime state with desired state and repair drift. For example, a namespace deleted by hand gets recreated.
 
+**M1 slice-4 refinement (accepted recommendations; not implemented):**
+the [design](superpowers/specs/2026-10-02-m1-slice-4-recovery-reset-design.md)
+and [plan](superpowers/plans/2026-10-02-m1-slice-4-recovery-reset.md) define
+retained-root recovery, owned-lifetime cleanup and reset closure. Runtime
+IDs remain observation caches: inspect/start/stop/delete/exec must bind the
+expected workspace and instance identity. Rediscovery has separate creation
+provenance; stale-ID repair uses generation/old-ID compare-and-swap and never
+deletes an existing retained root merely because recording failed. A missing
+previously provisioned root is visible failure, not silent AMI replacement.
+Whole-appliance startup refreshes private ephemeral runtime directories at
+their existing paths while retaining Podman graphroot/container state; an
+already-running instance still needs verified ENI observation and repair.
+
+Option A uses a SQLite reset operation and creation fence, with atomic
+instance→subnet→VPC phase decisions, automatic continuation after
+interruption, and synchronous HTTP waiting. Request cancellation after
+commit only detaches the waiter. Terminal ownership/incomplete-inspection or
+leak failure keeps the fence until explicit retry of that operation. The
+reset-specific status endpoint is diagnostic, not a general asynchronous
+operation API. Completed keyed reset replay cannot delete later resources.
+Soft reset preserves durable events, create replay snapshots and index
+allocation history as well as the AMI/token/default workspace.
+Terminal failure pauses coordinator phase advancement/new-layer intents and
+success, not already committed deletion intent or proven periodic orphan GC;
+those may progress, but the failed status/fence needs explicit retry.
+
+Graceful appliance shutdown drains upgraded consoles, workers and hooks,
+then stops nested containers while Podman remains alive, retaining their
+roots. Every unexpected server/controller failure uses that same lifetime
+cleanup path. Effect draining accounts for verified child work: an admitted
+Podman Start must still complete its private OCI hook while independent
+effects are blocked. Parent completion cannot hide outstanding hook children.
+Hard purge prevalidates both Docker objects, targets the
+captured container ID and rechecks owned volume creation identity; fresh
+bootstrap occurs only after verified removal. It bypasses unhealthy
+API/SQLite, preserves observed limits unless overridden, and atomically
+replaces credentials only after fresh readiness. See the design for precise
+budgets, key/retry and partial-failure contracts; these are planning claims.
+
 **Reset levels:**
 
 | Command | Effect | Keeps |
@@ -511,6 +550,19 @@ After every non-hard reset, the **leak checker** verifies:
 - no orphan veth interfaces.
 
 A failed check is reported as a bug, and `nephos reset --hard` is suggested.
+For M1 slice 4, zero pathnames/rows alone is insufficient: broaden inventory
+to malformed marked objects and rowless runtime/ENI orphans, but delete only
+strictly proven owned objects. Drain external effects and account for
+product-owned namespace handles/duplicates, sockets, exec, cgroups and
+workers before recording success and releasing the SQLite fence. Check
+owned kernel residue while namespaces are pinned, then corroborate known
+identities through appliance process/namespace-FD observations. `/proc` is
+not universal enumeration of socket-held namespaces. Required inspection
+failure or unresolved timed-out effects must produce an incomplete/error
+result, never clean success. The
+[slice-4 verification plan](tests/M1-slice4-verification-plan.md) requires
+independent leak assertions in the still-running appliance before Docker
+teardown, foreign-object negative fixtures and native/WSL platform evidence.
 
 ## 8. Probe and explain
 
@@ -621,6 +673,16 @@ After the MVP (M11): VPC flow logs (nftables log group → NFLOG → `nephosd`, 
 - **Nightly:** the full e2e and lab suites; chaos tests from M8.
 - **Release checklist** (manual until automated): quickstart on Windows with WSL2 + Docker Desktop, and on macOS with Docker Desktop and OrbStack.
 
+**M1 slice-4 subset (planned):** deterministic identity/retained-root,
+shutdown/hook-child, reset phase/fence/replay, namespace-reference, foreign-
+ownership and partial-purge fixtures. The full local-build demo/e2e must pass
+on native Ubuntu 24.04 and manually on Windows 10/WSL2/Docker Desktop; no
+SG/NACL, lab, explain, or M8 random-chaos coverage is implied. Verify leaks
+inside the live appliance before outer teardown, save redacted artifacts
+before cleanup, and distinguish post-start inner-operation host snapshots
+from whole-lifecycle snapshots. The slice-4 verification plan maps these
+requirements; `make e2e` remains a placeholder until implementation.
+
 ## 12. Platform support
 
 | Platform | MVP status | Notes |
@@ -666,6 +728,8 @@ nephos/
 │   ├── model/                   # domain types shared by services, reconcilers, explain
 │   ├── store/                   # SQLite: migrations, sqlc queries, generated code
 │   ├── reconcile/               # controller framework and reconcilers
+│   ├── lifecycle/               # planned M1 slice-4 ephemeral leases, admission and lifetime accounting
+│   ├── leakcheck/               # planned M1 slice-4 complete owned-runtime/kernel verification
 │   ├── semantics/               # AWS behavior catalog: defaults, ordering, reserved ranges
 │   ├── network/
 │   │   ├── netns/               # the ONLY package allowed to switch network namespaces
@@ -696,13 +760,16 @@ nephos/
 │   ├── appliance/               # Dockerfile, entrypoint, Podman and hook configuration
 │   └── amis/
 │       └── ubuntu-24.04/        # systemd, sshd, cloud-init configured for Nephos IMDS
-├── test/
-│   ├── e2e/                     # connectivity matrices, lifecycle, reset leaks, differential explain
-│   └── testdata/
+├── tests/                       # existing appliance/network/instance smoke and contract tests
+│   ├── e2e/                     # planned M1 slice-4 tagged full-demo runner
+│   └── fixtures/                # test-only helpers; never shipped in product images
 ├── scripts/                     # install.sh and development helpers
 └── docs/
     ├── VISION.md, ARCHITECTURE.md, ROADMAP.md, LABS.md, RISKS.md
     ├── adr/
+    ├── superpowers/             # reviewed designs and ordered implementation plans
+    ├── tests/                   # verification plans and actual evidence checkpoints
+    ├── demos/                   # milestone replay instructions (M1 added in slice 4)
     └── spikes/                  # M0 spike reports
 ```
 
@@ -713,6 +780,9 @@ nephos/
 - `explain` and the `firewall` renderer are **pure**: they import only `model` and `semantics`. No I/O, no clock, no randomness.
 - Only `internal/network/netns` calls `setns`.
 - Engines (`network`, `compute`) never import `service` or `apiserver`.
+- Planned `lifecycle` is ephemeral admission/reference accounting, not a
+  durable desired-state store; `leakcheck` consumes narrow observation
+  interfaces and engine-independent model DTOs, not API/service decisions.
 - The CLI talks to `nephosd` only through `pkg/client`.
 
 ## 14. Post-MVP architecture notes

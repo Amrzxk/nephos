@@ -13,6 +13,15 @@ Each entry names the milestone it belongs to; see [docs/ROADMAP.md](docs/ROADMAP
 
 ### Added
 
+- **M1 — recovery and reset planning (fourth delivery slice).**
+  A [design](docs/superpowers/specs/2026-10-02-m1-slice-4-recovery-reset-design.md)
+  and [implementation plan](docs/superpowers/plans/2026-10-02-m1-slice-4-recovery-reset.md)
+  approved for native execution cover retained-root restart recovery, runtime ownership,
+  lifecycle and leak checks, durable SQLite soft-reset continuation, validated
+  hard purge, and replayable demo/e2e and platform closure. The roadmap orders
+  delivery as 4A through 4E, with independent boundary reviews. Written-plan
+  approval is recorded on 2026-10-02; no slice-4 behavior or acceptance completion is
+  claimed by this documentation change.
 - **M1 — appliance bootstrap (first delivery slice).** Local Ubuntu 24.04
   development AMI and Debian/Podman appliance image builds, fail-closed
   cgroup/network preflight, public health and authenticated version endpoints,
@@ -107,9 +116,12 @@ Each entry names the milestone it belongs to; see [docs/ROADMAP.md](docs/ROADMAP
 
 - M1 slices 1 and 2 are implemented and merged in PRs #3 and #4, establishing
   appliance bootstrap and VPC/subnet state and topology. Slice 3 is implemented
-  in [PR #6](https://github.com/Amrzxk/nephos/pull/6), with local and native
-  Docker CI evidence. Full
-  instance restart recovery, reset and leak closure remain in slice 4.
+  and merged in [PR #6](https://github.com/Amrzxk/nephos/pull/6), with local and
+  native Docker CI evidence. Full instance restart recovery, reset and leak
+  closure remain in slice 4, whose
+  [design](docs/superpowers/specs/2026-10-02-m1-slice-4-recovery-reset-design.md)
+  and [plan](docs/superpowers/plans/2026-10-02-m1-slice-4-recovery-reset.md)
+  are approved for native execution. Slice-4 behavior is not implemented.
   The milestone is not complete
   ([roadmap](docs/ROADMAP.md#m1-thinnest-end-to-end-slice-two-instances-ping)).
 - The spikes carry six findings into M1 and M2: nested cgroup v2 controllers must

@@ -38,6 +38,14 @@ Risks whose mitigation lands in **M0–M8** must be mitigated before v0.1.0 (see
   - A published support matrix; e2e CI on Ubuntu 24.04; manual release QA on WSL2 and macOS.
   - The containerd fallback in [ADR-0004](adr/0004-instances-as-system-containers.md).
 - **Milestone:** M0, then M8.
+- **M1 slice-4 plan, not yet mitigation evidence:** verify private fresh
+  runroot/libpod runtime state at whole-appliance startup without clearing
+  retained graphroot or writable layers. Test actual preserved container,
+  marker/IP/ENI/MAC and packet behavior on native Ubuntu and WSL2; record
+  built-image IDs and actual runtime/tool versions. Current unversioned apt
+  inputs do not establish reproducible userspace builds. Preserve the
+  fail-closed whole-appliance policy; no transparent daemon respawn.
+  See the [slice-4 design](superpowers/specs/2026-10-02-m1-slice-4-recovery-reset-design.md).
 - **Early warning:** SP1 fails on WSL2; issues mentioning cgroup or overlay mount errors.
 
 ### T2. systemd and cloud-init quirks inside containers
@@ -84,6 +92,18 @@ Risks whose mitigation lands in **M0–M8** must be mitigated before v0.1.0 (see
   races, missed enqueue/resync, failed teardown retries with retained runtime
   IDs/IP leases, and full instance/ENI/VPC deletion in the real appliance.
 - **Milestone:** M1, M8.
+- **M1 slice-4 plan, not yet closure:** bind every runtime operation to its
+  expected instance and workspace; distinguish new creation from discovery
+  and CAS-rebind stale cached IDs without deleting retained roots. A missing
+  previously provisioned root must fail visibly. Persist reset phase/fence
+  decisions in SQLite and automatically continue interrupted operations;
+  failed ownership/inspection/leak proof retains the fence for explicit
+  retry. Drain uncertain effects before success, preserve events/replay/index
+  history, and test every transaction/effect boundary deterministically.
+  Identity-safe Docker purge is an API/SQLite-independent escape hatch, not
+  a guarantee against external Docker interference or every storage failure.
+  M8 random chaos remains separate; see the
+  [ordered plan](superpowers/plans/2026-10-02-m1-slice-4-recovery-reset.md).
 - **Early warning:** nightly leak-checker failures; "stuck in pending" reports.
 
 ### T5. Laptop resource limits
@@ -141,6 +161,16 @@ Risks whose mitigation lands in **M0–M8** must be mitigated before v0.1.0 (see
   Native Ubuntu [CI run 36973066755](https://github.com/Amrzxk/nephos/actions/runs/36973066755)
   also passes the required host nftables snapshot and the real packet cases.
 - **Milestone:** M0 (SP3), M1.
+- **M1 slice-4 plan, not yet closure:** reject namespace aliases to appliance
+  root/other desired namespaces before mutation; distinguish broad marked
+  inventory from strict deletion proof. Track and join product-owned
+  namespace handles, duplicates, sockets and workers; unlinking a namespace
+  is not proof of destruction, and `/proc` does not expose every socket-only
+  hold. Required inspection failure cannot become an empty clean result.
+  Compare post-start host state around inner operations and whole-lifecycle
+  before/after, with required native nftables observation. Test independent
+  residual-object witnesses before outer Docker teardown, as mapped in the
+  [verification plan](tests/M1-slice4-verification-plan.md).
 - **Early warning:** flaky integration tests; objects appearing in the wrong namespace.
 
 ### T9. Access friction for learners
@@ -251,6 +281,12 @@ Risks whose mitigation lands in **M0–M8** must be mitigated before v0.1.0 (see
     M6 adds browser-session cookies and browser-facing CORS tests with the
     web console; M1 does not relax its no-browser-Origin policy.
 - **Milestone:** M1 (token, localhost binding, CLI console protections), M6 (browser sessions).
+- **M1 slice-4 plan:** preserve authentication/Host/Origin rules on reset and
+  status/continuation, transactional console admission fencing, and expected
+  runtime identity at exec. Daemon/reset cancellation must explicitly close
+  and join upgraded sessions/exec pumps before store/runtime teardown;
+  ordinary HTTP shutdown alone is insufficient. Keep tokens out of phase
+  logs, inventory reports, CLI diagnostics and CI artifacts.
 - **Early warning:** any unauthenticated endpoint besides health; security reports.
 
 ### S6. Resource exhaustion
@@ -268,6 +304,11 @@ Risks whose mitigation lands in **M0–M8** must be mitigated before v0.1.0 (see
   - Disk usage monitoring with warnings, and a per-instance soft quota: an instance exceeding it is stopped with a clear `state_reason`.
   - Reconcile backoff and log rotation.
 - **Milestone:** M1 (fixed instance limits), M2 (additional types/capacity), M8 (release hardening).
+- **M1 slice-4 plan:** one bounded shutdown/drain budget rather than a
+  multiplied timeout per instance; backoff for transient teardown, visible
+  failure for incomplete cleanup, and actual CPU/memory/pids limits retained
+  by hard reset unless explicitly overridden. Bounded fault helpers must be
+  test-only, never unbounded fork bombs or shipped debug controls.
 - **Early warning:** appliance OOM events; rapid volume growth.
 
 ### S7. Supply chain: images, dependencies, and lab content

@@ -43,8 +43,9 @@ bootstrap, SQLite-backed VPC/subnet CRUD, durable events, reconciliation,
 real namespaces and gateway addresses, and native-Docker smoke coverage.
 See the [roadmap progress](docs/ROADMAP.md#m1-thinnest-end-to-end-slice-two-instances-ping)
 and [connectivity matrix](docs/tests/M1-connectivity-matrix.md) for the evidence.
-Slice 3 is implemented in [PR #6](https://github.com/Amrzxk/nephos/pull/6): durable ENI/IP allocation,
-instance reconciliation, a private fail-closed createRuntime hook, real veth
+Slice 3 is implemented and merged in [PR #6](https://github.com/Amrzxk/nephos/pull/6):
+durable ENI/IP allocation, instance reconciliation, a private fail-closed
+createRuntime hook, real veth
 networking and source checks, fixed `t3.micro` limits (2 vCPU, 1 GiB, 512
 tasks), and authenticated instance API/CLI and PTY/non-PTY console modes.
 Its [implementation plan](docs/superpowers/plans/2026-09-27-m1-slice-3-instances-ping.md)
@@ -56,9 +57,18 @@ The [slice-3 checkpoint](docs/tests/M1-slice3-local-verification.md) records
 the independent review, addressed findings, verification limits and rulings.
 Slice 4 still owns retained-root instance restart recovery, orphan collection,
 reset and leak closure, the replayable demo/e2e target, and full platform QA.
-M1 is **not** complete. Prepare and review the slice-4 plan before execution;
-do not repeat the completed slice-1/2/3 implementation checklists. Namespace
-and gateway checks alone must never be reported as packet connectivity.
+Its [design](docs/superpowers/specs/2026-10-02-m1-slice-4-recovery-reset-design.md)
+and [implementation plan](docs/superpowers/plans/2026-10-02-m1-slice-4-recovery-reset.md)
+were approved for native execution on 2026-10-02, with independent reviews at
+each 4A–4E delivery boundary. They select a durable SQLite reset coordinator with
+automatic continuation after interruption and a synchronous caller wait;
+runtime identity and ownership checks protect retained roots, and leak checks
+must verify cleanup before reset succeeds. Delivery proceeds through
+retained-root recovery, lifecycle/leak-check foundations, durable soft reset, hard purge,
+then demo/e2e and platform closure. No slice-4 behavior is implemented yet.
+M1 is **not** complete. Begin with 4A; do not repeat the completed
+slice-1/2/3 checklists or inherit permission to push/merge implementation.
+Namespace and gateway checks alone must never be reported as packet connectivity.
 
 ## Start-of-task workflow
 
@@ -93,6 +103,7 @@ and gateway checks alone must never be reported as packet connectivity.
 | Instances, runtime, AMIs | [ADR-0004](docs/adr/0004-instances-as-system-containers.md) |
 | Networking, firewalls, gateways | [ADR-0005](docs/adr/0005-nephos-owned-routed-network-plane.md), [ADR-0006](docs/adr/0006-learner-access-through-simulated-internet.md), ARCHITECTURE §5 |
 | State, reconcilers, reset | [ADR-0007](docs/adr/0007-sqlite-state-and-reconciliation.md) |
+| M1 retained-root recovery, reset, leak checks, and closure | [Slice-4 design](docs/superpowers/specs/2026-10-02-m1-slice-4-recovery-reset-design.md), [slice-4 implementation plan](docs/superpowers/plans/2026-10-02-m1-slice-4-recovery-reset.md), [ROADMAP M1](docs/ROADMAP.md#m1-thinnest-end-to-end-slice-two-instances-ping) |
 | API or CLI shape | [ADR-0008](docs/adr/0008-rest-openapi-api-not-aws-compatible.md), ARCHITECTURE §6 |
 | Web console | [ADR-0009](docs/adr/0009-web-console-react-typescript.md) |
 | Labs | [ADR-0010](docs/adr/0010-lab-format-yaml-cel-probes.md), [LABS.md](docs/LABS.md) |

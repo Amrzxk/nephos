@@ -17,6 +17,18 @@ reset/leak closure, and the complete M1 demo remain slice 4. The
 [roadmap](../../ROADMAP.md#m1-thinnest-end-to-end-slice-two-instances-ping)
 acceptance criteria remain authoritative and unchecked.
 
+**Slice-4 recommendations accepted, 2026-10-02:** use a SQLite-persisted
+reset coordinator with automatic interruption recovery and synchronous HTTP
+waiting (option A). The [slice-4 design](2026-10-02-m1-slice-4-recovery-reset-design.md)
+and [ordered plan](../plans/2026-10-02-m1-slice-4-recovery-reset.md) elaborate
+identity/provenance-safe retained-root recovery, lifecycle/ownership and
+leak foundations, durable soft reset, identity-safe hard reset, and final
+native/WSL evidence, in that order. Both written artifacts are approved plans,
+not implemented behavior. These refinements preserve the accepted
+ADRs; the slice-4 design is canonical for their detailed contracts. Written
+artifacts were approved for native execution with independent boundary
+reviews on 2026-10-02; no slice-4 implementation is claimed by that approval.
+
 ## Intent and agreed boundaries
 
 M1 gives a contributor a locally built Nephos appliance that can create two
@@ -290,7 +302,14 @@ instances.
 `nephos up` reuses the volume, observes Podman and kernel state, repairs or
 recreates Nephos objects from SQLite, and returns instances with the same
 private IPs and writable-root files. Runtime IDs are cached observations,
-not authoritative desired state. A restart test writes a marker inside an
+not authoritative desired state. Rebinding requires expected instance
+identity and a generation/old-ID compare-and-swap; failed recording must not
+delete a rediscovered retained root. An already provisioned missing root is
+visible `failed`, never silently replaced from the AMI. Whole-appliance
+startup refreshes private ephemeral Podman runtime directories while keeping
+its graphroot, container database and writable layers; daemon-only restart
+must not clear live runtime state. Already-running containers still require
+verified ENI observation/repair. A restart test writes a marker inside an
 instance, records its IP, restarts the appliance, and verifies the marker,
 IP, instance status, and cross-subnet ping.
 
@@ -300,15 +319,35 @@ M2 adds the one-hour terminated-instance visibility window. `subnet delete`
 and `vpc delete` require dependents to be gone. `nephos reset` is an
 authenticated daemon operation that deletes instances, subnets, then VPCs,
 waits for reconciliation, and runs the leak checker. In M1 the default
-workspace remains, but has no VPC or instance afterwards. The leak checker
-inspects labeled Podman containers, `nx-*` namespaces, Nephos nftables
-objects, and orphan veths; it reports any residue as an error.
+workspace remains, but has no VPC or instance afterwards. Persist reset
+intent/phases and the creation fence in SQLite; phase decisions atomically
+mark one dependency layer at a time. Caller cancellation after commit
+detaches the synchronous waiter, not the operation. Unfinished operations
+automatically continue; terminal ownership/inspection/leak failure retains
+the fence and requires explicit continuation of that operation. Keyed
+completed replay must not reset resources created afterwards. Keep events,
+24-hour create replay snapshots and kernel-index allocation history.
+
+The leak checker inspects broad Nephos-marked runtime/kernel candidates but
+deletion requires full ownership and correct scope. Drain consoles, hooks,
+reconcilers/GC and product-owned namespace FD/socket/worker lifetimes before
+complete clean verification in the still-running appliance. Named namespace
+absence does not prove destruction; `/proc` cannot enumerate every foreign
+socket-only namespace. Incomplete required inspection or unresolved effects
+cannot yield success. See the slice-4 design and
+[verification plan](../../tests/M1-slice4-verification-plan.md) for the exact
+ownership boundary, API/status/retry surface and independent witnesses.
 
 `nephos reset --hard` runs through the host Docker API: stop and remove the
 old appliance, remove its named volume, then perform a fresh `up`. It must
 show that the old container and volume are gone and that the new appliance
 has empty M1 resource state and a new token. It never reports success after
-a partial purge. M3's default-VPC creation will change the fresh initial
+a partial purge. Prevalidate both owned Docker objects, pin the container ID,
+reinspect volume ownership/creation identity, and serialize same-config CLI
+lifecycle commands. Preserve actual CPU/memory/pids limits unless explicitly
+overridden. Fresh readiness and empty state precede atomic credential
+replacement; unhealthy API or corrupt SQLite must not prevent the purge.
+M3's default-VPC creation will change the fresh initial
 resource set as documented in the roadmap.
 
 ## Verification and acceptance

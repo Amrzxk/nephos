@@ -122,14 +122,42 @@ network rule is exposed or implied as enforced.
 |---|---|---|
 | 1 | Locally built appliance, startup preflight, token bootstrap, public health, and authenticated API access | Implemented and merged in [PR #3](https://github.com/Amrzxk/nephos/pull/3); native-Docker bootstrap passed in [CI run 35920433115](https://github.com/Amrzxk/nephos/actions/runs/35920433115). |
 | 2 | VPC/subnet CLI and API through SQLite, reconciliation, and real namespaces | Implemented and merged in [PR #4](https://github.com/Amrzxk/nephos/pull/4); native-Docker VPC/subnet smoke passed in [CI run 36327904611](https://github.com/Amrzxk/nephos/actions/runs/36327904611). |
-| 3 | Instance run, OCI hook, console, and cross-subnet ping | Implemented in [PR #6](https://github.com/Amrzxk/nephos/pull/6), with fixed 512-task limits and both console modes. WSL2/Docker Desktop and native Ubuntu packet/failure evidence is recorded in the [matrix](tests/M1-connectivity-matrix.md); all native checks passed in [CI run 36973066755](https://github.com/Amrzxk/nephos/actions/runs/36973066755). [Execution plan](superpowers/plans/2026-09-27-m1-slice-3-instances-ping.md). |
-| 4 | Restart recovery, reset and leak checks, native-Docker e2e CI, and WSL2 manual QA | Not implemented. Full instance persistence and milestone closure remain here. |
+| 3 | Instance run, OCI hook, console, and cross-subnet ping | Implemented and merged in [PR #6](https://github.com/Amrzxk/nephos/pull/6), with fixed 512-task limits and both console modes. WSL2/Docker Desktop and native Ubuntu packet/failure evidence is recorded in the [matrix](tests/M1-connectivity-matrix.md); all native checks passed in [CI run 36973066755](https://github.com/Amrzxk/nephos/actions/runs/36973066755). [Execution plan](superpowers/plans/2026-09-27-m1-slice-3-instances-ping.md). |
+| 4 | Restart recovery, reset and leak checks, native-Docker e2e CI, and WSL2 manual QA | Not implemented. [Design](superpowers/specs/2026-10-02-m1-slice-4-recovery-reset-design.md) and [implementation plan](superpowers/plans/2026-10-02-m1-slice-4-recovery-reset.md) approved for native execution on 2026-10-02, starting with 4A and independent reviews at each delivery boundary. Full instance persistence and milestone closure remain here. |
 
 Slices 1–3 provide appliance bootstrap, resource state, and real instance
 connectivity. Slice 3 adds packet-level evidence beyond namespace/gateway
 checks. Retained instance roots across appliance restart, reset/leak closure,
 and the full native/WSL2 demo still require slice 4; the milestone acceptance
 criteria below remain unchecked until that evidence exists.
+
+**Slice-4 delivery order:** the [design](superpowers/specs/2026-10-02-m1-slice-4-recovery-reset-design.md)
+and [plan](superpowers/plans/2026-10-02-m1-slice-4-recovery-reset.md) define five
+increments, all still unimplemented:
+
+1. **4A:** runtime identity/provenance and retained-root restart recovery,
+   including repair of ENIs on already-running instances.
+2. **4B:** console/session and graceful shutdown lifecycle, ownership
+   inventory, orphan collection, and leak-check foundations.
+3. **4C:** durable SQLite soft-reset coordination and API/CLI wait behavior.
+4. **4D:** hard reset through validated Docker container/volume purge and
+   fresh startup.
+5. **4E:** replayable demo, e2e CI, native Linux and WSL2/Docker Desktop QA,
+   and evidence-based milestone closure.
+
+Soft reset atomically fences resource creation and continues after an
+interruption. It removes instances before subnets and VPCs, then performs
+quiescent orphan collection and verifies zero Nephos leaks before succeeding.
+Canceling a caller's wait does not cancel a committed reset. Transient errors
+retry with backoff; ownership, leak, or inspection failures keep the fence
+and require explicit continuation of the same operation. Events, the
+24-hour create-idempotency replay window, and kernel-index history survive
+soft reset. Runtime identity checks protect retained roots; a missing root
+for a previously provisioned instance is a visible failure, not a fresh AMI.
+Hard reset bypasses the API and SQLite so damaged state can be purged, but
+validates both Docker objects and their identity before deletion and preserves
+actual CPU, memory, and task limits unless explicitly overridden. These are
+planned M1 recovery and cleanup contracts; they add no M2 or M8 features.
 
 **Demo:**
 

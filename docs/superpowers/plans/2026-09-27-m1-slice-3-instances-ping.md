@@ -13,7 +13,11 @@ Native execution here means inline plan execution, not native Ubuntu
 validation. Actual native Ubuntu validation also passes in
 [CI run 36973066755](https://github.com/Amrzxk/nephos/actions/runs/36973066755),
 including host nftables hygiene. M1 is not complete and slice 4 is not
-implemented. Do not repeat this checklist.
+implemented. Do not repeat this checklist. Continue with the
+[slice-4 design](../specs/2026-10-02-m1-slice-4-recovery-reset-design.md) and
+[slice-4 implementation plan](2026-10-02-m1-slice-4-recovery-reset.md), approved
+for native execution with independent delivery-boundary reviews on 2026-10-02.
+The slice-3 execution choice and permissions do not authorize slice 4.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -321,8 +325,9 @@ the built image cannot support the specified hook, user namespace, limits,
 or exec stream through its local REST API, report the controlled result and
 resolve a genuine architectural conflict under the ADR process.
 
-The nine tasks implement only slice 3. Slice 4 still needs its own reviewed
-execution plan for retained-root restart recovery, orphan collection, soft
+The nine tasks implement only slice 3. Slice 4 now has its own approved
+[execution plan](2026-10-02-m1-slice-4-recovery-reset.md) for retained-root
+restart recovery, orphan collection, soft
 and hard reset, leak checks, the replayable `docs/demos/M1.md`, a real
 `make e2e` target, full native-Docker CI and WSL2 manual QA. The roadmap
 acceptance checkboxes stay unchecked until that evidence exists.

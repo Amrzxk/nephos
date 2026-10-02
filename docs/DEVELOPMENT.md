@@ -269,6 +269,75 @@ cleanup verifies container identity and volume creation time/ownership labels.
 The [M1 connectivity matrix](tests/M1-connectivity-matrix.md) records the
 exact packet paths and keeps restart/reset cases assigned to slice 4.
 
+### Planned slice-4 recovery and reset workflow
+
+**Design only; not implemented or run.** The slice-4
+[design](superpowers/specs/2026-10-02-m1-slice-4-recovery-reset-design.md),
+[implementation plan](superpowers/plans/2026-10-02-m1-slice-4-recovery-reset.md),
+and [verification plan](tests/M1-slice4-verification-plan.md) describe the next
+work. M1 remains incomplete. `make e2e` is still a failing placeholder;
+`nephos reset`, `nephos reset --hard`, and the replayable `docs/demos/M1.md`
+are future deliverables. The examples below specify future behavior and are
+not a runnable acceptance procedure for the current tree:
+
+```text
+# Future slice-4 workflow; unavailable until implementation and review.
+make dev-ami
+make appliance
+make build
+nephos down
+nephos up             # same instance IDs, ENIs, MACs, private IPs, roots and files
+nephos reset          # waits for durable deletion and an in-appliance leak check
+nephos reset --hard   # remove verified old container/volume, then start fresh
+make e2e             # replay the demo using freshly built images/binaries above
+```
+
+The planned recovery keeps the original Podman container and writable root;
+it must fail the instance visibly if that root is missing, rather than boot
+an empty replacement. Fresh private Podman runtime directories at
+`/var/lib/nephos/runroot` and `/run/libpod` are prepared before the first
+Podman call on each whole-appliance start, after validating the built
+configuration, while graphroot is retained. A daemon-only restart must
+preserve the live runtime directories.
+An already-running instance needs verified ENI plumbing before it is reported
+running. Shutdown must join console cleanup and gracefully stop nested
+instances before stopping Podman.
+
+Soft reset is planned as a durable SQLite operation. Its transaction fences
+resource creation, and its worker deletes instances before subnets before
+VPCs. The CLI waits for completion, but disconnecting or timing out does not
+cancel the admitted operation. Startup resumes unfinished work. Replaying a
+completed operation's idempotency key returns its recorded result without
+deleting resources created afterward. Leak failure keeps the create fence
+until an explicit retry of that failed operation succeeds. AMI cache, event
+history, request replay history and allocated kernel-index history remain.
+The default workspace stays empty; M1 has no default VPC.
+The future `reset --status` reads progress; `reset --retry` explicitly resumes
+the failed operation by its ID. The ordinary reset waiter defaults to two
+minutes, with a `--timeout` override; its timeout does not cancel the worker.
+
+Hard reset is planned to work even when the API is unhealthy or SQLite cannot
+open. It verifies both old Docker objects and any volume consumers before
+deletion, pins the old container ID, rechecks the volume's creation identity,
+and refuses foreign consumers. It starts fresh only after both old objects
+are confirmed absent; partial purge is an error, not a reason to call `up`.
+The fresh appliance gets a new token and an atomic mode-0600 credential
+replacement. Actual old appliance CPU, memory and PID limits are retained
+unless the caller explicitly overrides them.
+
+Future e2e runs must build the development AMI, appliance, CLI and test-only
+helpers from the candidate source, and record exact source/image/package
+versions. They use a private credential directory and refuse pre-existing
+objects. The leak assertion runs inside the still-live appliance after joined
+controller/GC/hook/console barriers, before test-owned Docker teardown.
+Snapshots around inner recovery/reset operations use a stable post-`up`
+host baseline; a separate comparison covers the whole appliance lifecycle.
+Native Ubuntu 24.04 CI must read host nftables. Windows 10 with WSL2 and
+Docker Desktop requires a fresh manual full-demo run; an unavailable WSL
+nftables check must be recorded explicitly. Cross-builds do not establish
+native Windows/macOS console behavior. Slice-3 smoke results remain their
+historical evidence and do not close these slice-4 gates.
+
 ### Why `make test-race` sets `CGO_ENABLED=1`
 
 Everything Nephos *ships* is built with `CGO_ENABLED=0`, so release tooling can
