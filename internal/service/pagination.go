@@ -41,6 +41,9 @@ func decodePageToken(kind, token string) (string, error) {
 
 func validPageID(kind, id string) bool {
 	prefix := kind + "-"
+	if kind == "instance" {
+		prefix = "i-"
+	}
 	if !strings.HasPrefix(id, prefix) || len(id) != len(prefix)+17 {
 		return false
 	}

@@ -52,6 +52,54 @@ func (e HealthResponseStatus) Valid() bool {
 	}
 }
 
+// Defines values for InstanceInstanceType.
+const (
+	T3Micro InstanceInstanceType = "t3.micro"
+)
+
+// Valid indicates whether the value is a known member of the InstanceInstanceType enum.
+func (e InstanceInstanceType) Valid() bool {
+	switch e {
+	case T3Micro:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for InstanceState.
+const (
+	InstanceStateFailed       InstanceState = "failed"
+	InstanceStatePending      InstanceState = "pending"
+	InstanceStateRunning      InstanceState = "running"
+	InstanceStateShuttingDown InstanceState = "shutting-down"
+	InstanceStateStopped      InstanceState = "stopped"
+	InstanceStateStopping     InstanceState = "stopping"
+	InstanceStateTerminated   InstanceState = "terminated"
+)
+
+// Valid indicates whether the value is a known member of the InstanceState enum.
+func (e InstanceState) Valid() bool {
+	switch e {
+	case InstanceStateFailed:
+		return true
+	case InstanceStatePending:
+		return true
+	case InstanceStateRunning:
+		return true
+	case InstanceStateShuttingDown:
+		return true
+	case InstanceStateStopped:
+		return true
+	case InstanceStateStopping:
+		return true
+	case InstanceStateTerminated:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for SubnetAvailabilityZone.
 const (
 	SubnetAvailabilityZoneLocal1a SubnetAvailabilityZone = "local-1a"
@@ -154,6 +202,38 @@ type HealthResponse struct {
 // HealthResponseStatus defines model for HealthResponse.Status.
 type HealthResponseStatus string
 
+// Instance defines model for Instance.
+type Instance struct {
+	EniId              string               `json:"eni_id"`
+	Generation         int64                `json:"generation"`
+	Id                 string               `json:"id"`
+	InstanceType       InstanceInstanceType `json:"instance_type"`
+	Name               string               `json:"name"`
+	ObservedGeneration int64                `json:"observed_generation"`
+	PrivateIp          string               `json:"private_ip"`
+	State              InstanceState        `json:"state"`
+	StateReason        string               `json:"state_reason"`
+	SubnetId           string               `json:"subnet_id"`
+}
+
+// InstanceInstanceType defines model for Instance.InstanceType.
+type InstanceInstanceType string
+
+// InstanceState defines model for Instance.State.
+type InstanceState string
+
+// InstancesPage defines model for InstancesPage.
+type InstancesPage struct {
+	Items         []Instance `json:"items"`
+	NextPageToken *string    `json:"next_page_token,omitempty"`
+}
+
+// RunInstanceRequest defines model for RunInstanceRequest.
+type RunInstanceRequest struct {
+	Name     string `json:"name"`
+	SubnetId string `json:"subnet_id"`
+}
+
 // Subnet defines model for Subnet.
 type Subnet struct {
 	AvailabilityZone   SubnetAvailabilityZone `json:"availability_zone"`
@@ -241,6 +321,18 @@ type GetEventsParams struct {
 	LastEventID *LastEventID `json:"Last-Event-ID,omitempty"`
 }
 
+// ListInstancesParams defines parameters for ListInstances.
+type ListInstancesParams struct {
+	Limit     *Limit     `form:"limit,omitempty" json:"limit,omitempty"`
+	PageToken *PageToken `form:"page_token,omitempty" json:"page_token,omitempty"`
+}
+
+// RunInstanceParams defines parameters for RunInstance.
+type RunInstanceParams struct {
+	// IdempotencyKey Replays identical creates for 24 hours
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
 // ListSubnetsParams defines parameters for ListSubnets.
 type ListSubnetsParams struct {
 	Limit     *Limit     `form:"limit,omitempty" json:"limit,omitempty"`
@@ -265,6 +357,9 @@ type CreateVpcParams struct {
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
+// RunInstanceJSONRequestBody defines body for RunInstance for application/json ContentType.
+type RunInstanceJSONRequestBody = RunInstanceRequest
+
 // CreateSubnetJSONRequestBody defines body for CreateSubnet for application/json ContentType.
 type CreateSubnetJSONRequestBody = CreateSubnetRequest
 
@@ -282,6 +377,21 @@ type ServerInterface interface {
 
 	// (GET /v1/version)
 	GetVersion(w http.ResponseWriter, r *http.Request)
+
+	// (GET /v1/workspaces/{workspace}/instances)
+	ListInstances(w http.ResponseWriter, r *http.Request, workspace Workspace, params ListInstancesParams)
+
+	// (POST /v1/workspaces/{workspace}/instances)
+	RunInstance(w http.ResponseWriter, r *http.Request, workspace Workspace, params RunInstanceParams)
+
+	// (DELETE /v1/workspaces/{workspace}/instances/{id})
+	TerminateInstance(w http.ResponseWriter, r *http.Request, workspace Workspace, id ResourceID)
+
+	// (GET /v1/workspaces/{workspace}/instances/{id})
+	GetInstance(w http.ResponseWriter, r *http.Request, workspace Workspace, id ResourceID)
+
+	// (GET /v1/workspaces/{workspace}/instances/{id}/console)
+	GetInstanceConsole(w http.ResponseWriter, r *http.Request, workspace Workspace, id ResourceID)
 
 	// (GET /v1/workspaces/{workspace}/subnets)
 	ListSubnets(w http.ResponseWriter, r *http.Request, workspace Workspace, params ListSubnetsParams)
@@ -377,6 +487,216 @@ func (siw *ServerInterfaceWrapper) GetVersion(w http.ResponseWriter, r *http.Req
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetVersion(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListInstances operation middleware
+func (siw *ServerInterfaceWrapper) ListInstances(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "workspace" -------------
+	var workspace Workspace
+
+	err = runtime.BindStyledParameterWithOptions("simple", "workspace", r.PathValue("workspace"), &workspace, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workspace", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListInstancesParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "page_token" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "page_token", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "page_token"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "page_token", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListInstances(w, r, workspace, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RunInstance operation middleware
+func (siw *ServerInterfaceWrapper) RunInstance(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "workspace" -------------
+	var workspace Workspace
+
+	err = runtime.BindStyledParameterWithOptions("simple", "workspace", r.PathValue("workspace"), &workspace, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workspace", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RunInstanceParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RunInstance(w, r, workspace, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// TerminateInstance operation middleware
+func (siw *ServerInterfaceWrapper) TerminateInstance(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "workspace" -------------
+	var workspace Workspace
+
+	err = runtime.BindStyledParameterWithOptions("simple", "workspace", r.PathValue("workspace"), &workspace, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workspace", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "id" -------------
+	var id ResourceID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.TerminateInstance(w, r, workspace, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetInstance operation middleware
+func (siw *ServerInterfaceWrapper) GetInstance(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "workspace" -------------
+	var workspace Workspace
+
+	err = runtime.BindStyledParameterWithOptions("simple", "workspace", r.PathValue("workspace"), &workspace, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workspace", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "id" -------------
+	var id ResourceID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetInstance(w, r, workspace, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetInstanceConsole operation middleware
+func (siw *ServerInterfaceWrapper) GetInstanceConsole(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "workspace" -------------
+	var workspace Workspace
+
+	err = runtime.BindStyledParameterWithOptions("simple", "workspace", r.PathValue("workspace"), &workspace, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workspace", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "id" -------------
+	var id ResourceID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetInstanceConsole(w, r, workspace, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -866,6 +1186,11 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/workspaces/{workspace}/subnets", wrapper.CreateSubnet)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/workspaces/{workspace}/subnets/{id}", wrapper.DeleteSubnet)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/workspaces/{workspace}/subnets/{id}", wrapper.GetSubnet)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/workspaces/{workspace}/instances", wrapper.ListInstances)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/workspaces/{workspace}/instances", wrapper.RunInstance)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/workspaces/{workspace}/instances/{id}", wrapper.TerminateInstance)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/workspaces/{workspace}/instances/{id}", wrapper.GetInstance)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/workspaces/{workspace}/instances/{id}/console", wrapper.GetInstanceConsole)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/events", wrapper.GetEvents)
 
 	return m

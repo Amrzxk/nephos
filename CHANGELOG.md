@@ -24,11 +24,18 @@ Each entry names the milestone it belongs to; see [docs/ROADMAP.md](docs/ROADMAP
   paginated VPC/subnet API and CLI commands; level-triggered reconciliation;
   isolated VPC namespaces and subnet base+1 gateways. Native-Docker CI now
   exercises overlapping VPC topology, VPC/subnet restart persistence, and
-  host-network hygiene; it does not yet test instance packets or root files.
-- **M1 — next-slice handoff.** A draft implementation plan for instances,
-  ENIs, the fail-closed OCI hook, authenticated console, and real cross-subnet
-  ping. The proposed process limit and console framing still await review;
-  no slice-3 product behavior is claimed.
+  host-network hygiene. Its topology smoke does not prove instance packets
+  or retained root files; slice 3 adds packet evidence below.
+- **M1 — instances and real packets (third delivery slice).**
+  Transactional ENI/IP allocation, generation-aware instance reconciliation,
+  private fail-closed createRuntime plumbing before PID 1, routed veth ENIs
+  and anti-spoof rules; fixed `t3.micro` limits of 2 vCPU, 1 GiB and 512 tasks.
+  Authenticated instance CRUD and CLI commands, interactive PTY and exact-argv
+  command consoles with separate byte streams, stdin EOF, resize, cleanup and
+  real exit status. Local Docker smoke proves cross-subnet ICMP,
+  overlapping-VPC isolation, spoof drops, hook failure and task refusal;
+  the native Ubuntu job also passes, including host nftables hygiene, in
+  [CI run 36973066755](https://github.com/Amrzxk/nephos/actions/runs/36973066755).
 - **M0 — repository scaffold.** Go module pinned to go1.27.1, the `nephos`,
   `nephosd`, and `nephos-hook` binaries, `internal/version` with linker-injected
   build identity, and a `Makefile` covering build, test, lint, and the
@@ -83,6 +90,13 @@ Each entry names the milestone it belongs to; see [docs/ROADMAP.md](docs/ROADMAP
 
 ### Fixed
 
+- **M1 — interrupted console backpressure.** Local stdout/stderr pipe and
+  terminal writes now observe cancellation and a bounded write deadline, so
+  a stalled consumer cannot strand session workers or leave the terminal raw.
+  Linux regressions use actual pipes and terminal settings; regular-file
+  output keeps its original offset/append semantics. Slice-3 plan/spec status
+  and the WebSocket dependency reference now match the implemented branch.
+
 - **M1 — daemon test connection cleanup.** Readiness/shutdown tests now own
   their HTTP transports, consume responses, and close unused connections
   before canceling the daemon. This removes an intermittent CI shutdown
@@ -92,9 +106,11 @@ Each entry names the milestone it belongs to; see [docs/ROADMAP.md](docs/ROADMAP
 ### Notes
 
 - M1 slices 1 and 2 are implemented and merged in PRs #3 and #4, establishing
-  appliance bootstrap and VPC/subnet state and topology. Instance ENIs,
-  console, actual ping, full instance restart recovery, reset and leak closure
-  remain in later M1 slices. The milestone is not complete
+  appliance bootstrap and VPC/subnet state and topology. Slice 3 is implemented
+  in [PR #6](https://github.com/Amrzxk/nephos/pull/6), with local and native
+  Docker CI evidence. Full
+  instance restart recovery, reset and leak closure remain in slice 4.
+  The milestone is not complete
   ([roadmap](docs/ROADMAP.md#m1-thinnest-end-to-end-slice-two-instances-ping)).
 - The spikes carry six findings into M1 and M2: nested cgroup v2 controllers must
   be delegated (and the appliance must fail closed if they cannot be),

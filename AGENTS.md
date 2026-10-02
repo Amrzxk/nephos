@@ -43,12 +43,22 @@ bootstrap, SQLite-backed VPC/subnet CRUD, durable events, reconciliation,
 real namespaces and gateway addresses, and native-Docker smoke coverage.
 See the [roadmap progress](docs/ROADMAP.md#m1-thinnest-end-to-end-slice-two-instances-ping)
 and [connectivity matrix](docs/tests/M1-connectivity-matrix.md) for the evidence.
-The next work is slice 3: ENIs, instances, console, and real cross-subnet
-ping. Its [implementation plan](docs/superpowers/plans/2026-09-27-m1-slice-3-instances-ping.md)
-is a **draft awaiting review**, not approval to begin implementation.
-Slice 4 still owns instance restart recovery, reset and leak closure. M1 is
-**not** complete, and namespace/gateway checks must not be reported as packet
-connectivity. Do not repeat the completed slice-1/2 plan checklists.
+Slice 3 is implemented in [PR #6](https://github.com/Amrzxk/nephos/pull/6): durable ENI/IP allocation,
+instance reconciliation, a private fail-closed createRuntime hook, real veth
+networking and source checks, fixed `t3.micro` limits (2 vCPU, 1 GiB, 512
+tasks), and authenticated instance API/CLI and PTY/non-PTY console modes.
+Its [implementation plan](docs/superpowers/plans/2026-09-27-m1-slice-3-instances-ping.md)
+and [console protocol](api/console-v1.md) describe the contracts. The matrix
+records local WSL2/Docker Desktop and native Ubuntu packet evidence. All
+checks passed in [CI run 36973066755](https://github.com/Amrzxk/nephos/actions/runs/36973066755),
+including the required native host nftables snapshot.
+The [slice-3 checkpoint](docs/tests/M1-slice3-local-verification.md) records
+the independent review, addressed findings, verification limits and rulings.
+Slice 4 still owns retained-root instance restart recovery, orphan collection,
+reset and leak closure, the replayable demo/e2e target, and full platform QA.
+M1 is **not** complete. Prepare and review the slice-4 plan before execution;
+do not repeat the completed slice-1/2/3 implementation checklists. Namespace
+and gateway checks alone must never be reported as packet connectivity.
 
 ## Start-of-task workflow
 
@@ -182,9 +192,10 @@ required by the changed area:
 - `make test-race` — tests under the race detector.
 - `make lint` — `golangci-lint` and formatting checks.
 - `make generate` — regenerate API-derived code.
-- `make ci` — the full pull-request suite. Its generated-code freshness step
-  expects a clean candidate tree; do not misreport an expected dirty-tree
-  failure as a product failure.
+- `make ci` — the Go pull-request suite (formatting, vet, lint, unit/race
+  tests, cross-builds). Run `make generate-check` separately for generated
+  freshness; it compares before/after snapshots and accepts a dirty candidate
+  tree. Docker smoke/e2e and vulnerability checks are also separate CI steps.
 - `make appliance`, `make e2e`, and spike scripts — require Docker and, where
   documented, a privileged container. Some targets intentionally remain
   unavailable until their owning milestone implements them.

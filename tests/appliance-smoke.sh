@@ -78,5 +78,16 @@ for controller in memory pids cpu; do
     docker exec nephos grep -qw "$controller" /sys/fs/cgroup/cgroup.subtree_control || fail "$controller controller not delegated"
 done
 docker exec nephos podman image exists nephos-ubuntu:dev || fail "development AMI was not imported"
+docker exec nephos curl --unix-socket /run/podman/podman.sock -fsS http://localhost/_ping >/dev/null || fail "private Podman API is unavailable"
+[ "$(docker exec nephos stat -c '%a:%u:%g' /run/podman/podman.sock)" = '600:0:0' ] || fail "Podman socket is not root-private"
 
-echo "appliance-smoke: health, auth boundary, image import, and isolation passed"
+# The test owns this empty appliance. Losing its private runtime must stop
+# the control plane rather than leave a healthy API with no compute engine.
+docker exec nephos sh -c 'runtime_pid=$(pgrep -x podman); [ -n "$runtime_pid" ] && kill -TERM "$runtime_pid"' || fail "could not stop test-owned runtime"
+for attempt in $(seq 1 15); do
+    [ "$(docker inspect -f '{{.State.Running}}' nephos)" = true ] || break
+    sleep 1
+done
+[ "$(docker inspect -f '{{.State.Running}}' nephos)" = false ] || fail "runtime loss left the appliance running"
+
+echo "appliance-smoke: health, auth, image import, isolation, and private runtime supervision passed"

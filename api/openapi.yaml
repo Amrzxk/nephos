@@ -221,6 +221,124 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+  /v1/workspaces/{workspace}/instances:
+    parameters:
+      - $ref: '#/components/parameters/Workspace'
+    post:
+      operationId: runInstance
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RunInstanceRequest'
+      responses:
+        '201':
+          description: Instance accepted for asynchronous creation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Instance'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    get:
+      operationId: listInstances
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/PageToken'
+      responses:
+        '200':
+          description: Instance snapshots
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstancesPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /v1/workspaces/{workspace}/instances/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Workspace'
+      - $ref: '#/components/parameters/ResourceID'
+    get:
+      operationId: getInstance
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Instance snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Instance'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    delete:
+      operationId: terminateInstance
+      security:
+        - bearerAuth: []
+      responses:
+        '202':
+          description: Instance accepted for asynchronous termination
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Instance'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /v1/workspaces/{workspace}/instances/{id}/console:
+    parameters:
+      - $ref: '#/components/parameters/Workspace'
+      - $ref: '#/components/parameters/ResourceID'
+    get:
+      operationId: getInstanceConsole
+      description: >
+        Authenticated serial console WebSocket, the explicitly labeled exception
+        to learner traffic entering through nx-edge. This is not SSH.
+        Clients negotiate the nephos.console.v1 subprotocol. The complete
+        message framing, limits, and failure semantics are in api/console-v1.md.
+      security:
+        - bearerAuth: []
+      responses:
+        '101':
+          description: WebSocket connection established
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
   /v1/events:
     get:
       operationId: getEvents
@@ -373,6 +491,45 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Subnet'
+        next_page_token: {type: string}
+    RunInstanceRequest:
+      type: object
+      additionalProperties: false
+      required: [name, subnet_id]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        subnet_id: {type: string}
+    Instance:
+      type: object
+      additionalProperties: false
+      required: [id, name, subnet_id, private_ip, eni_id, instance_type, state, state_reason, generation, observed_generation]
+      properties:
+        id: {type: string}
+        name: {type: string}
+        subnet_id: {type: string}
+        private_ip: {type: string}
+        eni_id: {type: string}
+        instance_type:
+          type: string
+          enum: [t3.micro]
+        state:
+          type: string
+          enum: [pending, running, stopping, stopped, shutting-down, terminated, failed]
+        state_reason: {type: string}
+        generation: {type: integer, format: int64}
+        observed_generation: {type: integer, format: int64}
+    InstancesPage:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Instance'
         next_page_token: {type: string}
     HealthResponse:
       type: object

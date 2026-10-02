@@ -20,7 +20,11 @@ import (
 	"time"
 
 	"github.com/Amrzxk/nephos/internal/apiserver"
+	"github.com/Amrzxk/nephos/internal/compute"
+	"github.com/Amrzxk/nephos/internal/compute/podman"
 	"github.com/Amrzxk/nephos/internal/credentials"
+	"github.com/Amrzxk/nephos/internal/hook"
+	"github.com/Amrzxk/nephos/internal/model"
 	"github.com/Amrzxk/nephos/internal/network/topology"
 	"github.com/Amrzxk/nephos/internal/reconcile"
 	"github.com/Amrzxk/nephos/internal/service"
@@ -64,14 +68,20 @@ func run(ctx context.Context, logger *slog.Logger) error {
 		return fmt.Errorf("listening for the API: %w", err)
 	}
 	defer ln.Close()
-	if err := serve(ctx, ln, "/var/lib/nephos/secrets/api-token", "/var/lib/nephos/state/nephos.db", info, topology.New()); err != nil {
+	if err := serve(ctx, ln, "/var/lib/nephos/secrets/api-token", "/var/lib/nephos/state/nephos.db", hook.SocketPath, info, topology.New(), podman.New("/run/podman/podman.sock")); err != nil {
 		return err
 	}
 	logger.Info("nephosd shutting down")
 	return nil
 }
 
-func serve(ctx context.Context, ln net.Listener, tokenPath, dbPath string, build version.Info, network reconcile.NetworkEngine) error {
+type networkEngine interface {
+	reconcile.NetworkEngine
+	hook.ENIPlumber
+	DeleteENI(context.Context, model.VPC, model.ENI) error
+}
+
+func serve(ctx context.Context, ln net.Listener, tokenPath, dbPath, hookPath string, build version.Info, network networkEngine, runtime compute.Runtime) error {
 	token, err := credentials.LoadOrCreate(tokenPath)
 	if err != nil {
 		return fmt.Errorf("loading API token: %w", err)
@@ -81,10 +91,20 @@ func serve(ctx context.Context, ln net.Listener, tokenPath, dbPath string, build
 		return fmt.Errorf("opening appliance state: %w", err)
 	}
 	defer s.Close()
+	hookListener, err := hook.Listen(ctx, hookPath)
+	if err != nil {
+		return fmt.Errorf("open private hook listener: %w", err)
+	}
+	defer hookListener.Close()
+	hookServer := &http.Server{Handler: hook.NewHandler(s, network), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 10 * time.Second, BaseContext: func(net.Listener) context.Context { return ctx }}
+	hookDone := make(chan error, 1)
+	go func() { hookDone <- hookServer.Serve(hookListener) }()
 	controller := reconcile.New(s, network, 60*time.Second)
+	instances := reconcile.NewInstances(s, instanceNetwork{store: s, engine: network}, runtime, 60*time.Second)
 	resources := service.NewNetwork(s, controller.Enqueue, nil)
+	instanceService := service.NewInstances(s, instances.Enqueue, nil)
 	var ready atomic.Bool
-	h := apiserver.New(token, build, ready.Load, resources, s)
+	h := apiserver.New(token, build, ready.Load, resources, instanceService, s, runtime)
 	srv := &http.Server{Handler: h, ReadHeaderTimeout: 5 * time.Second}
 	serverDone := make(chan error, 1)
 	go func() { serverDone <- srv.Serve(ln) }()
@@ -92,25 +112,39 @@ func serve(ctx context.Context, ln net.Listener, tokenPath, dbPath string, build
 		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 		defer cancel()
 		_ = srv.Shutdown(shutdownCtx)
+		_ = hookServer.Shutdown(shutdownCtx)
 	}
 	if err := controller.Sweep(ctx); err != nil {
 		shutdown()
 		<-serverDone
+		<-hookDone
 		return fmt.Errorf("initial VPC reconcile sweep: %w", err)
+	}
+	if err := instances.Sweep(ctx); err != nil {
+		shutdown()
+		<-serverDone
+		<-hookDone
+		return fmt.Errorf("initial instance reconcile sweep: %w", err)
 	}
 	ready.Store(true)
 	runCtx, stop := context.WithCancel(ctx)
 	defer stop()
 	controllerDone := make(chan error, 1)
 	go func() { controllerDone <- controller.Run(runCtx) }()
-	var serveErr, controllerErr error
-	serverExited, controllerExited := false, false
+	instanceDone := make(chan error, 1)
+	go func() { instanceDone <- instances.Run(runCtx) }()
+	var serveErr, controllerErr, instanceErr, hookErr error
+	serverExited, controllerExited, instanceExited, hookExited := false, false, false, false
 	select {
 	case <-ctx.Done():
 	case serveErr = <-serverDone:
 		serverExited = true
 	case controllerErr = <-controllerDone:
 		controllerExited = true
+	case instanceErr = <-instanceDone:
+		instanceExited = true
+	case hookErr = <-hookDone:
+		hookExited = true
 	}
 	ready.Store(false)
 	stop()
@@ -121,11 +155,23 @@ func serve(ctx context.Context, ln net.Listener, tokenPath, dbPath string, build
 	if !controllerExited {
 		controllerErr = <-controllerDone
 	}
+	if !instanceExited {
+		instanceErr = <-instanceDone
+	}
+	if !hookExited {
+		hookErr = <-hookDone
+	}
+	if hookErr != nil && !errors.Is(hookErr, http.ErrServerClosed) {
+		return fmt.Errorf("serve private hook: %w", hookErr)
+	}
 	if serveErr != nil && !errors.Is(serveErr, http.ErrServerClosed) {
 		return fmt.Errorf("serving the API: %w", serveErr)
 	}
 	if controllerErr != nil && !errors.Is(controllerErr, context.Canceled) {
 		return fmt.Errorf("running VPC reconciler: %w", controllerErr)
+	}
+	if instanceErr != nil && !errors.Is(instanceErr, context.Canceled) {
+		return fmt.Errorf("running instance reconciler: %w", instanceErr)
 	}
 	return nil
 }

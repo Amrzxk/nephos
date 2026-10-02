@@ -381,19 +381,28 @@ As in AWS, `running` means the machine has started, not that SSH is ready. Insta
 | **Network ACLs** | Stateless; ordered rule numbers; default allow-all; custom deny-all; subnet boundary only; don't filter VPC DNS or IMDS | None known |
 | **DNS and IMDS** | Resolver at base+2 and 169.254.169.253; IMDSv1 and v2; user data; public keys | No Route 53 hosted zones in the MVP; no IAM credential paths |
 | **Instances** | Lifecycle states; vCPU and memory per instance type; user data; key pairs; serial console | Shared kernel; no raw block devices; `free` and `nproc` show appliance totals; reboot is a container restart; no CPU credits |
+| **M1 ENIs and source check** | Primary private IP, routed local-VPC packets, rejection of forged IPv4 sources | One primary ENI per instance; fixed source check with no disable toggle. Additional ENIs, public/internet routing and SG/NACL policies belong to later milestones. |
 | **Regions and AZs** | AZ names and subnet placement | Logical only; one region |
 | **Names** | `Name` tag | Unique per resource type within a workspace |
 
 Behavior changes to the network plane must update this table in the same pull request.
 
-**Current M1 fidelity status:** slice 2 implements only VPC namespace
-isolation, the subnet base+1 `/32` gateway, the local-VPC policy rule, and a
-fail-closed unmatched rule. Its [connectivity matrix](tests/M1-connectivity-matrix.md)
-distinguishes these live-kernel observations from the slice-3 instance-packet
-tests. Other behavior in the table is the target architecture for its owning
-milestone, not a claim that it already ships. In particular, this slice has no
-ENI data path, SG/NACL packet enforcement, DNS/IMDS, default VPC, or internet
-edge.
+**Current M1 fidelity status:** slices 2 and 3 implement VPC namespace
+isolation, the subnet base+1 `/32` gateway, local-VPC policy routing, and real
+ENIs with instance `eth0`, router proxy ARP and destination `/32` routes.
+The [connectivity matrix](tests/M1-connectivity-matrix.md) records real
+bidirectional cross-subnet ICMP; independent overlapping IP spaces with a
+remote-only destination witness; and forged-source rejection with an nftables
+drop counter and no request at the destination. These pass locally on
+WSL2/Docker Desktop and on native Ubuntu 24.04 in
+[CI run 36973066755](https://github.com/Amrzxk/nephos/actions/runs/36973066755),
+including native host nftables hygiene.
+The source check permits only each ENI's assigned IPv4 source. Its fixed
+policy has no public disable toggle, SG/NACL enforcement, DNS/IMDS, default
+VPC or internet edge. Those rows in the table remain the target architecture
+for their owning milestones. Ping uses unprivileged ICMP with the instance
+`ping_group_range` set to `0 65535` and no `CAP_NET_RAW` file capability;
+the approved runtime capability policy stays unchanged.
 
 ## 6. API, CLI, and naming conventions
 
@@ -411,6 +420,17 @@ M1 implements these core rules for VPCs, subnets, and instances in one implicit
 does not change resource URLs. Arbitrary tags and broader list filters arrive
 in M3; the M1 list endpoints are still paginated. The M1 API token and
 localhost binding protect its resource, event, and console endpoints.
+
+**M1 slice-3 console contract:** interactive console uses a PTY;
+one-shot commands use non-PTY stdin/stdout/stderr, preserving output bytes
+and the command's exit status. Both use authenticated WebSocket exec, with
+an explicit final exit message; loss of that message is failure. The CLI's
+out-of-band label goes to stderr, not command stdout. The client requires
+both a valid exit and normal WebSocket closure; the server drains output and
+reaps exec before reporting exit. Controls are bounded to 4 KiB and data to
+64 KiB per assembled message. See the [wire protocol](../api/console-v1.md),
+[M1 design](superpowers/specs/2026-09-23-m1-two-instances-ping-design.md), and
+[slice-3 plan](superpowers/plans/2026-09-27-m1-slice-3-instances-ping.md).
 
 **CLI grammar:** `nephos <resource> <verb> [name-or-id] [flags]`. Flags are kebab-case versions of the API field names. Anywhere a resource is referenced, either its name or its ID works.
 
@@ -615,6 +635,7 @@ After the MVP (M11): VPC flow logs (nftables log group → NFLOG → `nephosd`, 
 | Setting | Default | Notes |
 |---|---|---|
 | Appliance limits | `--memory 4g --cpus 2 --pids-limit 4096` | Host with 8 GB RAM and 10 GB free disk recommended |
+| M1 instance limits | Fixed `t3.micro`: 2 vCPU, 1 GiB, 512 tasks | Enforced by slice 3. Tasks include threads; 512 is a Nephos safety ceiling, not an AWS attribute or a reservation. The appliance aggregate ceiling also applies. |
 | Running instances | 20 per appliance | |
 | Memory overcommit | 4× the appliance memory | Beyond this, launches fail with `InsufficientInstanceCapacity`, as a real region can |
 | VPCs | 5 per workspace | AWS default |

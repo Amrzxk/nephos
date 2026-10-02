@@ -24,7 +24,7 @@ func resourceAPI(t *testing.T) http.Handler {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = s.Close() })
-	return New("secret", version.Get(), func() bool { return true }, service.NewNetwork(s, nil, nil), s)
+	return New("secret", version.Get(), func() bool { return true }, service.NewNetwork(s, nil, nil), nil, s, nil)
 }
 
 func apiRequest(h http.Handler, method, path, body, key string) *httptest.ResponseRecorder {

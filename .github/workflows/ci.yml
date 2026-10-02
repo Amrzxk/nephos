@@ -160,6 +160,9 @@ jobs:
       - name: Check VPC and subnet resource path
         run: bash tests/vpc-subnet-smoke.sh
 
+      - name: Check real instance packets and console
+        run: bash tests/instance-ping-smoke.sh
+
       - name: Appliance logs on failure
         if: failure()
         run: docker logs nephos || true

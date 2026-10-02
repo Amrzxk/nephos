@@ -31,7 +31,7 @@ func TestNativeDockerWorkflowRunsVPCSubnetSmokeAfterBootstrap(t *testing.T) {
 	if !ok || job.RunsOn != "ubuntu-24.04" {
 		t.Fatalf("native Docker job missing or wrong runner: %+v", job)
 	}
-	bootstrapAt, networkAt := -1, -1
+	bootstrapAt, networkAt, instanceAt := -1, -1, -1
 	for i, step := range job.Steps {
 		command := strings.TrimSpace(step.Run)
 		if command == "bash tests/appliance-cli-smoke.sh" {
@@ -40,8 +40,14 @@ func TestNativeDockerWorkflowRunsVPCSubnetSmokeAfterBootstrap(t *testing.T) {
 		if command == "bash tests/vpc-subnet-smoke.sh" {
 			networkAt = i
 		}
+		if command == "bash tests/instance-ping-smoke.sh" {
+			instanceAt = i
+		}
 	}
 	if bootstrapAt < 0 || networkAt <= bootstrapAt {
 		t.Fatalf("VPC/subnet smoke must run after bootstrap: bootstrap=%d network=%d", bootstrapAt, networkAt)
+	}
+	if instanceAt <= networkAt {
+		t.Fatalf("instance packet smoke must run after VPC/subnet smoke: network=%d instances=%d", networkAt, instanceAt)
 	}
 }

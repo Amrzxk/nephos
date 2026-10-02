@@ -94,12 +94,16 @@ make clean
 
 ## M1 local appliance workflow
 
-Slices 1 and 2 are implemented and merged: appliance lifecycle, authenticated
-API access, and VPC/subnet state and topology. Instance and console commands,
-real cross-subnet ping, and reset are still pending. The
+Slices 1 and 2 are implemented and merged. Slice 3 is implemented in
+[PR #6](https://github.com/Amrzxk/nephos/pull/6): instance/ENI state, fail-closed boot plumbing, real
+cross-subnet ping, a 512-task instance ceiling, and interactive PTY/non-PTY
+command consoles. WSL2/Docker Desktop tests and native Ubuntu
+[CI run 36973066755](https://github.com/Amrzxk/nephos/actions/runs/36973066755)
+pass, including the native host nftables check. The
 [roadmap](ROADMAP.md#m1-thinnest-end-to-end-slice-two-instances-ping) tracks
-completion; the [slice-3 plan](superpowers/plans/2026-09-27-m1-slice-3-instances-ping.md)
-is the draft handoff for the next implementation session, not runnable behavior.
+completion. Retained instance-root restart recovery, reset, leak closure and
+the full replayable e2e demo remain slice 4; do not use the roadmap's complete
+restart/reset demo as a slice-3 acceptance claim.
 
 Run these commands inside native Linux or WSL2, not PowerShell. Docker must be
 rootful, support cgroup v2 and privileged containers, expose a Linux 5.15+
@@ -130,8 +134,8 @@ bin/nephos up        # reuses the same container, volume, and token
 user's default builder. `make appliance` deliberately refuses to build if
 the AMI archive is absent; rebuild both after changing the AMI definition.
 The CLI does not download or build either image. Publishing the AMI belongs
-to M2. This M1 slice adds VPC and subnet commands; instance commands arrive
-in the next slice. The sole workspace is implicit and named `default`.
+to M2. M1 provides VPC, subnet and instance commands. The sole workspace is
+implicit and named `default`.
 
 Create a VPC explicitly, then create a subnet inside it. Names are
 case-sensitive and may contain spaces or UTF-8 characters:
@@ -153,6 +157,43 @@ Delete with `--wait` succeeds only after the resource disappears. Resource
 commands use the locally stored token and never contact the Docker Engine.
 For `delete --wait -o json`, the output is the original API-accepted deletion
 object; the successful exit code confirms that the later GET returned 404.
+
+Run two instances in different subnets, then send real packets through their
+VPC. M1 fixes the type at `t3.micro` (2 vCPU, 1 GiB, 512 tasks):
+
+```bash
+bin/nephos subnet create 'App β' --vpc 'Lab East' \
+  --cidr-block 10.0.2.0/24 --availability-zone local-1b --wait
+bin/nephos instance run one --subnet 'App α' --wait -o json
+bin/nephos instance run two --subnet 'App β' --wait -o json
+bin/nephos instance list --limit 50 -o json
+bin/nephos console one -- ping -c 3 10.0.2.4
+bin/nephos console one                 # local terminal required; interactive Bash
+bin/nephos instance terminate one --wait
+bin/nephos instance terminate two --wait
+```
+
+`instance run|list|describe|terminate` resolves exact case-sensitive names or
+IDs; name resolution reads all pages. `--wait` reports running, failed reason,
+removal or a timeout; `--timeout` overrides the two-minute default. Run retries
+retain one idempotency key. `terminate --wait -o json` returns the original
+accepted deletion object once removal has been confirmed.
+
+Console command mode uses exact argv, no implicit shell and no PTY. Redirect
+stdin/stdout normally; stdout/stderr bytes remain distinct and remote exit
+codes propagate to the CLI. The serial/exec label goes to stderr. Interactive
+mode runs `/bin/bash`, transfers resize changes and restores terminal settings
+on exit/error/interruption. Both use the same authenticated, instance-scoped
+[WebSocket protocol](../api/console-v1.md); packets sent inside the instance
+still traverse the VPC. A connection without a valid final exit and normal
+closure fails. Native Windows/macOS console runtime QA is not yet established;
+project commands remain supported inside Linux or WSL2. Pending pipe/terminal
+output writes are bounded to ten seconds and observe cancellation, including
+when stderr cannot accept diagnostics. Linux uses private nonblocking stream
+handles without changing caller flags; Darwin's best-effort implementation
+temporarily sets shared output nonblocking flags and restores them on normal
+session cleanup. Redirected regular files keep their offset/append behavior;
+blocking filesystem I/O is not a poller-cancellable stream.
 
 ### Activating rebuilt development images
 
@@ -208,17 +249,25 @@ temporary HOME so it cannot replace your normal credential:
 bash tests/appliance-smoke.sh
 bash tests/appliance-cli-smoke.sh
 bash tests/vpc-subnet-smoke.sh
+bash tests/instance-ping-smoke.sh
 ```
 
-The last script requires locally built images and `bin/nephos`, `jq`, Docker,
+The VPC/subnet script requires locally built images and `bin/nephos`, `jq`, Docker,
 and permission to run a privileged appliance. It creates overlapping-CIDR
 VPCs in separate namespaces, checks subnet gateways, authentication, durable
 events, pagination, restart persistence, and deletion. It snapshots host
 network objects before the appliance starts and after its test-owned
 container/volume are removed. Native CI installs `nftables` and requires
 readable host rules; a WSL2 host without `nft` reports that part as unavailable.
-The [M1 connectivity matrix](tests/M1-connectivity-matrix.md) identifies the
-instance-packet cases still assigned to slice 3.
+The instance script adds real bidirectional pings, an overlapping-VPC fixture
+with a remote-only destination counter, source spoof/drop witnesses, a
+pre-PID-1 hook observer and forced failure, console NUL bytes/EOF/exit 7, the
+bounded 512-task probe, and instance/network teardown. Its helpers are built
+locally and copied only into the test-owned appliance; they are never shipped.
+Failure evidence stays in the printed `/tmp/nephos-instance-smoke.*` directory;
+cleanup verifies container identity and volume creation time/ownership labels.
+The [M1 connectivity matrix](tests/M1-connectivity-matrix.md) records the
+exact packet paths and keeps restart/reset cases assigned to slice 4.
 
 ### Why `make test-race` sets `CGO_ENABLED=1`
 

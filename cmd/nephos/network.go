@@ -127,6 +127,20 @@ func writeResource(stdout *os.File, value any, output string) error {
 	case client.Subnet:
 		_, err := fmt.Fprintf(stdout, "%s\t%s\t%s\t%s\t%s\n", item.Id, item.Name, item.VpcId, item.CidrBlock, item.State)
 		return err
+	case client.Instance:
+		_, err := fmt.Fprintf(stdout, "%s\t%s\t%s\t%s\t%s\n", item.Id, item.Name, item.SubnetId, item.PrivateIp, item.State)
+		return err
+	case client.InstancesPage:
+		for i := range item.Items {
+			if err := writeResource(stdout, item.Items[i], "human"); err != nil {
+				return err
+			}
+		}
+		if item.NextPageToken != nil {
+			_, err := fmt.Fprintf(stdout, "Next page: %s\n", *item.NextPageToken)
+			return err
+		}
+		return nil
 	case client.VpcsPage:
 		for i := range item.Items {
 			if err := writeResource(stdout, item.Items[i], "human"); err != nil {

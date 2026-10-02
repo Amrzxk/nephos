@@ -1,7 +1,7 @@
 // Command nephos is the Nephos CLI. It runs on the learner's machine and talks
 // to nephosd inside the appliance over the REST API.
 //
-// M1 includes appliance lifecycle and generated-client VPC/subnet commands.
+// M1 includes appliance lifecycle, VPC/subnet/instance commands and console.
 package main
 
 import (
@@ -10,6 +10,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/Amrzxk/nephos/internal/version"
 )
@@ -22,7 +24,10 @@ const (
 )
 
 func main() {
-	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	code := runWithConfig(ctx, os.Args[1:], os.Stdout, os.Stderr, resourceConfig{})
+	stop()
+	os.Exit(code)
 }
 
 func run(args []string, stdout, stderr *os.File) int {
@@ -34,7 +39,7 @@ func runWithConfig(ctx context.Context, args []string, stdout, stderr *os.File, 
 	fs.SetOutput(stderr)
 	asJSON := fs.Bool("json", false, "print the version as JSON")
 	fs.Usage = func() {
-		fmt.Fprintf(stderr, "nephos %s\n\nUsage:\n  nephos version [--json]\n  nephos up [--memory=4g] [--cpus=2] [--pids-limit=4096]\n  nephos down\n  nephos status\n  nephos vpc create|list|describe|delete ...\n  nephos subnet create|list|describe|delete ...\n", version.Get().Version)
+		fmt.Fprintf(stderr, "nephos %s\n\nUsage:\n  nephos version [--json]\n  nephos up [--memory=4g] [--cpus=2] [--pids-limit=4096]\n  nephos down\n  nephos status\n  nephos vpc create|list|describe|delete ...\n  nephos subnet create|list|describe|delete ...\n  nephos instance run|list|describe|terminate ...\n  nephos console <name-or-id> [-- command ...]\n", version.Get().Version)
 	}
 
 	if err := fs.Parse(args); err != nil {
@@ -65,6 +70,10 @@ func runWithConfig(ctx context.Context, args []string, stdout, stderr *os.File, 
 		return runStatus(fs.Args()[1:], stdout, stderr)
 	case "vpc", "subnet":
 		return runResource(ctx, cmd, fs.Args()[1:], stdout, stderr, cfg)
+	case "instance":
+		return runInstance(ctx, fs.Args()[1:], stdout, stderr, cfg)
+	case "console":
+		return runConsole(ctx, fs.Args()[1:], os.Stdin, stdout, stderr, cfg, nil)
 	default:
 		fmt.Fprintf(stderr, "nephos: unknown command %q\n", cmd)
 		fs.Usage()

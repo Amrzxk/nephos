@@ -4,6 +4,10 @@
 
 package sqlc
 
+import (
+	"database/sql"
+)
+
 type Eni struct {
 	ID                 string
 	WorkspaceID        string
@@ -55,6 +59,8 @@ type Instance struct {
 	StateReason        string
 	CreatedAt          int64
 	UpdatedAt          int64
+	DeletionRequested  int64
+	RuntimeID          sql.NullString
 }
 
 type KernelIndex struct {

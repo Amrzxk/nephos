@@ -60,8 +60,8 @@ func TestOpenMigratesAndReopensWithoutLosingState(t *testing.T) {
 	if err := s.db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil {
 		t.Fatal(err)
 	}
-	if version != 3 {
-		t.Fatalf("schema version=%d, want 3", version)
+	if version != schemaVersion {
+		t.Fatalf("schema version=%d, want %d", version, schemaVersion)
 	}
 	var migrationCount int
 	if err := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM schema_migrations WHERE version = 1").Scan(&migrationCount); err != nil {
@@ -93,8 +93,8 @@ func TestOpenMigratesAndReopensWithoutLosingState(t *testing.T) {
 	if err := reopened.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM schema_migrations").Scan(&migrationCount); err != nil {
 		t.Fatal(err)
 	}
-	if migrationCount != 3 {
-		t.Fatalf("migration rows after reopen=%d, want 3", migrationCount)
+	if migrationCount != schemaVersion {
+		t.Fatalf("migration rows after reopen=%d, want %d", migrationCount, schemaVersion)
 	}
 }
 
@@ -140,7 +140,7 @@ func TestOpenUpgradesVersionOneWithoutLosingEvents(t *testing.T) {
 	if err := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM schema_migrations").Scan(&migrationCount); err != nil {
 		t.Fatal(err)
 	}
-	if version != 3 || eventCount != 1 || migrationCount != 3 {
+	if version != schemaVersion || eventCount != 1 || migrationCount != schemaVersion {
 		t.Fatalf("upgraded version=%d events=%d migrations=%d", version, eventCount, migrationCount)
 	}
 	_, err = s.db.ExecContext(ctx, "INSERT INTO idempotency_requests(workspace_id, operation, key, payload_hash, resource_id, response_json, created_at, expires_at) VALUES ('default', 'create-vpc', 'old-key', 'hash', 'vpc-0123456789abcdef0', '{}', 100, 200)")

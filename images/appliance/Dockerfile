@@ -25,10 +25,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN printf 'containers:200000:1048576\n' > /etc/subuid \
     && printf 'containers:200000:1048576\n' > /etc/subgid \
     && mkdir -p /var/lib/nephos/containers /var/lib/nephos/runroot \
-        /run/nephos /usr/local/share/nephos
+        /run/nephos /run/podman /usr/local/share/nephos
 
 COPY images/appliance/storage.conf /etc/containers/storage.conf
 COPY images/appliance/containers.conf /etc/containers/containers.conf
+COPY images/appliance/nephos-hook.json /usr/share/containers/oci/hooks.d/nephos.json
 COPY images/appliance/entrypoint.sh /usr/local/bin/nephos-entrypoint
 COPY --from=build /out/nephosd /usr/local/bin/nephosd
 COPY --from=build /out/nephos-hook /usr/local/bin/nephos-hook

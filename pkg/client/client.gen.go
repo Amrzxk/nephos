@@ -55,6 +55,54 @@ func (e HealthResponseStatus) Valid() bool {
 	}
 }
 
+// Defines values for InstanceInstanceType.
+const (
+	T3Micro InstanceInstanceType = "t3.micro"
+)
+
+// Valid indicates whether the value is a known member of the InstanceInstanceType enum.
+func (e InstanceInstanceType) Valid() bool {
+	switch e {
+	case T3Micro:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for InstanceState.
+const (
+	InstanceStateFailed       InstanceState = "failed"
+	InstanceStatePending      InstanceState = "pending"
+	InstanceStateRunning      InstanceState = "running"
+	InstanceStateShuttingDown InstanceState = "shutting-down"
+	InstanceStateStopped      InstanceState = "stopped"
+	InstanceStateStopping     InstanceState = "stopping"
+	InstanceStateTerminated   InstanceState = "terminated"
+)
+
+// Valid indicates whether the value is a known member of the InstanceState enum.
+func (e InstanceState) Valid() bool {
+	switch e {
+	case InstanceStateFailed:
+		return true
+	case InstanceStatePending:
+		return true
+	case InstanceStateRunning:
+		return true
+	case InstanceStateShuttingDown:
+		return true
+	case InstanceStateStopped:
+		return true
+	case InstanceStateStopping:
+		return true
+	case InstanceStateTerminated:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for SubnetAvailabilityZone.
 const (
 	SubnetAvailabilityZoneLocal1a SubnetAvailabilityZone = "local-1a"
@@ -157,6 +205,38 @@ type HealthResponse struct {
 // HealthResponseStatus defines model for HealthResponse.Status.
 type HealthResponseStatus string
 
+// Instance defines model for Instance.
+type Instance struct {
+	EniId              string               `json:"eni_id"`
+	Generation         int64                `json:"generation"`
+	Id                 string               `json:"id"`
+	InstanceType       InstanceInstanceType `json:"instance_type"`
+	Name               string               `json:"name"`
+	ObservedGeneration int64                `json:"observed_generation"`
+	PrivateIp          string               `json:"private_ip"`
+	State              InstanceState        `json:"state"`
+	StateReason        string               `json:"state_reason"`
+	SubnetId           string               `json:"subnet_id"`
+}
+
+// InstanceInstanceType defines model for Instance.InstanceType.
+type InstanceInstanceType string
+
+// InstanceState defines model for Instance.State.
+type InstanceState string
+
+// InstancesPage defines model for InstancesPage.
+type InstancesPage struct {
+	Items         []Instance `json:"items"`
+	NextPageToken *string    `json:"next_page_token,omitempty"`
+}
+
+// RunInstanceRequest defines model for RunInstanceRequest.
+type RunInstanceRequest struct {
+	Name     string `json:"name"`
+	SubnetId string `json:"subnet_id"`
+}
+
 // Subnet defines model for Subnet.
 type Subnet struct {
 	AvailabilityZone   SubnetAvailabilityZone `json:"availability_zone"`
@@ -244,6 +324,18 @@ type GetEventsParams struct {
 	LastEventID *LastEventID `json:"Last-Event-ID,omitempty"`
 }
 
+// ListInstancesParams defines parameters for ListInstances.
+type ListInstancesParams struct {
+	Limit     *Limit     `form:"limit,omitempty" json:"limit,omitempty"`
+	PageToken *PageToken `form:"page_token,omitempty" json:"page_token,omitempty"`
+}
+
+// RunInstanceParams defines parameters for RunInstance.
+type RunInstanceParams struct {
+	// IdempotencyKey Replays identical creates for 24 hours
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
 // ListSubnetsParams defines parameters for ListSubnets.
 type ListSubnetsParams struct {
 	Limit     *Limit     `form:"limit,omitempty" json:"limit,omitempty"`
@@ -267,6 +359,9 @@ type CreateVpcParams struct {
 	// IdempotencyKey Replays identical creates for 24 hours
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
+
+// RunInstanceJSONRequestBody defines body for RunInstance for application/json ContentType.
+type RunInstanceJSONRequestBody = RunInstanceRequest
 
 // CreateSubnetJSONRequestBody defines body for CreateSubnet for application/json ContentType.
 type CreateSubnetJSONRequestBody = CreateSubnetRequest
@@ -357,6 +452,28 @@ type ClientInterface interface {
 	// GetVersion performs a GET /v1/version (the `GetVersion` operationId) request.
 	GetVersion(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListInstances performs a GET /v1/workspaces/{workspace}/instances (the `ListInstances` operationId) request.
+	ListInstances(ctx context.Context, workspace Workspace, params *ListInstancesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RunInstanceWithBody performs a POST /v1/workspaces/{workspace}/instances (the `RunInstance` operationId) request,
+	// with any type of body and a specified content type.
+	RunInstanceWithBody(ctx context.Context, workspace Workspace, params *RunInstanceParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RunInstance performs a POST /v1/workspaces/{workspace}/instances (the `RunInstance` operationId) request.
+	// Takes a body of the `application/json` content type.
+	RunInstance(ctx context.Context, workspace Workspace, params *RunInstanceParams, body RunInstanceJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// TerminateInstance performs a DELETE /v1/workspaces/{workspace}/instances/{id} (the `TerminateInstance` operationId) request.
+	TerminateInstance(ctx context.Context, workspace Workspace, id ResourceID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetInstance performs a GET /v1/workspaces/{workspace}/instances/{id} (the `GetInstance` operationId) request.
+	GetInstance(ctx context.Context, workspace Workspace, id ResourceID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetInstanceConsole performs a GET /v1/workspaces/{workspace}/instances/{id}/console (the `GetInstanceConsole` operationId) request.
+	//
+	// Authenticated serial console WebSocket, the explicitly labeled exception to learner traffic entering through nx-edge. This is not SSH. Clients negotiate the nephos.console.v1 subprotocol. The complete message framing, limits, and failure semantics are in api/console-v1.md.
+	GetInstanceConsole(ctx context.Context, workspace Workspace, id ResourceID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListSubnets performs a GET /v1/workspaces/{workspace}/subnets (the `ListSubnets` operationId) request.
 	ListSubnets(ctx context.Context, workspace Workspace, params *ListSubnetsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -421,6 +538,88 @@ func (c *Client) GetHealth(ctx context.Context, reqEditors ...RequestEditorFn) (
 // GetVersion performs a GET /v1/version (the `GetVersion` operationId) request.
 func (c *Client) GetVersion(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetVersionRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListInstances performs a GET /v1/workspaces/{workspace}/instances (the `ListInstances` operationId) request.
+func (c *Client) ListInstances(ctx context.Context, workspace Workspace, params *ListInstancesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListInstancesRequest(c.Server, workspace, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// RunInstanceWithBody performs a POST /v1/workspaces/{workspace}/instances (the `RunInstance` operationId) request,
+// with any type of body and a specified content type.
+func (c *Client) RunInstanceWithBody(ctx context.Context, workspace Workspace, params *RunInstanceParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRunInstanceRequestWithBody(c.Server, workspace, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// RunInstance performs a POST /v1/workspaces/{workspace}/instances (the `RunInstance` operationId) request.
+// Takes a body of the `application/json` content type.
+func (c *Client) RunInstance(ctx context.Context, workspace Workspace, params *RunInstanceParams, body RunInstanceJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRunInstanceRequest(c.Server, workspace, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// TerminateInstance performs a DELETE /v1/workspaces/{workspace}/instances/{id} (the `TerminateInstance` operationId) request.
+func (c *Client) TerminateInstance(ctx context.Context, workspace Workspace, id ResourceID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewTerminateInstanceRequest(c.Server, workspace, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetInstance performs a GET /v1/workspaces/{workspace}/instances/{id} (the `GetInstance` operationId) request.
+func (c *Client) GetInstance(ctx context.Context, workspace Workspace, id ResourceID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetInstanceRequest(c.Server, workspace, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetInstanceConsole performs a GET /v1/workspaces/{workspace}/instances/{id}/console (the `GetInstanceConsole` operationId) request.
+//
+// Authenticated serial console WebSocket, the explicitly labeled exception to learner traffic entering through nx-edge. This is not SSH. Clients negotiate the nephos.console.v1 subprotocol. The complete message framing, limits, and failure semantics are in api/console-v1.md.
+func (c *Client) GetInstanceConsole(ctx context.Context, workspace Workspace, id ResourceID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetInstanceConsoleRequest(c.Server, workspace, id)
 	if err != nil {
 		return nil, err
 	}
@@ -644,6 +843,264 @@ func NewGetVersionRequest(server string) (*http.Request, error) {
 	}
 
 	operationPath := fmt.Sprintf("/v1/version")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewListInstancesRequest constructs an http.Request for the ListInstances method
+func NewListInstancesRequest(server string, workspace Workspace, params *ListInstancesParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "workspace", workspace, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/workspaces/%s/instances", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PageToken != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page_token", *params.PageToken, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewRunInstanceRequest calls the generic RunInstance builder with application/json body
+func NewRunInstanceRequest(server string, workspace Workspace, params *RunInstanceParams, body RunInstanceJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewRunInstanceRequestWithBody(server, workspace, params, "application/json", bodyReader)
+}
+
+// NewRunInstanceRequestWithBody constructs an http.Request for the RunInstance method, with any body, and a specified content type
+func NewRunInstanceRequestWithBody(server string, workspace Workspace, params *RunInstanceParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "workspace", workspace, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/workspaces/%s/instances", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.IdempotencyKey != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", *params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewTerminateInstanceRequest constructs an http.Request for the TerminateInstance method
+func NewTerminateInstanceRequest(server string, workspace Workspace, id ResourceID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "workspace", workspace, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/workspaces/%s/instances/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetInstanceRequest constructs an http.Request for the GetInstance method
+func NewGetInstanceRequest(server string, workspace Workspace, id ResourceID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "workspace", workspace, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/workspaces/%s/instances/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetInstanceConsoleRequest constructs an http.Request for the GetInstanceConsole method
+func NewGetInstanceConsoleRequest(server string, workspace Workspace, id ResourceID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "workspace", workspace, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/workspaces/%s/instances/%s/console", pathParam0, pathParam1)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -1154,6 +1611,38 @@ type ClientWithResponsesInterface interface {
 	// Returns a wrapper object for the known response body format(s).
 	GetVersionWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetVersionResponse, error)
 
+	// ListInstancesWithResponse performs a GET /v1/workspaces/{workspace}/instances (the `ListInstances` operationId) request.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	ListInstancesWithResponse(ctx context.Context, workspace Workspace, params *ListInstancesParams, reqEditors ...RequestEditorFn) (*ListInstancesResponse, error)
+
+	// RunInstanceWithBodyWithResponse performs a POST /v1/workspaces/{workspace}/instances (the `RunInstance` operationId) request,
+	// with any type of body and a specified content type.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	RunInstanceWithBodyWithResponse(ctx context.Context, workspace Workspace, params *RunInstanceParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RunInstanceResponse, error)
+
+	// RunInstanceWithResponse performs a POST /v1/workspaces/{workspace}/instances (the `RunInstance` operationId) request.
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	RunInstanceWithResponse(ctx context.Context, workspace Workspace, params *RunInstanceParams, body RunInstanceJSONRequestBody, reqEditors ...RequestEditorFn) (*RunInstanceResponse, error)
+
+	// TerminateInstanceWithResponse performs a DELETE /v1/workspaces/{workspace}/instances/{id} (the `TerminateInstance` operationId) request.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	TerminateInstanceWithResponse(ctx context.Context, workspace Workspace, id ResourceID, reqEditors ...RequestEditorFn) (*TerminateInstanceResponse, error)
+
+	// GetInstanceWithResponse performs a GET /v1/workspaces/{workspace}/instances/{id} (the `GetInstance` operationId) request.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	GetInstanceWithResponse(ctx context.Context, workspace Workspace, id ResourceID, reqEditors ...RequestEditorFn) (*GetInstanceResponse, error)
+
+	// GetInstanceConsoleWithResponse performs a GET /v1/workspaces/{workspace}/instances/{id}/console (the `GetInstanceConsole` operationId) request.
+	//
+	// Authenticated serial console WebSocket, the explicitly labeled exception to learner traffic entering through nx-edge. This is not SSH. Clients negotiate the nephos.console.v1 subprotocol. The complete message framing, limits, and failure semantics are in api/console-v1.md.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	GetInstanceConsoleWithResponse(ctx context.Context, workspace Workspace, id ResourceID, reqEditors ...RequestEditorFn) (*GetInstanceConsoleResponse, error)
+
 	// ListSubnetsWithResponse performs a GET /v1/workspaces/{workspace}/subnets (the `ListSubnets` operationId) request.
 	//
 	// Returns a wrapper object for the known response body format(s).
@@ -1357,6 +1846,344 @@ func (r GetVersionResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r GetVersionResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ListInstancesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *InstancesPage
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *BadRequest
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthorized
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *Conflict
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListInstancesResponse) GetJSON200() *InstancesPage {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r ListInstancesResponse) GetJSON400() *BadRequest {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r ListInstancesResponse) GetJSON401() *Unauthorized {
+	return r.JSON401
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r ListInstancesResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r ListInstancesResponse) GetJSON409() *Conflict {
+	return r.JSON409
+}
+
+// GetBody returns the raw response body bytes
+func (r ListInstancesResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListInstancesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListInstancesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListInstancesResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type RunInstanceResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *Instance
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *BadRequest
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthorized
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *Conflict
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r RunInstanceResponse) GetJSON201() *Instance {
+	return r.JSON201
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r RunInstanceResponse) GetJSON400() *BadRequest {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r RunInstanceResponse) GetJSON401() *Unauthorized {
+	return r.JSON401
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r RunInstanceResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r RunInstanceResponse) GetJSON409() *Conflict {
+	return r.JSON409
+}
+
+// GetBody returns the raw response body bytes
+func (r RunInstanceResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r RunInstanceResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RunInstanceResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r RunInstanceResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type TerminateInstanceResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON202 the response for an HTTP 202 `application/json` response
+	JSON202 *Instance
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *BadRequest
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthorized
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *Conflict
+}
+
+// GetJSON202 returns the response for an HTTP 202 `application/json` response
+func (r TerminateInstanceResponse) GetJSON202() *Instance {
+	return r.JSON202
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r TerminateInstanceResponse) GetJSON400() *BadRequest {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r TerminateInstanceResponse) GetJSON401() *Unauthorized {
+	return r.JSON401
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r TerminateInstanceResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r TerminateInstanceResponse) GetJSON409() *Conflict {
+	return r.JSON409
+}
+
+// GetBody returns the raw response body bytes
+func (r TerminateInstanceResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r TerminateInstanceResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r TerminateInstanceResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r TerminateInstanceResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetInstanceResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Instance
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *BadRequest
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthorized
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *Conflict
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetInstanceResponse) GetJSON200() *Instance {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r GetInstanceResponse) GetJSON400() *BadRequest {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r GetInstanceResponse) GetJSON401() *Unauthorized {
+	return r.JSON401
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r GetInstanceResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r GetInstanceResponse) GetJSON409() *Conflict {
+	return r.JSON409
+}
+
+// GetBody returns the raw response body bytes
+func (r GetInstanceResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetInstanceResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetInstanceResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetInstanceResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetInstanceConsoleResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *BadRequest
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthorized
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *Conflict
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r GetInstanceConsoleResponse) GetJSON400() *BadRequest {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r GetInstanceConsoleResponse) GetJSON401() *Unauthorized {
+	return r.JSON401
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r GetInstanceConsoleResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r GetInstanceConsoleResponse) GetJSON409() *Conflict {
+	return r.JSON409
+}
+
+// GetBody returns the raw response body bytes
+func (r GetInstanceConsoleResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetInstanceConsoleResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetInstanceConsoleResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetInstanceConsoleResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -1948,6 +2775,74 @@ func (c *ClientWithResponses) GetVersionWithResponse(ctx context.Context, reqEdi
 	return ParseGetVersionResponse(rsp)
 }
 
+// ListInstancesWithResponse performs a GET /v1/workspaces/{workspace}/instances (the `ListInstances` operationId) request.
+//
+// Returns a wrapper object for the known response body format(s).
+func (c *ClientWithResponses) ListInstancesWithResponse(ctx context.Context, workspace Workspace, params *ListInstancesParams, reqEditors ...RequestEditorFn) (*ListInstancesResponse, error) {
+	rsp, err := c.ListInstances(ctx, workspace, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListInstancesResponse(rsp)
+}
+
+// RunInstanceWithBodyWithResponse performs a POST /v1/workspaces/{workspace}/instances (the `RunInstance` operationId) request,
+// with any type of body and a specified content type.
+//
+// Returns a wrapper object for the known response body format(s).
+func (c *ClientWithResponses) RunInstanceWithBodyWithResponse(ctx context.Context, workspace Workspace, params *RunInstanceParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RunInstanceResponse, error) {
+	rsp, err := c.RunInstanceWithBody(ctx, workspace, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRunInstanceResponse(rsp)
+}
+
+// RunInstanceWithResponse performs a POST /v1/workspaces/{workspace}/instances (the `RunInstance` operationId) request.
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+func (c *ClientWithResponses) RunInstanceWithResponse(ctx context.Context, workspace Workspace, params *RunInstanceParams, body RunInstanceJSONRequestBody, reqEditors ...RequestEditorFn) (*RunInstanceResponse, error) {
+	rsp, err := c.RunInstance(ctx, workspace, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRunInstanceResponse(rsp)
+}
+
+// TerminateInstanceWithResponse performs a DELETE /v1/workspaces/{workspace}/instances/{id} (the `TerminateInstance` operationId) request.
+//
+// Returns a wrapper object for the known response body format(s).
+func (c *ClientWithResponses) TerminateInstanceWithResponse(ctx context.Context, workspace Workspace, id ResourceID, reqEditors ...RequestEditorFn) (*TerminateInstanceResponse, error) {
+	rsp, err := c.TerminateInstance(ctx, workspace, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseTerminateInstanceResponse(rsp)
+}
+
+// GetInstanceWithResponse performs a GET /v1/workspaces/{workspace}/instances/{id} (the `GetInstance` operationId) request.
+//
+// Returns a wrapper object for the known response body format(s).
+func (c *ClientWithResponses) GetInstanceWithResponse(ctx context.Context, workspace Workspace, id ResourceID, reqEditors ...RequestEditorFn) (*GetInstanceResponse, error) {
+	rsp, err := c.GetInstance(ctx, workspace, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetInstanceResponse(rsp)
+}
+
+// GetInstanceConsoleWithResponse performs a GET /v1/workspaces/{workspace}/instances/{id}/console (the `GetInstanceConsole` operationId) request.
+//
+// Authenticated serial console WebSocket, the explicitly labeled exception to learner traffic entering through nx-edge. This is not SSH. Clients negotiate the nephos.console.v1 subprotocol. The complete message framing, limits, and failure semantics are in api/console-v1.md.
+//
+// Returns a wrapper object for the known response body format(s).
+func (c *ClientWithResponses) GetInstanceConsoleWithResponse(ctx context.Context, workspace Workspace, id ResourceID, reqEditors ...RequestEditorFn) (*GetInstanceConsoleResponse, error) {
+	rsp, err := c.GetInstanceConsole(ctx, workspace, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetInstanceConsoleResponse(rsp)
+}
+
 // ListSubnetsWithResponse performs a GET /v1/workspaces/{workspace}/subnets (the `ListSubnets` operationId) request.
 //
 // Returns a wrapper object for the known response body format(s).
@@ -2165,6 +3060,272 @@ func ParseGetVersionResponse(rsp *http.Response) (*GetVersionResponse, error) {
 			return nil, err
 		}
 		response.JSON401 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListInstancesResponse parses an HTTP response from a ListInstancesWithResponse call
+func ParseListInstancesResponse(rsp *http.Response) (*ListInstancesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListInstancesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest InstancesPage
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseRunInstanceResponse parses an HTTP response from a RunInstanceWithResponse call
+func ParseRunInstanceResponse(rsp *http.Response) (*RunInstanceResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RunInstanceResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest Instance
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseTerminateInstanceResponse parses an HTTP response from a TerminateInstanceWithResponse call
+func ParseTerminateInstanceResponse(rsp *http.Response) (*TerminateInstanceResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &TerminateInstanceResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 202:
+		var dest Instance
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON202 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetInstanceResponse parses an HTTP response from a GetInstanceWithResponse call
+func ParseGetInstanceResponse(rsp *http.Response) (*GetInstanceResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetInstanceResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Instance
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetInstanceConsoleResponse parses an HTTP response from a GetInstanceConsoleWithResponse call
+func ParseGetInstanceConsoleResponse(rsp *http.Response) (*GetInstanceConsoleResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetInstanceConsoleResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 101:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
 
 	}
 
