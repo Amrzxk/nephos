@@ -73,8 +73,10 @@ func (e *Engine) EnsureENI(ctx context.Context, vpc model.VPC, subnet model.Subn
 			if err != nil && !created {
 				return fmt.Errorf("find router ENI %s: %w", name, err)
 			}
-			if !created && (router.Type() != "veth" || router.Attrs().Alias != alias) {
-				return fmt.Errorf("refusing foreign or mismatched router link %s", name)
+			if !created {
+				if err := verifyExistingENI(ctx, handle, router, eni, target, fd); err != nil {
+					return fmt.Errorf("verify retained ENI %s: %w", name, err)
+				}
 			}
 			if created {
 				err = netns.WithInstanceHandle(ctx, target, func(peerHandle *netlink.Handle) error {
@@ -105,7 +107,7 @@ func (e *Engine) EnsureENI(ctx context.Context, vpc model.VPC, subnet model.Subn
 					_ = handle.LinkDel(router)
 				}
 			}()
-			if created {
+			if created || router.Attrs().Alias != alias {
 				// This kernel does not retain IFLA_IFALIAS from RTM_NEWLINK.
 				// Set and verify the marker explicitly before any policy uses it.
 				if err := handle.LinkSetAlias(router, alias); err != nil {
@@ -143,7 +145,11 @@ func (e *Engine) EnsureENI(ctx context.Context, vpc model.VPC, subnet model.Subn
 				if peer.Type() != "veth" || peer.Attrs().ParentIndex != router.Attrs().Index || router.Attrs().ParentIndex != peer.Attrs().Index {
 					return fmt.Errorf("refusing unrelated instance link")
 				}
-				if peer.Attrs().Alias != alias && (!created || peer.Attrs().Alias != "") {
+				if !created {
+					if err := verifyENIOwner(peer.Attrs().Alias, eni); err != nil {
+						return err
+					}
+				} else if peer.Attrs().Alias != alias && peer.Attrs().Alias != "" {
 					return fmt.Errorf("refusing foreign instance ENI")
 				}
 				if err := peerHandle.LinkSetDown(peer); err != nil {

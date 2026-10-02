@@ -16,7 +16,7 @@ func sameInstanceDecision(current, snapshot model.Instance) bool {
 		current.Generation == snapshot.Generation && current.DeletionRequested == snapshot.DeletionRequested &&
 		current.SubnetID == snapshot.SubnetID && current.ShortIndex == snapshot.ShortIndex &&
 		current.RuntimeID == snapshot.RuntimeID && current.ENI.ID == snapshot.ENI.ID &&
-		current.ENI.ShortIndex == snapshot.ENI.ShortIndex && current.ENI.PrivateIP == snapshot.ENI.PrivateIP
+		current.ENI.ShortIndex == snapshot.ENI.ShortIndex && current.ENI.PrivateIP == snapshot.ENI.PrivateIP && current.ENI.MACAddress == snapshot.ENI.MACAddress
 }
 
 // RetainTerminatingRuntimeID makes a create/terminate race recoverable if
@@ -55,15 +55,19 @@ func (s *Store) RecordInstance(ctx context.Context, snapshot model.Instance, sta
 			return ErrStaleSnapshot
 		}
 		generation := current.ObservedGeneration
+		provisioned := int64(0)
+		if current.Provisioned || observed {
+			provisioned = 1
+		}
 		if observed {
 			generation = current.Generation
 		}
-		if current.State == status && current.StateReason == reason && current.ObservedGeneration == generation {
+		if current.State == status && current.StateReason == reason && current.ObservedGeneration == generation && current.Provisioned == (provisioned != 0) {
 			return nil
 		}
 		now := time.Now().UTC().Unix()
 		if err := tx.q.UpdateInstanceStatus(ctx, sqlc.UpdateInstanceStatusParams{State: string(status), StateReason: reason,
-			ObservedGeneration: generation, UpdatedAt: now, ID: current.ID, WorkspaceID: current.WorkspaceID}); err != nil {
+			ObservedGeneration: generation, UpdatedAt: now, Provisioned: provisioned, ID: current.ID, WorkspaceID: current.WorkspaceID}); err != nil {
 			return fmt.Errorf("record instance %s status: %w", current.ID, err)
 		}
 		if !current.DeletionRequested {

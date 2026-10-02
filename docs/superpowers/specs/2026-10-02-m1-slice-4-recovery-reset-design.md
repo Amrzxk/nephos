@@ -78,8 +78,9 @@ runtime ID also requires discovery before creation. Missing pre-running
 scratch containers may be retried, but existing roots are always reused.
 
 At whole-appliance startup, mount private fresh tmpfs at the existing
-configured runroot `/var/lib/nephos/runroot` and rootful libpod temporary
-directory `/run/libpod` before the first Podman command. Preserve graphroot
+configured runroot `/var/lib/nephos/runroot`, rootful libpod temporary
+directory `/run/libpod`, and crun state directory `/run/crun` before the first
+Podman command. Preserve graphroot
 `/var/lib/nephos/containers`, the container database, images, user namespace
 allocations, and writable layers. Validate the built Podman configuration
 against those paths; do not casually change paths recorded in its database.
@@ -87,12 +88,23 @@ Never refresh these mounts on a daemon-only restart while nested containers
 can still be alive. Continue the existing fail-closed whole-appliance policy;
 do not introduce transparent daemon respawn.
 
+The `/run/crun` refinement follows a controlled 4A restart failure on Podman
+5.4.2/crun 1.21: stale status survived in Docker's writable layer, and Start
+failed with `container ... already exists` despite inspected `Running:false`.
+Refreshing only that ephemeral directory started the same full container ID
+with its root-file marker intact. This changes no durable path, capability,
+or accepted platform assumption.
+
 The running fast path must inspect the expected instance, pin and validate
 its live PID/user/network namespace identity, and observe/repair its ENI.
 Retain instance ID, ENI ID, IP, MAC, and short index; the new namespace inode
 may legitimately differ after appliance restart. An old-inode ENI may be
 replaced only after strict ownership and obsolete-attachment proof. Foreign
 or ambiguous links must cause failure, not adoption or deletion.
+For 4A, an obsolete inode marker on a reciprocal owned pair can be rebound
+only after proving its actual attachment to the currently pinned instance
+namespace. A pair actually attached elsewhere is refused, not destroyed;
+broader owned-orphan collection remains 4B.
 
 ## 3. Shutdown, sessions, and lifetime accounting
 

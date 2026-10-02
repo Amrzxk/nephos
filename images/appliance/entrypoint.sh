@@ -26,7 +26,7 @@ case "$memory_max" in
 esac
 [ "$memory_max" -ge 3221225472 ] || fail "at least 3 GiB of appliance memory is required"
 
-mkdir -p /var/lib/nephos/containers /var/lib/nephos/runroot /run/nephos /run/netns
+mkdir -p /var/lib/nephos/containers /var/lib/nephos/runroot /run/libpod /run/crun /run/nephos /run/netns
 available_kb=$(df -Pk /var/lib/nephos | awk 'NR == 2 {print $4}')
 [ -n "$available_kb" ] && [ "$available_kb" -ge 2097152 ] || fail "at least 2 GiB free in nephos-data is required"
 
@@ -43,6 +43,30 @@ mount -t tmpfs -o mode=0700,nosuid,nodev,noexec tmpfs /run/nephos \
     || fail "could not initialize private ephemeral hook directory"
 mount --make-private /run/nephos \
     || fail "could not make hook directory private"
+
+# Podman's persistent database/roots stay at the same graphroot. Only its
+# ephemeral runroot, libpod tmpdir, and crun state are fresh on whole-appliance
+# startup. Stale crun status files otherwise reject starting retained IDs.
+# Never run this entrypoint as a daemon-only restart with live instances.
+mount -t tmpfs -o mode=0700,nosuid,nodev,noexec tmpfs /var/lib/nephos/runroot \
+    || fail "could not initialize ephemeral Podman runroot"
+mount --make-private /var/lib/nephos/runroot \
+    || fail "could not make Podman runroot private"
+mount -t tmpfs -o mode=0700,nosuid,nodev,noexec tmpfs /run/libpod \
+    || fail "could not initialize ephemeral libpod temporary directory"
+mount --make-private /run/libpod \
+    || fail "could not make libpod temporary directory private"
+mount -t tmpfs -o mode=0700,nosuid,nodev,noexec tmpfs /run/crun \
+    || fail "could not initialize ephemeral crun state directory"
+mount --make-private /run/crun \
+    || fail "could not make crun state directory private"
+
+# The configured temp directory is explicitly pinned to Podman's validated
+# rootful default in containers.conf; refuse changed persisted storage paths.
+runtime_paths=$(podman info --format '{{.Store.RunRoot}} {{.Store.GraphRoot}}') \
+    || fail "could not validate Podman storage configuration"
+[ "$runtime_paths" = '/var/lib/nephos/runroot /var/lib/nephos/containers' ] \
+    || fail "Podman storage paths differ from the retained-root configuration"
 
 # Functional probes run only inside the appliance's own namespace. No module
 # is explicitly loaded and no host network or firewall object is changed.

@@ -17,6 +17,7 @@ import (
 // InstanceNetwork checks committed prerequisites and removes one owned ENI.
 type InstanceNetwork interface {
 	Ready(context.Context, model.Instance) (bool, error)
+	EnsureRunning(context.Context, model.Instance, compute.Reference, compute.Status) error
 	DeleteENI(context.Context, model.VPC, model.ENI) error
 }
 
@@ -177,25 +178,12 @@ func (c *InstanceController) reconcileLocked(ctx context.Context, id string) err
 	if !ready {
 		return nil // the next hint or durable resync checks prerequisites again
 	}
-	if instance.State == model.InstanceRunning && instance.ObservedGeneration == instance.Generation && instance.RuntimeID != "" {
-		status, err := c.runtime.Inspect(ctx, runtimeReference(instance))
-		if err == nil && status.Running {
-			c.clearRetry(id)
-			return nil
-		}
-		if err != nil {
-			return c.fail(ctx, instance, err)
-		}
-	}
-	if err := c.runtime.EnsureImage(ctx, "nephos-ubuntu:dev"); err != nil {
-		return c.fail(ctx, instance, err)
-	}
-	created, err := c.runtime.Create(ctx, instance)
+	created, err := c.lookupOrCreate(ctx, instance)
 	if err != nil {
 		return c.fail(ctx, instance, err)
 	}
 	ref := created.Reference
-	if err := c.store.RecordRuntimeID(ctx, instance.ID, instance.Generation, string(ref.ID)); err != nil {
+	if err := c.store.RebindRuntimeID(ctx, instance.ID, instance.Generation, instance.RuntimeID, string(ref.ID)); err != nil {
 		return c.createdDuringStateChange(ctx, instance, created, err)
 	}
 	// Read the committed runtime ID and desired generation again before Start;
@@ -204,19 +192,30 @@ func (c *InstanceController) reconcileLocked(ctx context.Context, id string) err
 	if err != nil {
 		return fmt.Errorf("reload instance %s after create: %w", id, err)
 	}
-	if instance.DeletionRequested {
+	if instance.DeletionRequested || instance.RuntimeID != string(ref.ID) {
 		c.Enqueue(id)
 		return nil
-	}
-	if err := c.runtime.Start(ctx, ref); err != nil {
-		return c.fail(ctx, instance, err)
 	}
 	status, err := c.runtime.Inspect(ctx, ref)
 	if err != nil {
 		return c.fail(ctx, instance, err)
 	}
 	if !status.Running {
-		return c.fail(ctx, instance, fmt.Errorf("runtime did not report a running instance after start"))
+		if err := c.runtime.Start(ctx, ref); err != nil {
+			return c.fail(ctx, instance, err)
+		}
+		status, err = c.runtime.Inspect(ctx, ref)
+		if err != nil {
+			return c.fail(ctx, instance, err)
+		}
+		if !status.Running {
+			return c.fail(ctx, instance, fmt.Errorf("runtime did not report a running instance after start"))
+		}
+	}
+	// A running process is not proof of a converged ENI. Pin its observed
+	// namespace and repair the route/policy even on the old running fast path.
+	if err := c.network.EnsureRunning(ctx, instance, ref, status); err != nil {
+		return c.fail(ctx, instance, err)
 	}
 	if err := c.store.RecordInstance(ctx, instance, model.InstanceRunning, "", true); err != nil {
 		if errors.Is(err, store.ErrStaleSnapshot) {
@@ -267,10 +266,15 @@ func (c *InstanceController) createdDuringStateChange(ctx context.Context, insta
 }
 
 func (c *InstanceController) terminate(ctx context.Context, instance model.Instance) error {
-	if instance.RuntimeID != "" {
-		if err := c.runtime.Delete(ctx, runtimeReference(instance)); err != nil {
+	// Even NULL or stale caches may have a retained container. Resolve only
+	// the expected identity; never follow the cache into another managed root.
+	ref, err := c.runtime.Lookup(ctx, runtimeReference(instance).Identity)
+	if err == nil {
+		if err := c.runtime.Delete(ctx, ref); err != nil {
 			return c.fail(ctx, instance, err)
 		}
+	} else if !errors.Is(err, compute.ErrNotFound) {
+		return c.fail(ctx, instance, err)
 	}
 	subnet, err := c.store.GetSubnet(ctx, instance.WorkspaceID, instance.SubnetID)
 	if err != nil {

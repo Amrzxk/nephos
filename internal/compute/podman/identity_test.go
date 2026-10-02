@@ -90,20 +90,21 @@ func TestRuntimeExpectedIdentity(t *testing.T) {
 				case "exec":
 					_, err = c.Exec(ctx, ref, compute.ExecRequest{Command: []string{"/bin/true"}})
 				}
-				if tc.reject {
+				switch {
+				case tc.reject:
 					if err == nil || mutations.Load() != 0 {
 						t.Fatalf("operation for expected instance %s accepted mismatched identity: err=%v mutations=%d", testID, err, mutations.Load())
 					}
 					if status != (compute.Status{}) {
 						t.Fatalf("unverified state escaped: %+v", status)
 					}
-				} else if method == "exec" {
+				case method == "exec":
 					if err == nil || !strings.Contains(err.Error(), "validated-exec") || mutations.Load() != 1 {
 						t.Fatalf("exact exec: %v mutations=%d", err, mutations.Load())
 					}
-				} else if err != nil {
+				case err != nil:
 					t.Fatal(err)
-				} else if method == "inspect" && status != (compute.Status{Running: true, PID: 714}) {
+				case method == "inspect" && status != (compute.Status{Running: true, PID: 714}):
 					t.Fatalf("lost verified runtime status: %+v", status)
 				}
 			})

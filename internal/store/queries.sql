@@ -127,8 +127,14 @@ UPDATE instances SET runtime_id = ?
 WHERE id = ? AND deletion_requested = 1 AND runtime_id IS NULL;
 
 -- name: UpdateInstanceStatus :exec
-UPDATE instances SET state = ?, state_reason = ?, observed_generation = ?, updated_at = ?
+UPDATE instances SET state = ?, state_reason = ?, observed_generation = ?, updated_at = ?, provisioned = ?
 WHERE id = ? AND workspace_id = ?;
+
+-- name: RebindRuntimeID :execrows
+UPDATE instances SET runtime_id = sqlc.arg(new_runtime_id)
+WHERE id = sqlc.arg(instance_id) AND generation = sqlc.arg(generation)
+    AND deletion_requested = 0
+    AND COALESCE(runtime_id, '') = sqlc.arg(old_runtime_id);
 
 -- name: UpdateInstanceENIStatus :exec
 UPDATE enis SET state = ?, state_reason = ?, observed_generation = ?, updated_at = ?
