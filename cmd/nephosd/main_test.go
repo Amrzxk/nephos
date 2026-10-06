@@ -65,7 +65,10 @@ func (r *blockingInstanceRuntime) Create(ctx context.Context, instance model.Ins
 		return compute.CreateResult{}, ctx.Err()
 	}
 }
-func (r *blockingInstanceRuntime) Start(context.Context, compute.Reference) error  { return nil }
+func (r *blockingInstanceRuntime) Start(context.Context, compute.Reference) error { return nil }
+func (r *blockingInstanceRuntime) Stop(context.Context, compute.Reference, time.Duration) error {
+	return nil
+}
 func (r *blockingInstanceRuntime) Delete(context.Context, compute.Reference) error { return nil }
 func (r *blockingInstanceRuntime) Inspect(context.Context, compute.Reference) (compute.Status, error) {
 	return compute.Status{Running: true}, nil

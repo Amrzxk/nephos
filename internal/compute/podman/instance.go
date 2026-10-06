@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"strconv"
+	"time"
 
 	"github.com/Amrzxk/nephos/internal/compute"
 	"github.com/Amrzxk/nephos/internal/model"
@@ -123,11 +125,11 @@ func (c *Client) Create(ctx context.Context, instance model.Instance) (compute.C
 		return compute.CreateResult{}, err
 	}
 	if !runtimeIDPattern.MatchString(response.ID) {
-		return compute.CreateResult{}, fmt.Errorf("podman returned an invalid container ID")
+		return compute.CreateResult{}, fmt.Errorf("podman returned an invalid container ID: %w", compute.ErrUncertainEffect)
 	}
 	ref := compute.Reference{Identity: identity, ID: compute.RuntimeID(response.ID)}
 	if _, err := c.inspectOwned(ctx, ref); err != nil {
-		return compute.CreateResult{}, fmt.Errorf("verify created container: %w", err)
+		return compute.CreateResult{}, fmt.Errorf("verify created container: %w", errors.Join(err, compute.ErrUncertainEffect))
 	}
 	return compute.CreateResult{Reference: ref, Created: true}, nil
 }
@@ -156,6 +158,26 @@ func (c *Client) Start(ctx context.Context, ref compute.Reference) error {
 		return err
 	}
 	return c.request(ctx, http.MethodPost, "/containers/"+string(ref.ID)+"/start", nil, nil)
+}
+
+// Stop gracefully stops one verified instance without deleting its root.
+// The caller's shared shutdown deadline bounds this operation across instances.
+func (c *Client) Stop(ctx context.Context, ref compute.Reference, timeout time.Duration) error {
+	if timeout <= 0 {
+		return fmt.Errorf("instance stop requires a positive timeout")
+	}
+	doc, err := c.inspectOwned(ctx, ref)
+	if err != nil {
+		return err
+	}
+	if !doc.State.Running {
+		return nil
+	}
+	seconds := int64(timeout / time.Second)
+	if timeout%time.Second != 0 {
+		seconds++
+	}
+	return c.request(ctx, http.MethodPost, "/containers/"+string(ref.ID)+"/stop?t="+strconv.FormatInt(seconds, 10), nil, nil)
 }
 
 // Delete removes only a verified Nephos-owned instance container.

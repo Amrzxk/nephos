@@ -96,9 +96,11 @@ cleanup() {
     trap - 0 INT TERM
     [ -z "$guard_pid" ] || kill "$guard_pid" 2>/dev/null || true
     [ -z "$daemon_pid" ] || kill "$daemon_pid" 2>/dev/null || true
-    kill "$podman_pid" 2>/dev/null || true
     [ -z "$guard_pid" ] || wait "$guard_pid" 2>/dev/null || true
+    # nephosd cancels/joins execs and stops retained instances while the
+    # private Podman API is still alive. Never terminate both concurrently.
     [ -z "$daemon_pid" ] || wait "$daemon_pid" 2>/dev/null || true
+    kill "$podman_pid" 2>/dev/null || true
     wait "$podman_pid" 2>/dev/null || true
 }
 trap cleanup 0

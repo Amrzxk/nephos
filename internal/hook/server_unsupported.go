@@ -13,7 +13,7 @@ import (
 
 type ENIPlumber interface{}
 
-func NewHandler(*store.Store, ENIPlumber) http.Handler {
+func NewHandler(*store.Store, ENIPlumber, ...Admission) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { http.Error(w, "hook requires Linux", 503) })
 }
 func Listen(context.Context, string) (net.Listener, error) {

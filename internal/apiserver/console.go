@@ -54,6 +54,26 @@ func (s *server) GetInstanceConsole(w http.ResponseWriter, r *http.Request, work
 		writeAPIError(w, http.StatusBadRequest, "InvalidParameterValue", "nephos.console.v1 subprotocol is required", id)
 		return
 	}
+	if s.admitConsole != nil {
+		admitted, release, err := s.admitConsole(r.Context(), instance)
+		if err != nil {
+			writeAPIError(w, http.StatusServiceUnavailable, "ServiceUnavailable", err.Error(), id)
+			return
+		}
+		r = r.WithContext(admitted)
+		defer func() {
+			if err := release(); err != nil && s.references != nil {
+				s.references.ReportError(instance.WorkspaceID, err)
+			}
+		}()
+	}
+	ctx, stop := context.WithCancel(r.Context())
+	defer stop()
+	r = r.WithContext(ctx)
+	if s.references != nil {
+		release := s.references.Track(instance.WorkspaceID, "console", instance.ID, stop)
+		defer release()
+	}
 	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{Subprotocols: []string{console.Subprotocol}})
 	if err != nil {
 		return // Accept wrote the handshake error.
@@ -95,12 +115,20 @@ func (s *server) GetInstanceConsole(w http.ResponseWriter, r *http.Request, work
 		writeConsoleError(r.Context(), conn, err)
 		return
 	}
-	if err := bridgeConsole(r.Context(), conn, session, start.TTY); err != nil {
+	if err := bridgeConsole(r.Context(), conn, session, start.TTY, func(err error) {
+		if s.references != nil {
+			s.references.ReportError(instance.WorkspaceID, err)
+		}
+	}); err != nil {
 		return // The bridge reports the error before canceling its reader.
 	}
 }
 
 func writeConsoleError(ctx context.Context, conn *websocket.Conn, err error) {
+	if ctx.Err() != nil {
+		_ = conn.CloseNow()
+		return
+	}
 	message := err.Error()
 	if len(message) > 2048 {
 		message = message[:2048]
@@ -208,7 +236,7 @@ func writeConsoleMessage(ctx context.Context, conn *websocket.Conn, kind websock
 	return nil
 }
 
-func bridgeConsole(parent context.Context, conn *websocket.Conn, session compute.ExecSession, tty bool) (result error) {
+func bridgeConsole(parent context.Context, conn *websocket.Conn, session compute.ExecSession, tty bool, cleanupError ...func(error)) (result error) {
 	ctx, cancel := context.WithCancel(parent)
 	events := make(chan consoleEvent, 8)
 	inputDone := make(chan error, 1)
@@ -251,7 +279,13 @@ func bridgeConsole(parent context.Context, conn *websocket.Conn, session compute
 			writeConsoleError(parent, conn, result)
 		}
 		cancel()
-		_ = session.Close()
+		if err := session.Close(); err != nil {
+			wrapped := fmt.Errorf("close console exec: %w", err)
+			result = errors.Join(result, wrapped)
+			for _, report := range cleanupError {
+				report(wrapped)
+			}
+		}
 		workers.Wait()
 	}()
 	for {

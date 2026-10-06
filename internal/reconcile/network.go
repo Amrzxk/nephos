@@ -14,6 +14,14 @@ import (
 // persisted VPC. Individual engine failures are recorded and retried, not
 // returned as startup-fatal errors.
 func (c *Controller) Sweep(ctx context.Context) error {
+	ctx, done, admitted, err := enterEffect(ctx, c.gate)
+	if err != nil {
+		return err
+	}
+	if !admitted {
+		return nil
+	}
+	defer done()
 	c.workMu.Lock()
 	defer c.workMu.Unlock()
 	vpcs := make([]model.VPC, 0)

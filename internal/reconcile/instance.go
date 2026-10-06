@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Amrzxk/nephos/internal/compute"
+	"github.com/Amrzxk/nephos/internal/lifecycle"
 	"github.com/Amrzxk/nephos/internal/model"
 	"github.com/Amrzxk/nephos/internal/store"
 )
@@ -23,6 +24,7 @@ type InstanceNetwork interface {
 
 // InstanceController converges SQLite instance intent into local runtime state.
 type InstanceController struct {
+	gate     *lifecycle.Gate
 	store    *store.Store
 	network  InstanceNetwork
 	runtime  compute.Runtime
@@ -35,12 +37,16 @@ type InstanceController struct {
 }
 
 // NewInstances creates a bounded controller; the daemon calls Sweep at startup.
-func NewInstances(s *store.Store, network InstanceNetwork, runtime compute.Runtime, interval time.Duration) *InstanceController {
+func NewInstances(s *store.Store, network InstanceNetwork, runtime compute.Runtime, interval time.Duration, gates ...*lifecycle.Gate) *InstanceController {
 	if interval <= 0 {
 		interval = defaultInterval
 	}
-	return &InstanceController{store: s, network: network, runtime: runtime, interval: interval,
+	c := &InstanceController{store: s, network: network, runtime: runtime, interval: interval,
 		pending: make(map[string]struct{}), retries: make(map[string]retryEntry), wake: make(chan struct{}, 1)}
+	if len(gates) > 0 {
+		c.gate = gates[0]
+	}
+	return c
 }
 
 // Enqueue accelerates convergence without making the queue authoritative.
@@ -135,6 +141,14 @@ func (c *InstanceController) Run(ctx context.Context) error {
 
 // Sweep repairs dropped hints and converges every committed instance.
 func (c *InstanceController) Sweep(ctx context.Context) error {
+	ctx, done, admitted, err := enterEffect(ctx, c.gate)
+	if err != nil {
+		return err
+	}
+	if !admitted {
+		return nil
+	}
+	defer done()
 	c.workMu.Lock()
 	defer c.workMu.Unlock()
 	after := ""
@@ -160,6 +174,15 @@ func (c *InstanceController) reconcile(ctx context.Context, id string) error {
 	return c.reconcileLocked(ctx, id)
 }
 func (c *InstanceController) reconcileLocked(ctx context.Context, id string) error {
+	ctx, done, admitted, err := enterEffect(ctx, c.gate)
+	if err != nil {
+		return err
+	}
+	if !admitted {
+		c.retry(id)
+		return nil
+	}
+	defer done()
 	instance, err := c.store.GetInstance(ctx, "default", id)
 	if errors.Is(err, sql.ErrNoRows) {
 		c.clearRetry(id)

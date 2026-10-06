@@ -111,6 +111,9 @@ func (r *instanceTestRuntime) Inspect(_ context.Context, ref compute.Reference) 
 	defer r.mu.Unlock()
 	return compute.Status{Running: r.running[ref.ID]}, nil
 }
+func (r *instanceTestRuntime) Stop(context.Context, compute.Reference, time.Duration) error {
+	return nil
+}
 func (r *instanceTestRuntime) Exec(context.Context, compute.Reference, compute.ExecRequest) (compute.ExecSession, error) {
 	return nil, errors.New("not used by reconciler")
 }

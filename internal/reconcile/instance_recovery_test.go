@@ -93,6 +93,7 @@ func (r *recoveryRuntime) Delete(_ context.Context, ref compute.Reference) error
 	delete(r.roots, ref.ID)
 	return nil
 }
+func (r *recoveryRuntime) Stop(context.Context, compute.Reference, time.Duration) error { return nil }
 func (r *recoveryRuntime) Exec(context.Context, compute.Reference, compute.ExecRequest) (compute.ExecSession, error) {
 	return nil, errors.New("unused recovery console")
 }

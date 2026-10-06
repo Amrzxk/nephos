@@ -32,6 +32,28 @@ func TestAppliancePrivatePodmanService(t *testing.T) {
 	}
 }
 
+func TestApplianceWaitsDaemonBeforeStoppingRuntime(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "images", "appliance", "entrypoint.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	start := strings.Index(text, "cleanup() {")
+	if start < 0 {
+		t.Fatal("supervisor cleanup missing")
+	}
+	end := strings.Index(text[start:], "\n}\n")
+	if end < 0 {
+		t.Fatal("supervisor cleanup missing")
+	}
+	cleanup := text[start : start+end]
+	daemonWait := strings.Index(cleanup, `wait "$daemon_pid"`)
+	runtimeStop := strings.Index(cleanup, `kill "$podman_pid"`)
+	if daemonWait < 0 || runtimeStop < 0 || daemonWait > runtimeStop {
+		t.Fatal("Podman stopped before daemon joined nested stop")
+	}
+}
+
 func TestApplianceFreshRuntimePreservesGraphroot(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join("..", "images", "appliance", "entrypoint.sh"))
 	if err != nil {

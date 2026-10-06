@@ -24,6 +24,7 @@ import (
 	"github.com/Amrzxk/nephos/internal/compute/podman"
 	"github.com/Amrzxk/nephos/internal/credentials"
 	"github.com/Amrzxk/nephos/internal/hook"
+	"github.com/Amrzxk/nephos/internal/lifecycle"
 	"github.com/Amrzxk/nephos/internal/model"
 	"github.com/Amrzxk/nephos/internal/network/topology"
 	"github.com/Amrzxk/nephos/internal/reconcile"
@@ -81,7 +82,13 @@ type networkEngine interface {
 	DeleteENI(context.Context, model.VPC, model.ENI) error
 }
 
-func serve(ctx context.Context, ln net.Listener, tokenPath, dbPath, hookPath string, build version.Info, network networkEngine, runtime compute.Runtime) error {
+type daemonOptions struct{ shutdownBudget time.Duration }
+
+func serve(ctx context.Context, ln net.Listener, tokenPath, dbPath, hookPath string, build version.Info, network networkEngine, runtime compute.Runtime, options ...daemonOptions) (result error) {
+	budget := daemonShutdownBudget
+	if len(options) > 0 && options[0].shutdownBudget > 0 {
+		budget = options[0].shutdownBudget
+	}
 	token, err := credentials.LoadOrCreate(tokenPath)
 	if err != nil {
 		return fmt.Errorf("loading API token: %w", err)
@@ -90,90 +97,97 @@ func serve(ctx context.Context, ln net.Listener, tokenPath, dbPath, hookPath str
 	if err != nil {
 		return fmt.Errorf("opening appliance state: %w", err)
 	}
-	defer s.Close()
+	canCloseStore := true
+	defer func() {
+		if canCloseStore {
+			result = errors.Join(result, s.Close())
+		} else {
+			slog.Error("store retained until process exit because owners did not fully join")
+		}
+	}()
+	lifetime, stop := context.WithCancel(ctx)
+	defer stop()
+	gate := lifecycle.NewGate()
+	refs := lifecycle.NewRegistry()
+	mutationFailure := make(chan error, 1)
+	starts := newOwnedRuntime(runtime, gate, mutationFailure)
 	hookListener, err := hook.Listen(ctx, hookPath)
 	if err != nil {
 		return fmt.Errorf("open private hook listener: %w", err)
 	}
 	defer hookListener.Close()
-	hookServer := &http.Server{Handler: hook.NewHandler(s, network), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 10 * time.Second, BaseContext: func(net.Listener) context.Context { return ctx }}
+	hookServer := &http.Server{Handler: hook.NewHandler(s, network, starts.admitHook), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 10 * time.Second, BaseContext: func(net.Listener) context.Context { return lifetime }}
 	hookDone := make(chan error, 1)
 	go func() { hookDone <- hookServer.Serve(hookListener) }()
-	controller := reconcile.New(s, network, 60*time.Second)
-	instances := reconcile.NewInstances(s, instanceNetwork{store: s, engine: network}, runtime, 60*time.Second)
+	controller := reconcile.New(s, network, 60*time.Second, gate)
+	instances := reconcile.NewInstances(s, instanceNetwork{store: s, engine: network}, starts, 60*time.Second, gate)
 	resources := service.NewNetwork(s, controller.Enqueue, nil)
 	instanceService := service.NewInstances(s, instances.Enqueue, nil)
 	var ready atomic.Bool
-	h := apiserver.New(token, build, ready.Load, resources, instanceService, s, runtime)
-	srv := &http.Server{Handler: h, ReadHeaderTimeout: 5 * time.Second}
+	h := apiserver.New(token, build, func() bool { return ready.Load() && !starts.failed.Load() }, resources, instanceService, s, starts, apiserver.WithConsoleLifecycle(consoleAdmission(gate), refs))
+	srv := &http.Server{Handler: h, ReadHeaderTimeout: 5 * time.Second, BaseContext: func(net.Listener) context.Context { return lifetime }}
 	serverDone := make(chan error, 1)
 	go func() { serverDone <- srv.Serve(ln) }()
-	shutdown := func() {
-		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-		defer cancel()
-		_ = srv.Shutdown(shutdownCtx)
-		_ = hookServer.Shutdown(shutdownCtx)
-	}
-	if err := controller.Sweep(ctx); err != nil {
-		shutdown()
-		<-serverDone
-		<-hookDone
-		return fmt.Errorf("initial VPC reconcile sweep: %w", err)
-	}
-	if err := instances.Sweep(ctx); err != nil {
-		shutdown()
-		<-serverDone
-		<-hookDone
-		return fmt.Errorf("initial instance reconcile sweep: %w", err)
-	}
-	ready.Store(true)
-	runCtx, stop := context.WithCancel(ctx)
-	defer stop()
+	networkReady := make(chan struct{})
 	controllerDone := make(chan error, 1)
-	go func() { controllerDone <- controller.Run(runCtx) }()
+	go func() {
+		if err := controller.Sweep(lifetime); err != nil {
+			controllerDone <- fmt.Errorf("initial VPC reconcile sweep: %w", err)
+			return
+		}
+		close(networkReady)
+		controllerDone <- controller.Run(lifetime)
+	}()
 	instanceDone := make(chan error, 1)
-	go func() { instanceDone <- instances.Run(runCtx) }()
-	var serveErr, controllerErr, instanceErr, hookErr error
-	serverExited, controllerExited, instanceExited, hookExited := false, false, false, false
+	go func() {
+		select {
+		case <-networkReady:
+		case <-lifetime.Done():
+			instanceDone <- lifetime.Err()
+			return
+		}
+		if err := instances.Sweep(lifetime); err != nil {
+			instanceDone <- fmt.Errorf("initial instance reconcile sweep: %w", err)
+			return
+		}
+		if lifetime.Err() == nil {
+			ready.Store(true)
+		}
+		instanceDone <- instances.Run(lifetime)
+	}()
+	workers := []*daemonWorker{{name: "serving the API", done: serverDone}, {name: "serve private hook", done: hookDone},
+		{name: "running VPC reconciler", done: controllerDone}, {name: "running instance reconciler", done: instanceDone}}
+	canCloseStore = false
+	var exited *daemonWorker
+	var failure error
 	select {
 	case <-ctx.Done():
-	case serveErr = <-serverDone:
-		serverExited = true
-	case controllerErr = <-controllerDone:
-		controllerExited = true
-	case instanceErr = <-instanceDone:
-		instanceExited = true
-	case hookErr = <-hookDone:
-		hookExited = true
+	case err := <-mutationFailure:
+		failure = fmt.Errorf("runtime lifecycle failure: %w", err)
+	case err := <-serverDone:
+		exited = workers[0]
+		exited.result = err
+	case err := <-hookDone:
+		exited = workers[1]
+		exited.result = err
+	case err := <-controllerDone:
+		exited = workers[2]
+		exited.result = err
+	case err := <-instanceDone:
+		exited = workers[3]
+		exited.result = err
+	}
+	if exited != nil {
+		exited.joined = true
+		if ctx.Err() == nil && (exited.result == nil || errors.Is(exited.result, http.ErrServerClosed) || errors.Is(exited.result, context.Canceled)) {
+			exited.result = fmt.Errorf("unexpected worker exit without daemon cancellation")
+		}
 	}
 	ready.Store(false)
+	gate.Seal("default")
 	stop()
-	shutdown()
-	if !serverExited {
-		serveErr = <-serverDone
-	}
-	if !controllerExited {
-		controllerErr = <-controllerDone
-	}
-	if !instanceExited {
-		instanceErr = <-instanceDone
-	}
-	if !hookExited {
-		hookErr = <-hookDone
-	}
-	if hookErr != nil && !errors.Is(hookErr, http.ErrServerClosed) {
-		return fmt.Errorf("serve private hook: %w", hookErr)
-	}
-	if serveErr != nil && !errors.Is(serveErr, http.ErrServerClosed) {
-		return fmt.Errorf("serving the API: %w", serveErr)
-	}
-	if controllerErr != nil && !errors.Is(controllerErr, context.Canceled) {
-		return fmt.Errorf("running VPC reconciler: %w", controllerErr)
-	}
-	if instanceErr != nil && !errors.Is(instanceErr, context.Canceled) {
-		return fmt.Errorf("running instance reconciler: %w", instanceErr)
-	}
-	return nil
+	canCloseStore, result = shutdownDaemon(ctx, gate, refs, s, runtime, []*http.Server{srv, hookServer}, workers, budget)
+	return errors.Join(failure, result)
 }
 
 // newLogger builds the structured JSON logger every Nephos component uses.

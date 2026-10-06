@@ -14,6 +14,7 @@ import (
 
 	"golang.org/x/sys/unix"
 
+	"github.com/Amrzxk/nephos/internal/compute"
 	"github.com/Amrzxk/nephos/internal/model"
 	"github.com/Amrzxk/nephos/internal/network/netns"
 	"github.com/Amrzxk/nephos/internal/store"
@@ -25,7 +26,7 @@ type ENIPlumber interface {
 }
 
 // NewHandler serves only the private, identity-checked plumbing operation.
-func NewHandler(s *store.Store, network ENIPlumber) http.Handler {
+func NewHandler(s *store.Store, network ENIPlumber, admission ...Admission) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /plumb", func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 9*time.Second)
@@ -81,6 +82,19 @@ func NewHandler(s *store.Store, network ENIPlumber) http.Handler {
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusForbidden)
 			return
+		}
+		// Ownership checks above precede resolving any pending Start lease. A
+		// hook-provided label/token can never grant admission on its own.
+		var release func() error
+		if len(admission) > 0 {
+			ref := compute.Reference{Identity: compute.Identity{WorkspaceID: instance.WorkspaceID, InstanceID: instance.ID}, ID: compute.RuntimeID(request.ContainerID)}
+			release, err = admission[0](ctx, ref)
+			if err != nil {
+				_ = target.Close()
+				http.Error(w, err.Error(), http.StatusConflict)
+				return
+			}
+			defer func() { _ = release() }()
 		}
 		defer func() { _ = target.Close() }()
 		if err := network.EnsureENI(ctx, vpc, subnet, instance.ENI, target); err != nil {

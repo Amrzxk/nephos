@@ -66,7 +66,7 @@ func (p *observedPlumber) EnsureENI(ctx context.Context, vpc model.VPC, subnet m
 	p.beforePID1.Store(true) // createRuntime has not returned to the OCI runtime.
 	return nil
 }
-func hookWorld(t *testing.T, forceError bool) hookFixture {
+func hookWorld(t *testing.T, forceError bool, admission ...Admission) hookFixture {
 	t.Helper()
 	if os.Getenv("NEPHOS_IN_APPLIANCE") != "1" {
 		t.Skip("requires the isolated privileged test appliance with packaged createRuntime hook")
@@ -110,7 +110,7 @@ func hookWorld(t *testing.T, forceError bool) hookFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	server := &http.Server{Handler: NewHandler(s, plumber), ReadHeaderTimeout: 5 * time.Second}
+	server := &http.Server{Handler: NewHandler(s, plumber, admission...), ReadHeaderTimeout: 5 * time.Second}
 	done := make(chan error, 1)
 	go func() { done <- server.Serve(ln) }()
 	t.Cleanup(func() {

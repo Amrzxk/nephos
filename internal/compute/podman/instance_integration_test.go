@@ -100,7 +100,11 @@ func realCommand(ctx context.Context, t *testing.T, c *Client, id compute.Refere
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer session.Close()
+	defer func() {
+		if err := session.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
 	var out, errout []byte
 	var outErr, errErr error
 	var wg sync.WaitGroup
@@ -192,6 +196,83 @@ func TestPodmanAdapterRealResize(t *testing.T) {
 	}
 	if code, err := session.Wait(ctx); err != nil || code != 7 {
 		t.Fatalf("PTY exit %d %v", code, err)
+	}
+}
+
+func TestPodmanAdapterDelayedOutputExit(t *testing.T) {
+	ctx, c, ref := realInstance(t)
+	session, err := c.Exec(ctx, ref, compute.ExecRequest{Command: []string{"/bin/sh", "-c", "printf 'tail\\000'; printf 'error\\000' >&2; exit 7"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := session.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
+	// Do not consume output until the runtime proves the command exited.
+	// Exit-code retention must not depend on the speed of an output consumer.
+	ticker := time.NewTicker(20 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		var status struct {
+			Running  bool
+			ExitCode int
+		}
+		if err := c.request(ctx, "GET", "/exec/"+session.(*execSession).id+"/json", nil, &status); err != nil {
+			t.Fatal(err)
+		}
+		if !status.Running {
+			if status.ExitCode != 7 {
+				t.Fatalf("premature exit status: %d", status.ExitCode)
+			}
+			break
+		}
+		select {
+		case <-ctx.Done():
+			t.Fatal(ctx.Err())
+		case <-ticker.C:
+		}
+	}
+	out, errout, err := readExec(t, session)
+	if err != nil || string(out) != "tail\x00" || string(errout) != "error\x00" {
+		t.Fatalf("delayed output: %q %q %v", out, errout, err)
+	}
+	if code, err := session.Wait(ctx); err != nil || code != 7 {
+		t.Fatalf("delayed exit: %d %v", code, err)
+	}
+}
+
+func TestPodmanExecCloseIsSessionScoped(t *testing.T) {
+	ctx, c, ref := realInstance(t)
+	var sessions []compute.ExecSession
+	defer func() {
+		for _, session := range sessions {
+			if err := session.Close(); err != nil {
+				t.Error(err)
+			}
+		}
+	}()
+	for range 2 {
+		session, err := c.Exec(ctx, ref, compute.ExecRequest{Command: []string{"/bin/sh", "-c", "printf ready; exec sleep infinity"}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		sessions = append(sessions, session)
+		var ready [5]byte
+		if _, err := io.ReadFull(session.Stdout(), ready[:]); err != nil || string(ready[:]) != "ready" {
+			t.Fatalf("attach: %q %v", ready, err)
+		}
+	}
+	if err := sessions[0].Close(); err != nil {
+		t.Fatal(err)
+	}
+	var second struct{ Running bool }
+	if err := c.request(ctx, "GET", "/exec/"+sessions[1].(*execSession).id+"/json", nil, &second); err != nil || !second.Running {
+		t.Fatalf("closing first session touched second: %+v %v", second, err)
+	}
+	if status, err := c.Inspect(ctx, ref); err != nil || !status.Running {
+		t.Fatalf("closing first session touched root: %+v %v", status, err)
 	}
 }
 

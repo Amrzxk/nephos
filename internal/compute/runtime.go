@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"time"
 
 	"github.com/Amrzxk/nephos/internal/model"
 )
@@ -34,6 +35,14 @@ type CreateResult struct {
 // ErrNotFound means authoritative inspection found no expected container.
 // Inspection failures and ownership collisions must never return this error.
 var ErrNotFound = errors.New("expected runtime container not found")
+
+// ErrUncertainEffect means a submitted mutation has no authoritative reply.
+// Cancellation/transport failure is not evidence that external work stopped.
+var ErrUncertainEffect = errors.New("runtime mutation completion is uncertain")
+
+// ErrInspectionUnavailable means required runtime observations cannot be
+// trusted. It is systemic, unlike authoritative absence/ownership rejection.
+var ErrInspectionUnavailable = errors.New("required runtime inspection is unavailable")
 
 // Status is the observed runtime state, not desired SQLite state.
 type Status struct {
@@ -64,6 +73,7 @@ type Runtime interface {
 	Lookup(ctx context.Context, identity Identity) (Reference, error)
 	Create(ctx context.Context, instance model.Instance) (CreateResult, error)
 	Start(ctx context.Context, ref Reference) error
+	Stop(ctx context.Context, ref Reference, timeout time.Duration) error
 	Delete(ctx context.Context, ref Reference) error
 	Inspect(ctx context.Context, ref Reference) (Status, error)
 	Exec(ctx context.Context, ref Reference, req ExecRequest) (ExecSession, error)

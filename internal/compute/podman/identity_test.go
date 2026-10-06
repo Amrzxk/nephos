@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/Amrzxk/nephos/internal/compute"
 	"github.com/Amrzxk/nephos/internal/model"
@@ -53,7 +54,7 @@ func TestRuntimeExpectedIdentity(t *testing.T) {
 		}},
 	}
 	for _, tc := range cases {
-		for _, method := range []string{"inspect", "start", "delete", "exec"} {
+		for _, method := range []string{"inspect", "start", "stop", "delete", "exec"} {
 			t.Run(tc.name+"/"+method, func(t *testing.T) {
 				doc := ownedInspect()
 				doc["State"] = map[string]any{"Running": true, "Pid": 714}
@@ -85,6 +86,8 @@ func TestRuntimeExpectedIdentity(t *testing.T) {
 					status, err = c.Inspect(ctx, ref)
 				case "start":
 					err = c.Start(ctx, ref)
+				case "stop":
+					err = c.Stop(ctx, ref, 15*time.Second)
 				case "delete":
 					err = c.Delete(ctx, ref)
 				case "exec":

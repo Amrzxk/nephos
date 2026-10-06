@@ -20,7 +20,7 @@ import (
 )
 
 // Exec attaches one command to a verified running instance.
-func (c *Client) Exec(ctx context.Context, ref compute.Reference, req compute.ExecRequest) (compute.ExecSession, error) {
+func (c *Client) Exec(ctx context.Context, ref compute.Reference, req compute.ExecRequest) (_ compute.ExecSession, result error) {
 	if err := validateExec(req); err != nil {
 		return nil, err
 	}
@@ -43,18 +43,23 @@ func (c *Client) Exec(ctx context.Context, ref compute.Reference, req compute.Ex
 		return nil, err
 	}
 	if created.ID == "" || strings.ContainsAny(created.ID, "/?#\x00") {
-		return nil, fmt.Errorf("invalid exec session ID")
+		return nil, fmt.Errorf("invalid exec session ID: %w", compute.ErrUncertainEffect)
 	}
 	conn, err := c.dial(ctx)
 	if err != nil {
-		_ = c.removeExec(ctx, created.ID)
+		cleanupErr := c.removeExec(ctx, ref, created.ID)
+		if cleanupErr != nil {
+			return nil, errors.Join(err, cleanupErr, compute.ErrUncertainEffect)
+		}
 		return nil, err
 	}
 	cleanup := true
 	defer func() {
 		if cleanup {
 			_ = conn.Close()
-			_ = c.removeExec(ctx, created.ID)
+			if err := c.removeExec(ctx, ref, created.ID); err != nil {
+				result = errors.Join(result, err, compute.ErrUncertainEffect)
+			}
 		}
 	}()
 	deadline := time.Now().Add(10 * time.Second)
@@ -102,7 +107,7 @@ func (c *Client) Exec(ctx context.Context, ref compute.Reference, req compute.Ex
 	}
 	outR, outW := io.Pipe()
 	errR, errW := io.Pipe()
-	s := &execSession{client: c, id: created.ID, parent: ctx, conn: unixConn, tty: req.TTY,
+	s := &execSession{client: c, id: created.ID, ref: ref, parent: ctx, conn: unixConn, tty: req.TTY,
 		stdout: outR, stderr: errR, outW: outW, errW: errW, done: make(chan struct{})}
 	s.stdin = &execInput{conn: unixConn}
 	s.stop = context.AfterFunc(ctx, func() { s.closeIO(ctx.Err()) })
@@ -140,6 +145,7 @@ func (i *execInput) Close() error                   { i.once.Do(func() { i.err =
 type execSession struct {
 	client         *Client
 	id             string
+	ref            compute.Reference
 	parent         context.Context
 	conn           *net.UnixConn
 	tty            bool
@@ -251,17 +257,27 @@ func (s *execSession) Close() error {
 		s.stop()
 		s.closeIO(io.ErrClosedPipe)
 		<-s.done
-		s.closeErr = s.client.removeExec(s.parent, s.id)
+		s.closeErr = s.client.removeExec(s.parent, s.ref, s.id)
 	})
 	return s.closeErr
 }
-func (c *Client) removeExec(parent context.Context, id string) error {
+func (c *Client) removeExec(parent context.Context, ref compute.Reference, id string) error {
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(parent), 2*time.Second)
 	defer cancel()
-	// Force stops only this session, never the instance or another session.
-	err := c.request(ctx, http.MethodPost, "/exec/"+id+"/remove", struct{ Force bool }{Force: true}, nil)
-	if isStatus(err, 404) {
-		return nil
+	// Pin before Podman discards the session metadata, including failed stream
+	// setup. These pins survive an executable transition and are not lost when
+	// the subsequent scan stops matching conmon.
+	pins, err := scanExecSupervisors(ctx, ref, id)
+	if err != nil {
+		return fmt.Errorf("pin exec supervisors: %w", err)
 	}
-	return err
+	// Force stops only this session, never the instance or another session.
+	err = c.request(ctx, http.MethodPost, "/exec/"+id+"/remove", struct{ Force bool }{Force: true}, nil)
+	if err != nil && !isStatus(err, 404) {
+		for _, pin := range pins {
+			err = errors.Join(err, pin.close())
+		}
+		return err // An uncertain removal cannot authorize a process signal.
+	}
+	return joinExecSupervisors(ctx, ref, id, scanExecSupervisors, pins...)
 }
