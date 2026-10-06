@@ -26,12 +26,15 @@ and privileged isolated-appliance tests, cleaning only test-owned objects.
 Implementation pushes and merges remain separate decisions; slice-3
 authorization is not inherited.
 
-**Execution checkpoint:** 4A (Tasks 1–2) is implemented and independently
-reviewed locally on `codex/m1-slice4-native`, product head `25a455c`.
-The [4A report](../../tests/M1-slice4a-local-verification.md) records tests,
-the crun refinement and the resolved healthy-resync review finding. No
-implementation push/merge or native Ubuntu CI result is claimed. Continue
-with 4B; Tasks 3–11 remain unimplemented.
+**Execution checkpoint (2026-10-06):** 4A (Tasks 1–2) and 4B Task 3 are
+implemented and independently reviewed locally on `codex/m1-slice4-native`,
+product head `1e8abe3`. The branch is published, not merged; native Ubuntu
+CI remains pending. The [4A report](../../tests/M1-slice4a-local-verification.md)
+records the recovery tests and resolved review findings; the
+[lifecycle report](../../tests/M1-slice4b-lifecycle-local-verification.md)
+records Task 3 shutdown/console proof and its limits. Continue with Tasks
+4–5 inventory/orphan collection and complete leak accounting, then a fresh
+full-4B boundary review. Tasks 4–11 remain unimplemented.
 
 **Base:** merged main `84462f8` (PR #6). Reuse a suitable managed worktree
 and prepare a dedicated `codex/` branch at execution time. The preserved
@@ -173,7 +176,7 @@ time.Duration) error` is internal lifecycle, not a new learner command.
 - [x] **Step 2: Run `go test ./internal/lifecycle ./internal/apiserver ./cmd/nephosd -run 'TestConsoleDaemon|TestDaemonFailure|TestEffectBarrier|TestStartHookChild|TestNestedStop' -count=1`.** Observed FAIL before lifecycle ownership for live exec return and lost cleanup failure, with bounded test deadlines. Later review/process regressions and their limits are recorded in the checkpoint.
 - [x] **Step 3: Implement registry/gate and bind both HTTP servers and upgraded sessions to a daemon-owned context.** Add the pending-start/verified child-hook lease protocol, with child references retaining their family after parent completion. Provide a console-admission callback; Task 6 installs its transactional fence check when reset storage exists. Release admission outside that transaction after cleanup, never hold SQLite during exec/close. Use one cleanup path for signals and unexpected exits. Add 25-second total daemon budget/15-second nested-stop sub-budget and 35-second Docker stop; entrypoint waits daemon cleanup before stopping Podman. Retain containers on timeout. Keep every effect gate/registry dependency below service/API layers.
 - [x] **Step 4: Run `go test ./internal/lifecycle ./internal/apiserver ./internal/compute/... ./cmd/nephosd ./internal/appliance -count=1` and `make test-race`.** Observed PASS, including full `make ci`. Actual PTY/non-PTY/blocked-output drain, exact stopped retained roots, exec/supervisor/init disappearance and empty owned cgroups pass before outer teardown with Podman alive. Shared stop deadline and failure behavior are pinned by deterministic tests; no complete Task-5 leak result is implied.
-- [x] **Step 5: Commit when authorized:** `git commit -s -m "fix(lifecycle): drain consoles and stop nested instances safely"` (`1e8abe3`, signed off locally, not pushed).
+- [x] **Step 5: Commit when authorized:** `git commit -s -m "fix(lifecycle): drain consoles and stop nested instances safely"` (`1e8abe3`, signed off and published on `codex/m1-slice4-native`, not merged).
 
 Task-3 independent re-review has no unresolved Critical/Important findings.
 See the [local lifecycle checkpoint](../../tests/M1-slice4b-lifecycle-local-verification.md)

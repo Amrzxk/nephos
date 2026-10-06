@@ -271,13 +271,13 @@ exact packet paths and distinguishes local 4A restart proof from pending reset.
 
 ### Slice-4 recovery progress and planned reset workflow
 
-**4A is published on its branch; 4B Task 3 is implemented locally.** The
+**4A and 4B Task 3 are published on `codex/m1-slice4-native`, not merged.** The
 [4A checkpoint](tests/M1-slice4a-local-verification.md) records unit/race,
 privileged integration, and WSL2/Docker Desktop retained-root/ENI/ping proof.
 4A is pushed through `6c696ce`, not merged; native Ubuntu CI is pending.
 The [lifecycle checkpoint](tests/M1-slice4b-lifecycle-local-verification.md)
 records Task 3's effect/console/hook ownership, graceful nested stop and
-process-level cleanup tests at `1e8abe3`. Task 3 is not pushed or merged;
+process-level cleanup tests at `1e8abe3`. Native Ubuntu CI remains pending;
 strict orphan collection, complete leak accounting and full 4B review remain.
 The slice-4
 [design](superpowers/specs/2026-10-02-m1-slice-4-recovery-reset-design.md),

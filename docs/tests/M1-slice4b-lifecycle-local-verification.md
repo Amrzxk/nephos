@@ -8,8 +8,9 @@ Task 5; both and the fresh full-4B boundary review remain required.
 
 ## Source, authority and platform
 
-Task 3 is signed off locally in `1e8abe326f164ee66578270cd7809603aa13cf0e`
-on `codex/m1-slice4-native`. It has not been pushed or merged. Prior 4A is
+Task 3 is signed off in `1e8abe326f164ee66578270cd7809603aa13cf0e`
+and published on `codex/m1-slice4-native` at the user's request on 2026-10-06.
+It is not merged, and native Ubuntu CI remains pending. Prior 4A is
 published through `6c696ce`; main is unchanged. The primary checkout's eight
 preexisting documentation modifications remain untouched.
 

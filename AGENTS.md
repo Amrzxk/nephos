@@ -71,7 +71,8 @@ repair, durable provisioning history, retained-root restart and running ENI
 repair. The [4A checkpoint](docs/tests/M1-slice4a-local-verification.md)
 records independent review and local evidence. 4A is pushed through `6c696ce`
 on that branch, not merged; native Ubuntu CI remains pending. 4B Task 3 is
-implemented and reviewed locally in `1e8abe3`: effect/hook-child leases,
+implemented and reviewed locally in `1e8abe3`, published on the same branch
+but not merged: effect/hook-child leases,
 console and supervisor closure, and graceful nested stop. Its
 [lifecycle checkpoint](docs/tests/M1-slice4b-lifecycle-local-verification.md)
 records tests and limits. Task 4 strict inventory/orphan collection and Task 5
