@@ -69,10 +69,16 @@ then demo/e2e and platform closure. 4A is implemented locally on
 `codex/m1-slice4-native`: expected runtime identity/provenance, guarded cache
 repair, durable provisioning history, retained-root restart and running ENI
 repair. The [4A checkpoint](docs/tests/M1-slice4a-local-verification.md)
-records independent review and local evidence; native Ubuntu CI is still
-pending and implementation has not been pushed or merged. 4B–4E remain planned.
-M1 is **not** complete. Next is 4B; do not repeat the completed
-slice-1/2/3 checklists or inherit permission to push/merge implementation.
+records independent review and local evidence. 4A is pushed through `6c696ce`
+on that branch, not merged; native Ubuntu CI remains pending. 4B Task 3 is
+implemented and reviewed locally in `1e8abe3`: effect/hook-child leases,
+console and supervisor closure, and graceful nested stop. Its
+[lifecycle checkpoint](docs/tests/M1-slice4b-lifecycle-local-verification.md)
+records tests and limits. Task 4 strict inventory/orphan collection and Task 5
+complete leak accounting remain next; the independent full-4B boundary review
+still follows both. 4C–4E remain planned. M1 is **not** complete. Do not repeat
+the completed slice-1/2/3 or 4A/Task-3 checklists, or inherit permission to
+push/merge new implementation.
 Namespace and gateway checks alone must never be reported as packet connectivity.
 
 ## Start-of-task workflow

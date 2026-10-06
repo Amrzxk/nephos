@@ -3,12 +3,14 @@
 Date: 2026-10-02. This is a **local implementation checkpoint**, not M1
 acceptance closure or a native Ubuntu CI result. The approved
 [slice-4 plan](../superpowers/plans/2026-10-02-m1-slice-4-recovery-reset.md)
-assigns Tasks 1–2 to 4A; 4B–4E remain unimplemented.
+assigns Tasks 1–2 to 4A. Subsequent Task-3 progress is recorded separately in
+the [lifecycle checkpoint](M1-slice4b-lifecycle-local-verification.md).
 
 ## Source and scope
 
 Approved docs commit `c65b725` was pushed to `main`. Implementation is on the
-isolated `codex/m1-slice4-native` branch and has not been pushed or merged.
+isolated `codex/m1-slice4-native` branch. Publication update: 4A was pushed
+through `6c696ce`; it is not merged and new native CI remains pending.
 The primary checkout's eight preexisting documentation changes remain intact.
 
 - `8a1acd2`: expected runtime identity/full ID validation and creation provenance.
@@ -128,14 +130,16 @@ they are not waived or counted as 4A verification.
 ## Remaining gates
 
 - New 4A code has **not** run on native Ubuntu 24.04 CI; implementation
-  push/PR/merge requires separate authority. Historical slice-3 CI does not
+  PR/merge and publication of new implementation require separate authority.
+  Historical slice-3 CI does not
   prove new recovery code.
 - Host namespace, links, routes and policy-rule snapshots matched around the
   local whole-lifecycle smoke. Host nftables inspection was unavailable in
   WSL2 and is **not** reported as passing; native CI must require it.
 - This is not manual native Windows/macOS console QA or the full M1 demo.
-- 4B graceful nested stop, console/hook/effect lifetime drain, owned orphan
-  collection and complete in-appliance leak checker remain next.
+- Task 3 graceful nested stop and console/hook/effect lifetime drain now have
+  a separate local checkpoint. Owned orphan collection and the complete
+  in-appliance leak checker remain next; full 4B is not complete.
 - Soft/hard reset, real `make e2e`, and full native/WSL demo are 4C–4E.
   Existing row/container/namespace teardown checks are not a complete leak
   proof. Every M1 acceptance checkbox remains unchecked.

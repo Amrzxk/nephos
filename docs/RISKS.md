@@ -104,7 +104,10 @@ Risks whose mitigation lands in **M0–M8** must be mitigated before v0.1.0 (see
   cover cache/delete races, conservative migration and missing provisioned
   roots failing without replacement; privileged ENI tests reject foreign or
   ambiguous peers. Local smoke preserves files and repairs running ENI drift.
-  Stop identity/lifetime accounting joins this in 4B. Persist reset phase/fence
+  Task 3 adds expected Stop identity and effect/session lifetime accounting,
+  with local process-level evidence in its
+  [checkpoint](tests/M1-slice4b-lifecycle-local-verification.md). Strict GC and
+  complete leak proof remain next. Persist reset phase/fence
   decisions in SQLite and automatically continue interrupted operations;
   failed ownership/inspection/leak proof retains the fence for explicit
   retry. Drain uncertain effects before success, preserve events/replay/index
@@ -232,6 +235,17 @@ Risks whose mitigation lands in **M0–M8** must be mitigated before v0.1.0 (see
   - Offer VM delivery for stronger isolation (M16).
   - After the MVP, research running the appliance under the Sysbox runtime where it's installed.
 - **Milestone:** M1 (design rules), M8 (docs, threat model), M16.
+- **M1 Task-3 process-signaling boundary:** supervisor cleanup requires the
+  full verified container/exec binding, exact bundle/name, trusted conmon
+  executable and appliance PID/mount/user namespaces. Pin with pidfds before
+  runtime metadata disappears; only authoritative session removal permits
+  signaling. Stop and revalidate a proven delayed child before termination;
+  its parent reaps naturally. Never signal by prefix, basename or raw reused
+  PID, and never kill the instance's main conmon or another console. Exited
+  pins remain until process disappearance proves reaping; changed executable,
+  denied inspection, missing pidfd support or incomplete join fails closed.
+  The [lifecycle checkpoint](tests/M1-slice4b-lifecycle-local-verification.md)
+  records local evidence; this is not host/platform or full leak-risk closure.
 - **Early warning:** any code that writes global sysctls (`/proc/sys/net/*/all`, `/proc/sys/net/*/default` outside Nephos namespaces) or touches `/sys/module`.
 
 ### S2. Learner root escapes an instance into the appliance

@@ -143,7 +143,8 @@ wire it to `netns.OpenInstance` and existing `Engine.EnsureENI`.
 **Files:** Create `internal/lifecycle/{gate,registry}.go` with tests and
 `cmd/nephosd/lifecycle.go`; modify `cmd/nephosd/main.go`,
 `internal/apiserver/{server,console}.go`, `internal/compute/runtime.go`,
-`internal/compute/podman/instance.go`, reconcilers/hook wiring,
+`internal/compute/podman/{instance,exec}.go`, add scoped supervisor helpers/tests,
+reconcilers/hook wiring,
 `images/appliance/entrypoint.sh`, `internal/appliance/docker.go`.
 
 **Interfaces:** `lifecycle.Gate.Enter(ctx context.Context, workspace string)
@@ -168,11 +169,16 @@ exclusive lease survives through the caller's success commit. Registry
 `Runtime.Stop(ctx context.Context, ref compute.Reference, timeout
 time.Duration) error` is internal lifecycle, not a new learner command.
 
-- [ ] **Step 1: Add `TestConsoleDaemonShutdownJoins`, `TestDaemonFailureDrainsSessions`, `TestEffectBarrierWaitsForCompletion`, `TestStartHookChildCompletesDuringDrain`, and `TestNestedStopPrecedesRuntimeShutdown`.** Exercise TTY/non-TTY endless commands, blocked output, multiple sessions on one instance, unexpected server/controller failure and cleanup errors. Assert admission is closed, session-only exec close/reap, no store access after closure, and nested stop happens with Podman alive. Gate release must follow deferred cleanup, not early result send. Deterministically admit Start, request exclusivity, then admit its verified hook child; parent and hook finish, unrelated/forged child admission fails, and exclusive work starts only after both close. Extend `TestRuntimeExpectedIdentity` to Stop, including another valid owned instance ID.
-- [ ] **Step 2: Run `go test ./internal/lifecycle ./internal/apiserver ./cmd/nephosd -run 'TestConsoleDaemon|TestDaemonFailure|TestEffectBarrier|TestStartHookChild|TestNestedStop' -count=1`.** Expected FAIL before new lifecycle ownership, with a bounded test deadline rather than arbitrary sleeps.
-- [ ] **Step 3: Implement registry/gate and bind both HTTP servers and upgraded sessions to a daemon-owned context.** Add the pending-start/verified child-hook lease protocol, with child references retaining their family after parent completion. Provide a console-admission callback; Task 6 installs its transactional fence check when reset storage exists. Release admission outside that transaction after cleanup, never hold SQLite during exec/close. Use one cleanup path for signals and unexpected exits. Add 25-second total daemon budget/15-second nested-stop sub-budget and 35-second Docker stop; entrypoint waits daemon cleanup before stopping Podman. Retain containers on timeout. Keep every effect gate/registry dependency below service/API layers.
-- [ ] **Step 4: Run `go test ./internal/lifecycle ./internal/apiserver ./internal/compute/... ./cmd/nephosd ./internal/appliance -count=1` and `make test-race`.** Validate actual long-lived PTY/non-PTY exec shutdown and stopped retained containers in a test appliance when authorized. Expected no stranded pumps/exec and no multiplied per-instance stop budget; systemic shutdown error cannot report clean success.
-- [ ] **Step 5: Commit when authorized:** `git commit -s -m "fix(lifecycle): drain consoles and stop nested instances safely"`.
+- [x] **Step 1: Add `TestConsoleDaemonShutdownJoins`, `TestDaemonFailureDrainsSessions`, `TestEffectBarrierWaitsForCompletion`, `TestStartHookChildCompletesDuringDrain`, and `TestNestedStopPrecedesRuntimeShutdown`.** Exercise TTY/non-TTY endless commands, blocked output, multiple sessions on one instance, unexpected server/controller failure and cleanup errors. Assert admission is closed, session-only exec close/reap, no store access after closure, and nested stop happens with Podman alive. Gate release must follow deferred cleanup, not early result send. Deterministically admit Start, request exclusivity, then admit its verified hook child; parent and hook finish, unrelated/forged child admission fails, and exclusive work starts only after both close. Extend `TestRuntimeExpectedIdentity` to Stop, including another valid owned instance ID.
+- [x] **Step 2: Run `go test ./internal/lifecycle ./internal/apiserver ./cmd/nephosd -run 'TestConsoleDaemon|TestDaemonFailure|TestEffectBarrier|TestStartHookChild|TestNestedStop' -count=1`.** Observed FAIL before lifecycle ownership for live exec return and lost cleanup failure, with bounded test deadlines. Later review/process regressions and their limits are recorded in the checkpoint.
+- [x] **Step 3: Implement registry/gate and bind both HTTP servers and upgraded sessions to a daemon-owned context.** Add the pending-start/verified child-hook lease protocol, with child references retaining their family after parent completion. Provide a console-admission callback; Task 6 installs its transactional fence check when reset storage exists. Release admission outside that transaction after cleanup, never hold SQLite during exec/close. Use one cleanup path for signals and unexpected exits. Add 25-second total daemon budget/15-second nested-stop sub-budget and 35-second Docker stop; entrypoint waits daemon cleanup before stopping Podman. Retain containers on timeout. Keep every effect gate/registry dependency below service/API layers.
+- [x] **Step 4: Run `go test ./internal/lifecycle ./internal/apiserver ./internal/compute/... ./cmd/nephosd ./internal/appliance -count=1` and `make test-race`.** Observed PASS, including full `make ci`. Actual PTY/non-PTY/blocked-output drain, exact stopped retained roots, exec/supervisor/init disappearance and empty owned cgroups pass before outer teardown with Podman alive. Shared stop deadline and failure behavior are pinned by deterministic tests; no complete Task-5 leak result is implied.
+- [x] **Step 5: Commit when authorized:** `git commit -s -m "fix(lifecycle): drain consoles and stop nested instances safely"` (`1e8abe3`, signed off locally, not pushed).
+
+Task-3 independent re-review has no unresolved Critical/Important findings.
+See the [local lifecycle checkpoint](../../tests/M1-slice4b-lifecycle-local-verification.md)
+for exact platform/build/test evidence, scoped supervisor cleanup and failure
+refinements. Tasks 4–5 and fresh full-4B boundary review remain next.
 
 ### Task 4: Inventory and collect strictly owned runtime/network orphans
 

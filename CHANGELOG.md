@@ -13,6 +13,17 @@ Each entry names the milestone it belongs to; see [docs/ROADMAP.md](docs/ROADMAP
 
 ### Added
 
+- **M1 — lifecycle foundations (slice 4B Task 3; local implementation).**
+  Daemon-owned effect/verified-hook-child leases and console references drain
+  before nested stop. Real PTY/non-PTY cleanup includes session-scoped exec
+  supervisors with pinned identity and reaping proof, preserving remote exit
+  codes and trailing output. Shared shutdown budgets are 25 seconds for the
+  daemon, 15 within that for nested stop, and 35 for Docker. Systemic runtime
+  inspection and uncertain submitted mutation/cleanup fail closed. Local
+  unit/race/cross-build, privileged lifecycle/adapter/hook tests and independent
+  review are recorded in the [checkpoint](docs/tests/M1-slice4b-lifecycle-local-verification.md).
+  Strict orphan collection, complete leak checking, reset and full 4B/M1
+  closure remain pending; this implementation is not pushed or merged.
 - **M1 — retained-root recovery (slice 4A; local implementation).**
   Runtime operations bind the expected workspace/instance and full container
   ID; discovery carries creation provenance. Generation/old-ID/deletion CAS
@@ -25,7 +36,8 @@ Each entry names the milestone it belongs to; see [docs/ROADMAP.md](docs/ROADMAP
   and source-check counters. Local WSL2/Docker smoke proves four retained
   markers/identities and real ping after restart and ENI drift repair. See the
   [4A checkpoint](docs/tests/M1-slice4a-local-verification.md); native CI,
-  implementation publication, reset and M1 closure remain pending.
+  merge, reset and M1 closure remain pending. 4A is published through
+  `6c696ce` on `codex/m1-slice4-native`.
 - **M1 — recovery and reset planning (fourth delivery slice).**
   A [design](docs/superpowers/specs/2026-10-02-m1-slice-4-recovery-reset-design.md)
   and [implementation plan](docs/superpowers/plans/2026-10-02-m1-slice-4-recovery-reset.md)
@@ -135,8 +147,11 @@ Each entry names the milestone it belongs to; see [docs/ROADMAP.md](docs/ROADMAP
   [design](docs/superpowers/specs/2026-10-02-m1-slice-4-recovery-reset-design.md)
   and [plan](docs/superpowers/plans/2026-10-02-m1-slice-4-recovery-reset.md)
   are approved for native execution. 4A is implemented and independently
-  reviewed locally; 4B–4E, implementation publication and native 4A CI remain
-  outstanding. See the [4A checkpoint](docs/tests/M1-slice4a-local-verification.md).
+  reviewed locally and published on the dedicated branch. Task 3 lifecycle
+  is implemented/reviewed locally; its publication, Tasks 4–5, full 4B review,
+  4C–4E, merge and native CI remain outstanding. See the
+  [4A checkpoint](docs/tests/M1-slice4a-local-verification.md) and
+  [lifecycle checkpoint](docs/tests/M1-slice4b-lifecycle-local-verification.md).
   The milestone is not complete
   ([roadmap](docs/ROADMAP.md#m1-thinnest-end-to-end-slice-two-instances-ping)).
 - The spikes carry six findings into M1 and M2: nested cgroup v2 controllers must

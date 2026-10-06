@@ -2,7 +2,9 @@
 
 Date: 2026-10-02. This document is the test contract, not M1 sign-off.
 4A has local implementation/evidence in its
-[checkpoint](M1-slice4a-local-verification.md); 4B–4E remain planned and native
+[checkpoint](M1-slice4a-local-verification.md). 4B Task 3 has a
+[local lifecycle checkpoint](M1-slice4b-lifecycle-local-verification.md);
+Tasks 4–5 and 4C–4E remain planned and native
 4A CI is pending. M1 roadmap acceptance boxes remain unchecked.
 
 Canonical inputs are the [slice-4 design](../superpowers/specs/2026-10-02-m1-slice-4-recovery-reset-design.md),
@@ -18,8 +20,9 @@ closure.
 
 ## Delivery and evidence map
 
-Rows below specify required behavior; only the 4A checkpoint records checks
-actually run. The other rows remain **planned / not run**. Execution records must add the
+Rows below specify required behavior; the 4A and Task-3 lifecycle checkpoints
+record their checks actually run. Unrecorded rows remain **planned / not run**.
+Execution records must add the
 candidate commit, exact commands, platform, result and artifact links before
 claiming a pass. A skipped check must state its exact reason.
 
@@ -41,7 +44,9 @@ randomized `SIGKILL` chaos/soak and repeated 100-cycle reset testing remain M8.
 
 4A local execution results and the resolved independent-review finding are in
 the [4A checkpoint](M1-slice4a-local-verification.md). This document remains
-the verification contract, not evidence that every row below has run. 4B
+the verification contract, not evidence that every row below has run. Task 3
+has local console/supervisor/nested-stop and verified hook-child evidence;
+the remainder of 4B
 and native Ubuntu 4A CI are still outstanding.
 
 | Fixture | Required result |
@@ -69,6 +74,14 @@ For the 4B shutdown fixtures, test the proposed shared daemon budget of 25
 seconds, with nested stop at most 15 seconds within it and Docker outer stop
 35 seconds. These are engineering constants to verify, not measured runtime
 guarantees or a separate timeout multiplied serially for each instance.
+Inspect independent process/cgroup witnesses before outer teardown: API
+exec absence alone does not prove conmon closure, and pidfd termination does
+not prove reaping. Preserve real pipe/PTY exit codes and trailing output under
+slow consumption. Cover another live session on the same instance, ambiguous
+supervisor arguments, executable transition, denied inspection/pidfd failure,
+fork-between-scans and exit-during-pinning with delayed reaping. An uncertain
+runtime removal response must authorize no process signal. The Task-3 report
+distinguishes deterministic models from actual privileged evidence.
 
 ## 4B: ownership, orphan collection and leak observation
 

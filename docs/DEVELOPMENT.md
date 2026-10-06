@@ -271,10 +271,14 @@ exact packet paths and distinguishes local 4A restart proof from pending reset.
 
 ### Slice-4 recovery progress and planned reset workflow
 
-**4A is implemented locally; 4B–4E remain planned.** The
+**4A is published on its branch; 4B Task 3 is implemented locally.** The
 [4A checkpoint](tests/M1-slice4a-local-verification.md) records unit/race,
 privileged integration, and WSL2/Docker Desktop retained-root/ENI/ping proof.
-Implementation has not been pushed or merged; native Ubuntu CI is pending.
+4A is pushed through `6c696ce`, not merged; native Ubuntu CI is pending.
+The [lifecycle checkpoint](tests/M1-slice4b-lifecycle-local-verification.md)
+records Task 3's effect/console/hook ownership, graceful nested stop and
+process-level cleanup tests at `1e8abe3`. Task 3 is not pushed or merged;
+strict orphan collection, complete leak accounting and full 4B review remain.
 The slice-4
 [design](superpowers/specs/2026-10-02-m1-slice-4-recovery-reset-design.md),
 [implementation plan](superpowers/plans/2026-10-02-m1-slice-4-recovery-reset.md),
@@ -306,8 +310,12 @@ retained. A daemon-only restart must
 preserve the live runtime directories.
 An already-running instance needs verified ENI plumbing before it is reported
 running; healthy observation must not flap links or reset source-check counters.
-4B will join console cleanup and gracefully stop nested instances before
-stopping Podman; the current 4A restart smoke does not prove graceful shutdown.
+Task 3 joins console cleanup and gracefully stops nested instances before
+stopping Podman. Daemon cleanup has a shared 25-second budget, with at most
+15 seconds within it for all nested stops; Docker allows 35 seconds. The
+Task 3 fixture proves supervisor/init disappearance and empty instance
+cgroups before outer teardown; the historical 4A restart smoke alone does
+not prove this. No new learner stop/start command or console protocol exists.
 
 Soft reset is planned as a durable SQLite operation. Its transaction fences
 resource creation, and its worker deletes instances before subnets before

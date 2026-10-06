@@ -500,7 +500,7 @@ The full design is in [ADR-0007](adr/0007-sqlite-state-and-reconciliation.md). O
   the default VPC arrive in M3; NAT gateways arrive in M5.
 - **Resync:** every 60 seconds, reconcilers compare observed kernel and runtime state with desired state and repair drift. For example, a namespace deleted by hand gets recreated.
 
-**M1 slice-4 refinement (4A implemented locally; 4B–4E planned):**
+**M1 slice-4 refinement (4A and 4B Task 3 implemented; remainder planned):**
 the [design](superpowers/specs/2026-10-02-m1-slice-4-recovery-reset-design.md)
 and [plan](superpowers/plans/2026-10-02-m1-slice-4-recovery-reset.md) define
 retained-root recovery, owned-lifetime cleanup and reset closure. Runtime
@@ -511,7 +511,8 @@ deletes an existing retained root merely because recording failed. A missing
 previously provisioned root is visible failure, not silent AMI replacement.
 Schema 5 backfills provisioning history for running or previously observed
 rows; first observed running status, that monotonic fact, and its event commit
-atomically. Stop joins the same expected-identity contract in 4B.
+atomically. Internal Stop now uses the same expected-identity contract; it
+is not a learner stop/start endpoint.
 Whole-appliance startup refreshes private ephemeral runtime directories at
 `/var/lib/nephos/runroot`, `/run/libpod`, and `/run/crun` before the first
 Podman call, retaining graphroot `/var/lib/nephos/containers` and its container
@@ -523,7 +524,18 @@ Healthy resync verifies links, MAC/IP/routes/sysctls and the complete owned
 source-check policy without taking links down or replacing its counters.
 Detected drift is quiesced and repaired; unverifiable policy fails closed.
 See the [4A checkpoint](tests/M1-slice4a-local-verification.md) for proof and
-limits. The following reset and lifetime behavior remains planned.
+limits. Task 3 adds daemon-owned HTTP/console lifetime and parent/verified
+hook-child effect leases. Independent admission closes before drain; admitted
+children retain their family through actual handle close and worker join.
+Uncertain submitted runtime effects remain counted and fail the daemon closed;
+required runtime inspection failures cannot publish ready. Console cleanup
+removes only its exact exec session, then joins identity-pinned conmon children
+and their naturally reaping parents inside the appliance. Empty exec API
+inventory or a readable exited pidfd alone does not prove reaping. One daemon
+budget is 25 seconds, with nested stop at most 15 within it; Docker allows 35.
+The entrypoint waits for daemon cleanup before terminating Podman. See the
+[lifecycle checkpoint](tests/M1-slice4b-lifecycle-local-verification.md).
+General inventory/GC, namespace/socket leak accounting and reset remain planned.
 
 Option A uses a SQLite reset operation and creation fence, with atomic
 instance→subnet→VPC phase decisions, automatic continuation after
@@ -692,8 +704,9 @@ After the MVP (M11): VPC flow logs (nftables log group → NFLOG → `nephosd`, 
 
 **M1 slice-4 subset:** 4A identity/retained-root and running ENI fixtures are
 implemented with local unit/race, privileged integration and smoke evidence;
-native CI is pending. The remaining planned fixtures cover
-shutdown/hook-child, reset phase/fence/replay, namespace-reference, foreign-
+native CI is pending. Task 3 adds local shutdown, session/supervisor and
+verified hook-child drain fixtures. The remaining planned fixtures cover
+reset phase/fence/replay, namespace-reference, foreign-
 ownership and partial-purge fixtures. The full local-build demo/e2e must pass
 on native Ubuntu 24.04 and manually on Windows 10/WSL2/Docker Desktop; no
 SG/NACL, lab, explain, or M8 random-chaos coverage is implied. Verify leaks
