@@ -183,6 +183,13 @@ Risks whose mitigation lands in **M0–M8** must be mitigated before v0.1.0 (see
   before/after, with required native nftables observation. Test independent
   residual-object witnesses before outer Docker teardown, as mapped in the
   [verification plan](tests/M1-slice4-verification-plan.md).
+- **Task-4 partial mitigation:** real-appliance regressions reproduced root
+  and cross-VPC alias acceptance, plus acceptance of a user-namespace NSFS
+  mount. Namespace operations now reject these and symlinks before callbacks
+  or deletion. Runtime inventory reports malformed markers and refuses
+  incomplete inspection. Network/ENI inventory/GC and complete reference/leak
+  accounting are still outstanding; this does not close T8. See the
+  [foundation checkpoint](tests/M1-slice4b-inventory-foundations.md).
 - **Early warning:** flaky integration tests; objects appearing in the wrong namespace.
 
 ### T9. Access friction for learners

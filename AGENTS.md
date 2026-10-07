@@ -75,8 +75,12 @@ implemented and reviewed locally in `1e8abe3`, published on the same branch
 but not merged: effect/hook-child leases,
 console and supervisor closure, and graceful nested stop. Its
 [lifecycle checkpoint](docs/tests/M1-slice4b-lifecycle-local-verification.md)
-records tests and limits. Task 4 strict inventory/orphan collection and Task 5
-complete leak accounting remain next; the independent full-4B boundary review
+records tests and limits. Task 4 is in progress: broad runtime inventory,
+the runtime-only collector foundation, and namespace alias guards have local
+unit/privileged evidence in the [foundation checkpoint](docs/tests/M1-slice4b-inventory-foundations.md).
+The collector is not yet wired into startup/resync. Strict network/ENI
+inventory/GC, consistent snapshots and exclusive coordination remain in
+Task 4; Task 5 complete leak accounting remains next. The independent full-4B boundary review
 still follows both. 4C–4E remain planned. M1 is **not** complete. Do not repeat
 the completed slice-1/2/3 or 4A/Task-3 checklists, or inherit permission to
 push/merge new implementation.

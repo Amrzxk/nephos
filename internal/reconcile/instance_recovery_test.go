@@ -31,6 +31,9 @@ type recoveryRuntime struct {
 }
 
 func (r *recoveryRuntime) EnsureImage(context.Context, string) error { return nil }
+func (r *recoveryRuntime) Inventory(context.Context) ([]compute.ObservedContainer, error) {
+	return nil, errors.New("inventory not used by recovery fixture")
+}
 func (r *recoveryRuntime) Lookup(_ context.Context, identity compute.Identity) (compute.Reference, error) {
 	if r.lookupErr != nil {
 		return compute.Reference{}, r.lookupErr

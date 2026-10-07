@@ -85,6 +85,12 @@ func (p *pendingStarts) Inspect(ctx context.Context, ref compute.Reference) (com
 	return status, err
 }
 
+func (p *pendingStarts) Inventory(ctx context.Context) ([]compute.ObservedContainer, error) {
+	items, err := p.Runtime.Inventory(ctx)
+	p.observe(ctx, err)
+	return items, err
+}
+
 func (p *pendingStarts) Create(ctx context.Context, instance model.Instance) (created compute.CreateResult, err error) {
 	lease, err := p.begin(ctx)
 	if err != nil {

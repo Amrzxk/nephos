@@ -50,6 +50,9 @@ type blockingInstanceRuntime struct {
 }
 
 func (r *blockingInstanceRuntime) EnsureImage(context.Context, string) error { return nil }
+func (r *blockingInstanceRuntime) Inventory(context.Context) ([]compute.ObservedContainer, error) {
+	return []compute.ObservedContainer{}, nil
+}
 func (r *blockingInstanceRuntime) Lookup(context.Context, compute.Identity) (compute.Reference, error) {
 	return compute.Reference{}, compute.ErrNotFound
 }

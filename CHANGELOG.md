@@ -13,6 +13,17 @@ Each entry names the milestone it belongs to; see [docs/ROADMAP.md](docs/ROADMAP
 
 ### Added
 
+- **M1 — runtime inventory and namespace ownership foundations (slice 4B
+  Task 4, in progress).** Broad all-container list/inspect retains malformed
+  Nephos candidates and rejects incomplete inspection. The runtime-only
+  collector preserves desired owners with empty or stale cached IDs and
+  prevalidates all candidates before removing owned rowless roots. Namespace
+  operations reject root/cross-VPC aliases, symlinks and non-network NSFS
+  mounts. Unit and isolated-appliance evidence is recorded in the
+  [foundation checkpoint](docs/tests/M1-slice4b-inventory-foundations.md).
+  Collection is not yet wired into startup/resync; network/ENI inventory,
+  exclusive coordination, complete leak accounting and the full 4B review
+  remain required. These changes are local, not pushed or merged.
 - **M1 — lifecycle foundations (slice 4B Task 3; branch implementation).**
   Daemon-owned effect/verified-hook-child leases and console references drain
   before nested stop. Real PTY/non-PTY cleanup includes session-scoped exec

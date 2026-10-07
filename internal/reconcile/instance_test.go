@@ -53,6 +53,15 @@ type instanceTestRuntime struct {
 }
 
 func (r *instanceTestRuntime) EnsureImage(context.Context, string) error { return nil }
+func (r *instanceTestRuntime) Inventory(context.Context) ([]compute.ObservedContainer, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	items := make([]compute.ObservedContainer, 0, len(r.references))
+	for _, ref := range r.references {
+		items = append(items, compute.ObservedContainer{Reference: ref, Name: ref.Identity.InstanceID, Managed: true})
+	}
+	return items, nil
+}
 func (r *instanceTestRuntime) Lookup(_ context.Context, identity compute.Identity) (compute.Reference, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()

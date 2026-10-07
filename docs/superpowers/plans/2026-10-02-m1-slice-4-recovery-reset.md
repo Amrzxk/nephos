@@ -34,7 +34,14 @@ records the recovery tests and resolved review findings; the
 [lifecycle report](../../tests/M1-slice4b-lifecycle-local-verification.md)
 records Task 3 shutdown/console proof and its limits. Continue with Tasks
 4–5 inventory/orphan collection and complete leak accounting, then a fresh
-full-4B boundary review. Tasks 4–11 remain unimplemented.
+full-4B boundary review. Task 4 is now in progress (2026-10-07): runtime
+inventory, the runtime-only collector and namespace alias/type guards have
+local unit/privileged evidence in the
+[foundation checkpoint](../../tests/M1-slice4b-inventory-foundations.md).
+Startup/resync collection is not yet wired; strict network/ENI inventory/GC,
+consistent desired snapshots and exclusive coordination remain. Tasks 5–11
+remain unimplemented, and the Task-4 checklist stays open until all its
+required cases and integration are complete.
 
 **Base:** merged main `84462f8` (PR #6). Reuse a suitable managed worktree
 and prepare a dedicated `codex/` branch at execution time. The preserved

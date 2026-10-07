@@ -535,7 +535,15 @@ inventory or a readable exited pidfd alone does not prove reaping. One daemon
 budget is 25 seconds, with nested stop at most 15 within it; Docker allows 35.
 The entrypoint waits for daemon cleanup before terminating Podman. See the
 [lifecycle checkpoint](tests/M1-slice4b-lifecycle-local-verification.md).
-General inventory/GC, namespace/socket leak accounting and reset remain planned.
+Task 4 now has broad runtime list/inspect and a runtime-only collector
+foundation, with local unit/privileged tests. Candidate ambiguity blocks all
+root deletion; pending/stale-cache desired identities are preserved. Namespace
+mount checks reject root/cross-VPC aliases and require actual network NSFS
+identity, not just a reserved pathname. This collector is not yet wired into
+startup/resync. Network/ENI inventory/GC, exclusive collection coordination,
+namespace/socket leak accounting and reset remain planned. See the
+[foundation checkpoint](tests/M1-slice4b-inventory-foundations.md); it is not
+a complete inventory or zero-leak result.
 
 Option A uses a SQLite reset operation and creation fence, with atomic
 instance→subnet→VPC phase decisions, automatic continuation after

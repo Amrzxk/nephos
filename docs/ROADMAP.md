@@ -142,7 +142,9 @@ increments:
 2. **4B:** console/session and graceful shutdown lifecycle, ownership
    inventory, orphan collection, and leak-check foundations. Task 3 lifecycle
    is implemented/reviewed locally and published on the dedicated branch,
-   not merged; Tasks 4–5 and full boundary review remain.
+   not merged. Task 4's [runtime inventory and alias foundations](tests/M1-slice4b-inventory-foundations.md)
+   are implemented locally, not wired into startup/resync; network/ENI
+   collection and coordination still remain. Task 5 and full boundary review remain.
 3. **4C:** durable SQLite soft-reset coordination and API/CLI wait behavior.
 4. **4D:** hard reset through validated Docker container/volume purge and
    fresh startup.

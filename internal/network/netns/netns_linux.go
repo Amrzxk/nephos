@@ -59,21 +59,71 @@ func namespacePath(name string) string {
 }
 
 func requireNamespaceMount(path string) error {
-	fi, err := os.Lstat(path)
+	identity, err := namespaceMountIdentity(path)
 	if err != nil {
-		return fmt.Errorf("inspect namespace mount %s: %w", path, err)
+		return err
 	}
-	if fi.Mode()&os.ModeSymlink != 0 {
-		return fmt.Errorf("refusing symlink namespace mount %s", path)
+	var root unix.Stat_t
+	if err := unix.Stat("/proc/1/ns/net", &root); err != nil {
+		return fmt.Errorf("inspect appliance root namespace: %w", err)
 	}
-	var stat unix.Statfs_t
-	if err := unix.Statfs(path, &stat); err != nil {
-		return fmt.Errorf("stat namespace filesystem %s: %w", path, err)
+	if identity.Ino == root.Ino && identity.Dev == root.Dev {
+		return fmt.Errorf("refusing namespace alias to appliance root: %s", path)
 	}
-	if stat.Type != unix.NSFS_MAGIC {
-		return fmt.Errorf("refusing non-namespace mount %s (filesystem %#x)", path, stat.Type)
+	entries, err := os.ReadDir(namespaceDir)
+	if err != nil {
+		return fmt.Errorf("inspect namespace alias candidates: %w", err)
+	}
+	for _, entry := range entries {
+		other := namespacePath(entry.Name())
+		if other == path || !strings.HasPrefix(entry.Name(), "nx-") {
+			continue
+		}
+		// Required alias inspection must not become an empty desired set.
+		// Never follow symlinks or grant deletion authority to malformed paths.
+		stat, err := namespaceMountIdentity(other)
+		if err != nil {
+			return fmt.Errorf("inspect namespace alias candidate %s: %w", other, err)
+		}
+		if identity.Ino == stat.Ino && identity.Dev == stat.Dev {
+			return fmt.Errorf("refusing namespace alias %s to %s", path, other)
+		}
 	}
 	return nil
+}
+
+func namespaceMountIdentity(path string) (unix.Stat_t, error) {
+	var identity unix.Stat_t
+	fi, err := os.Lstat(path)
+	if err != nil {
+		return identity, fmt.Errorf("inspect namespace mount %s: %w", path, err)
+	}
+	if fi.Mode()&os.ModeSymlink != 0 {
+		return identity, fmt.Errorf("refusing symlink namespace mount %s", path)
+	}
+	fd, err := unix.Open(path, unix.O_RDONLY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
+	if err != nil {
+		return identity, fmt.Errorf("open namespace mount %s: %w", path, err)
+	}
+	defer func() { _ = unix.Close(fd) }()
+	var stat unix.Statfs_t
+	if err := unix.Fstatfs(fd, &stat); err != nil {
+		return identity, fmt.Errorf("stat namespace filesystem %s: %w", path, err)
+	}
+	if stat.Type != unix.NSFS_MAGIC {
+		return identity, fmt.Errorf("refusing non-namespace mount %s (filesystem %#x)", path, stat.Type)
+	}
+	kind, err := unix.IoctlRetInt(fd, unix.NS_GET_NSTYPE)
+	if err != nil {
+		return identity, fmt.Errorf("inspect namespace type %s: %w", path, err)
+	}
+	if kind != unix.CLONE_NEWNET {
+		return identity, fmt.Errorf("refusing mount %s: not a network namespace", path)
+	}
+	if err := unix.Fstat(fd, &identity); err != nil {
+		return identity, fmt.Errorf("stat namespace identity %s: %w", path, err)
+	}
+	return identity, nil
 }
 
 // Ensure preserves an existing VPC namespace and creates only an absent one.

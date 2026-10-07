@@ -96,7 +96,10 @@ func (r inspectionRuntime) Lookup(context.Context, compute.Identity) (compute.Re
 func (r inspectionRuntime) Inspect(context.Context, compute.Reference) (compute.Status, error) {
 	return compute.Status{}, r.err
 }
-func (r inspectionRuntime) EnsureImage(context.Context, string) error       { return r.err }
+func (r inspectionRuntime) EnsureImage(context.Context, string) error { return r.err }
+func (r inspectionRuntime) Inventory(context.Context) ([]compute.ObservedContainer, error) {
+	return nil, r.err
+}
 func (r inspectionRuntime) Start(context.Context, compute.Reference) error  { return r.err }
 func (r inspectionRuntime) Delete(context.Context, compute.Reference) error { return r.err }
 func (r inspectionRuntime) Create(context.Context, model.Instance) (compute.CreateResult, error) {
@@ -108,7 +111,7 @@ func (r inspectionRuntime) Exec(context.Context, compute.Reference, compute.Exec
 
 func TestRequiredInspectionFailureClosesDaemonAdmission(t *testing.T) {
 	for _, systemic := range []bool{true, false} {
-		for _, method := range []string{"lookup", "inspect", "image", "start", "create", "delete", "exec"} {
+		for _, method := range []string{"lookup", "inspect", "inventory", "image", "start", "create", "delete", "exec"} {
 			t.Run(method+"/systemic="+strconv.FormatBool(systemic), func(t *testing.T) {
 				failure := make(chan error, 1)
 				cause := errors.New("wrong owned resource identity")
@@ -126,6 +129,8 @@ func TestRequiredInspectionFailureClosesDaemonAdmission(t *testing.T) {
 					_, _ = p.Lookup(ctx, compute.Identity{})
 				case "inspect":
 					_, _ = p.Inspect(ctx, compute.Reference{})
+				case "inventory":
+					_, _ = p.Inventory(ctx)
 				case "image":
 					_ = p.EnsureImage(ctx, "test")
 				case "start":

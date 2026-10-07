@@ -32,6 +32,15 @@ type CreateResult struct {
 	Created   bool
 }
 
+// ObservedContainer includes ambiguous Nephos-marked candidates. Managed is
+// strict ownership proof, not just a matching name or label subset.
+type ObservedContainer struct {
+	Reference      Reference
+	Name           string
+	Managed        bool
+	OwnershipError string
+}
+
 // ErrNotFound means authoritative inspection found no expected container.
 // Inspection failures and ownership collisions must never return this error.
 var ErrNotFound = errors.New("expected runtime container not found")
@@ -70,6 +79,7 @@ type ExecSession interface {
 // Runtime is the small container lifecycle boundary used by reconciliation.
 type Runtime interface {
 	EnsureImage(ctx context.Context, ref string) error
+	Inventory(ctx context.Context) ([]ObservedContainer, error)
 	Lookup(ctx context.Context, identity Identity) (Reference, error)
 	Create(ctx context.Context, instance model.Instance) (CreateResult, error)
 	Start(ctx context.Context, ref Reference) error
