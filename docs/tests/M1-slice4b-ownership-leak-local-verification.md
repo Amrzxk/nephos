@@ -4,9 +4,10 @@ Date: 2026-10-07. Tasks 4–5 finish the locally implemented 4B boundary on
 `codex/m1-slice4-native`, following the published Task-3 lifecycle code
 `1e8abe3` and local inventory foundations `44d21b1`. This report supersedes
 the continuation section of the [foundation checkpoint](M1-slice4b-inventory-foundations.md),
-not its historical evidence. The candidate is the pending implementation
-change containing this report; full-4B review covers `6c696ce` through that
-candidate. New changes are **local, not pushed or merged**. Native Ubuntu CI,
+not its historical evidence. The implementation is signed off in
+`6afd3f114270be00d70943616b24e680637f1d8d`; full-4B review covers `6c696ce`
+through that candidate, with this documentation-only exact-hash follow-up.
+New changes are **local, not pushed or merged**. Native Ubuntu CI,
 4C–4E, reset integration, and M1 closure are not claimed.
 
 ## Implemented boundary

@@ -41,7 +41,8 @@ independent full-4B code review pass; see the
 New changes are not pushed/merged; native Ubuntu CI remains pending. Continue
 with 4C, Tasks 6–8. Tasks 6–11 remain unimplemented and M1 is not complete.
 
-**Execution elaboration:** Tasks 4–5's remaining code will be committed together
+**Execution elaboration:** Tasks 4–5's remaining code was committed together
+in signed-off `6afd3f1` (`feat(lifecycle): finish owned orphan and namespace leak proof`)
 because strict pinned cleanup and reference accounting share the same handle
 paths; `44d21b1` retains the earlier separately committed Task-4 foundations.
 This atomic boundary does not waive either task's test contract. Exact owned
@@ -226,7 +227,7 @@ container merely because the cached ID differs.
 - [x] **Step 2: Run `go test ./internal/compute/podman ./internal/reconcile -run 'TestRuntimeOrphan|TestAmbiguousOwnership' -count=1` plus Linux topology/netns ownership tests.** Expected FAIL on missing runtime inventory and incomplete alias/orphan checks.
 - [x] **Step 3: Implement strict identity proofs and broad candidate observation.** Add marked-child cleanup inside still-live VPCs, preserving desired IP/MAC/ENI identities and cached images. Run startup and periodic collection under the effect barrier; deletion order stays children before parents. Correlate namespace identity to the appliance root and desired namespace set before configuring/unmounting it. Do not import service/API into engines.
 - [x] **Step 4: Run unit/race checks and tagged integration tests in the isolated appliance.** Seed owned rowless runtime/ENI objects plus foreign neighbors and ambiguous aliases; expected owned cleanup, foreign preservation, and visible ambiguity failure. Inspection errors must not return an empty inventory.
-- [ ] **Step 5: Commit when authorized:** `git commit -s -m "feat(reconcile): collect proven owned runtime and ENI orphans"` (remaining Tasks 4–5 combined as elaborated above).
+- [x] **Step 5: Commit when authorized:** signed off with Task 5 in `6afd3f1`, as elaborated above; earlier Task-4 foundations are `44d21b1`.
 
 ### Task 5: Prove complete leak results and namespace lifetime cleanup
 
@@ -251,7 +252,7 @@ and unregister after actual close/reap; registry is never a durable owner map.
 - [x] **Step 2: Run `go test ./internal/leakcheck ./internal/lifecycle -count=1`.** Expected FAIL before complete-vs-clean accounting; use test barriers, not sleeps, to expose deferred lifetime.
 - [x] **Step 3: Implement registered reference lifetimes, targeted `/proc` namespace/task/FD corroboration and object-level errors.** Check/remove owned kernel residue while the namespace is pinned before unlink; inspect known owned identities after unlink. Reject uncertainty; never claim `/proc` sees all socket-only namespaces or add unvalidated cross-process socket syscalls.
 - [x] **Step 4: Run unit/race and `integration` namespace fixtures inside the appliance.** Independently pin a namespace FD after unlink with marked link/ruleset residue and require a leak finding. Separately demonstrate a socket-only hold can evade namespace-path/FD enumeration; the equivalent product-registered socket must prevent a clean result until closed. Assert zero references and named/known marked objects before outer Docker teardown; record the independent witnesses.
-- [ ] **Step 5: Commit when authorized:** `git commit -s -m "feat(leakcheck): verify owned effects and namespace lifetimes"` (remaining Tasks 4–5 combined as elaborated above).
+- [x] **Step 5: Commit when authorized:** signed off with Task 4 in `6afd3f1`, as elaborated above.
 
 ### Task 6: Persist reset decisions, fences, keyed aliases, and phase order
 
