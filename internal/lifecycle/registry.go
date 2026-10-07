@@ -20,6 +20,7 @@ type registration struct {
 type Registry struct {
 	mu       sync.Mutex
 	entries  map[*registration]struct{}
+	known    map[Reference]struct{}
 	draining map[string]bool
 	errors   map[string][]error
 	changed  chan struct{}

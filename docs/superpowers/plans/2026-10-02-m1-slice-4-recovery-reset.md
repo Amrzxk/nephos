@@ -26,22 +26,28 @@ and privileged isolated-appliance tests, cleaning only test-owned objects.
 Implementation pushes and merges remain separate decisions; slice-3
 authorization is not inherited.
 
-**Execution checkpoint (2026-10-06):** 4A (Tasks 1–2) and 4B Task 3 are
+**Execution checkpoint (2026-10-07):** 4A (Tasks 1–2) and 4B Task 3 are
 implemented and independently reviewed locally on `codex/m1-slice4-native`,
-product head `1e8abe3`. The branch is published, not merged; native Ubuntu
+published Task-3 product head `1e8abe3`. The branch is published, not merged; native Ubuntu
 CI remains pending. The [4A report](../../tests/M1-slice4a-local-verification.md)
 records the recovery tests and resolved review findings; the
 [lifecycle report](../../tests/M1-slice4b-lifecycle-local-verification.md)
-records Task 3 shutdown/console proof and its limits. Continue with Tasks
-4–5 inventory/orphan collection and complete leak accounting, then a fresh
-full-4B boundary review. Task 4 is now in progress (2026-10-07): runtime
-inventory, the runtime-only collector and namespace alias/type guards have
-local unit/privileged evidence in the
-[foundation checkpoint](../../tests/M1-slice4b-inventory-foundations.md).
-Startup/resync collection is not yet wired; strict network/ENI inventory/GC,
-consistent desired snapshots and exclusive coordination remain. Tasks 5–11
-remain unimplemented, and the Task-4 checklist stays open until all its
-required cases and integration are complete.
+records Task 3 shutdown/console proof and its limits. Tasks 4–5 now finish
+strict runtime/network inventory, consistent desired snapshots, exclusive
+startup/resync orphan collection and complete-versus-clean reference accounting
+locally. Unit/race/cross, real privileged ownership/lifetime fixtures and
+independent full-4B code review pass; see the
+[ownership/lifetime checkpoint](../../tests/M1-slice4b-ownership-leak-local-verification.md).
+New changes are not pushed/merged; native Ubuntu CI remains pending. Continue
+with 4C, Tasks 6–8. Tasks 6–11 remain unimplemented and M1 is not complete.
+
+**Execution elaboration:** Tasks 4–5's remaining code will be committed together
+because strict pinned cleanup and reference accounting share the same handle
+paths; `44d21b1` retains the earlier separately committed Task-4 foundations.
+This atomic boundary does not waive either task's test contract. Exact owned
+nft structure, not current live veth set equality, proves cleanup ownership:
+historical canonical source tuples can survive veth loss, but grant no link
+deletion authority. Desired convergence keeps its stricter assigned-value check.
 
 **Base:** merged main `84462f8` (PR #6). Reuse a suitable managed worktree
 and prepare a dedicated `codex/` branch at execution time. The preserved
@@ -188,7 +194,8 @@ time.Duration) error` is internal lifecycle, not a new learner command.
 Task-3 independent re-review has no unresolved Critical/Important findings.
 See the [local lifecycle checkpoint](../../tests/M1-slice4b-lifecycle-local-verification.md)
 for exact platform/build/test evidence, scoped supervisor cleanup and failure
-refinements. Tasks 4–5 and fresh full-4B boundary review remain next.
+refinements. Tasks 4–5 and the fresh full-4B boundary review are subsequently
+complete locally; see the [ownership/lifetime checkpoint](../../tests/M1-slice4b-ownership-leak-local-verification.md).
 
 ### Task 4: Inventory and collect strictly owned runtime/network orphans
 
@@ -215,11 +222,11 @@ compute.Runtime, network OrphanNetwork) error` uses consistent desired
 snapshots and exclusive effect coordination; it never deletes a live row's
 container merely because the cached ID differs.
 
-- [ ] **Step 1: Add `TestRuntimeOrphanCollection`, `TestENIOrphanCollection`, `TestAmbiguousOwnershipFails`, and `TestNamespaceAliasRejected`.** Rowless fully owned containers/ENIs are removed; pending rows with NULL IDs and desired retained containers survive. Malformed marked objects are reported, generic/foreign unmarked links remain untouched, root/same-other-VPC namespace aliases and symlinks are rejected before any network mutation. Foreign markers never become deletion permission by prefix alone.
-- [ ] **Step 2: Run `go test ./internal/compute/podman ./internal/reconcile -run 'TestRuntimeOrphan|TestAmbiguousOwnership' -count=1` plus Linux topology/netns ownership tests.** Expected FAIL on missing runtime inventory and incomplete alias/orphan checks.
-- [ ] **Step 3: Implement strict identity proofs and broad candidate observation.** Add marked-child cleanup inside still-live VPCs, preserving desired IP/MAC/ENI identities and cached images. Run startup and periodic collection under the effect barrier; deletion order stays children before parents. Correlate namespace identity to the appliance root and desired namespace set before configuring/unmounting it. Do not import service/API into engines.
-- [ ] **Step 4: Run unit/race checks and tagged integration tests in the isolated appliance.** Seed owned rowless runtime/ENI objects plus foreign neighbors and ambiguous aliases; expected owned cleanup, foreign preservation, and visible ambiguity failure. Inspection errors must not return an empty inventory.
-- [ ] **Step 5: Commit when authorized:** `git commit -s -m "feat(reconcile): collect proven owned runtime and ENI orphans"`.
+- [x] **Step 1: Add `TestRuntimeOrphanCollection`, `TestENIOrphanCollection`, `TestAmbiguousOwnershipFails`, and `TestNamespaceAliasRejected`.** Rowless fully owned containers/ENIs are removed; pending rows with NULL IDs and desired retained containers survive. Malformed marked objects are reported, generic/foreign unmarked links remain untouched, root/same-other-VPC namespace aliases and symlinks are rejected before any network mutation. Foreign markers never become deletion permission by prefix alone.
+- [x] **Step 2: Run `go test ./internal/compute/podman ./internal/reconcile -run 'TestRuntimeOrphan|TestAmbiguousOwnership' -count=1` plus Linux topology/netns ownership tests.** Expected FAIL on missing runtime inventory and incomplete alias/orphan checks.
+- [x] **Step 3: Implement strict identity proofs and broad candidate observation.** Add marked-child cleanup inside still-live VPCs, preserving desired IP/MAC/ENI identities and cached images. Run startup and periodic collection under the effect barrier; deletion order stays children before parents. Correlate namespace identity to the appliance root and desired namespace set before configuring/unmounting it. Do not import service/API into engines.
+- [x] **Step 4: Run unit/race checks and tagged integration tests in the isolated appliance.** Seed owned rowless runtime/ENI objects plus foreign neighbors and ambiguous aliases; expected owned cleanup, foreign preservation, and visible ambiguity failure. Inspection errors must not return an empty inventory.
+- [ ] **Step 5: Commit when authorized:** `git commit -s -m "feat(reconcile): collect proven owned runtime and ENI orphans"` (remaining Tasks 4–5 combined as elaborated above).
 
 ### Task 5: Prove complete leak results and namespace lifetime cleanup
 
@@ -240,11 +247,11 @@ Only an exclusive drained caller can authorize a success decision.
 Namespace handles/duplicates, sockets and workers register before exposure
 and unregister after actual close/reap; registry is never a durable owner map.
 
-- [ ] **Step 1: Add `TestLeakCheckRequiresCompleteInspection`, `TestUnlinkedNamespaceReferenceBlocksClean`, and `TestOutstandingEffectBlocksClean`.** Denied/failed runtime, nftables, netlink or required `/proc` inspection returns incomplete/not clean; remaining cgroup/task/exec/duplicate/socket keeps failure. A worker whose result arrives before deferred handle close still blocks success. Generic foreign unmarked objects are not deleted or misreported as owned leaks.
-- [ ] **Step 2: Run `go test ./internal/leakcheck ./internal/lifecycle -count=1`.** Expected FAIL before complete-vs-clean accounting; use test barriers, not sleeps, to expose deferred lifetime.
-- [ ] **Step 3: Implement registered reference lifetimes, targeted `/proc` namespace/task/FD corroboration and object-level errors.** Check/remove owned kernel residue while the namespace is pinned before unlink; inspect known owned identities after unlink. Reject uncertainty; never claim `/proc` sees all socket-only namespaces or add unvalidated cross-process socket syscalls.
-- [ ] **Step 4: Run unit/race and `integration` namespace fixtures inside the appliance.** Independently pin a namespace FD after unlink with marked link/ruleset residue and require a leak finding. Separately demonstrate a socket-only hold can evade namespace-path/FD enumeration; the equivalent product-registered socket must prevent a clean result until closed. Assert zero references and named/known marked objects before outer Docker teardown; record the independent witnesses.
-- [ ] **Step 5: Commit when authorized:** `git commit -s -m "feat(leakcheck): verify owned effects and namespace lifetimes"`.
+- [x] **Step 1: Add `TestLeakCheckRequiresCompleteInspection`, `TestUnlinkedNamespaceReferenceBlocksClean`, and `TestOutstandingEffectBlocksClean`.** Denied/failed runtime, nftables, netlink or required `/proc` inspection returns incomplete/not clean; remaining cgroup/task/exec/duplicate/socket keeps failure. A worker whose result arrives before deferred handle close still blocks success. Generic foreign unmarked objects are not deleted or misreported as owned leaks.
+- [x] **Step 2: Run `go test ./internal/leakcheck ./internal/lifecycle -count=1`.** Expected FAIL before complete-vs-clean accounting; use test barriers, not sleeps, to expose deferred lifetime.
+- [x] **Step 3: Implement registered reference lifetimes, targeted `/proc` namespace/task/FD corroboration and object-level errors.** Check/remove owned kernel residue while the namespace is pinned before unlink; inspect known owned identities after unlink. Reject uncertainty; never claim `/proc` sees all socket-only namespaces or add unvalidated cross-process socket syscalls.
+- [x] **Step 4: Run unit/race and `integration` namespace fixtures inside the appliance.** Independently pin a namespace FD after unlink with marked link/ruleset residue and require a leak finding. Separately demonstrate a socket-only hold can evade namespace-path/FD enumeration; the equivalent product-registered socket must prevent a clean result until closed. Assert zero references and named/known marked objects before outer Docker teardown; record the independent witnesses.
+- [ ] **Step 5: Commit when authorized:** `git commit -s -m "feat(leakcheck): verify owned effects and namespace lifetimes"` (remaining Tasks 4–5 combined as elaborated above).
 
 ### Task 6: Persist reset decisions, fences, keyed aliases, and phase order
 

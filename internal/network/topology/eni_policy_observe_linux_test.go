@@ -18,6 +18,27 @@ const observedENIPolicy = `{"nftables":[
  {"rule":{"family":"inet","table":"nephos","chain":"source_check","handle":4,"comment":"nephos:anti-spoof","expr":[{"match":{"op":"==","left":{"meta":{"key":"iifname"}},"right":"ve*"}},{"counter":{"packets":72,"bytes":9000}},{"drop":null}]}}
 ]}`
 
+func TestOwnedPolicyShapeAcceptsStaleValuesNotForeignObjects(t *testing.T) {
+	for _, tc := range []struct {
+		name, input string
+		want        bool
+	}{
+		{"stale exact owned table", observedENIPolicy, true},
+		{"foreign comment", strings.Replace(observedENIPolicy, "nephos:m1", "foreign", 1), false},
+		{"extra semantics", strings.Replace(observedENIPolicy, `"drop":null`, `"accept":null`, 1), false},
+		{"noncanonical name", strings.Replace(observedENIPolicy, `"ve1"`, `"ve01"`, 1), false},
+		{"IPv6 source", strings.Replace(observedENIPolicy, `"10.0.1.4"`, `"::1"`, 1), false},
+		{"duplicate interface", strings.Replace(observedENIPolicy, `"ve2"`, `"ve1"`, 1), false},
+		{"extra tuple field", strings.Replace(observedENIPolicy, `"ve1","10.0.1.4"`, `"ve1","10.0.1.4","extra"`, 1), false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := ownedENIPolicyShape([]byte(tc.input)); got != tc.want {
+				t.Fatalf("owned=%v want=%v", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestENIPolicyObservation(t *testing.T) {
 	records := map[string]eniIdentity{
 		"ve1": {IP: netip.MustParseAddr("10.0.1.4")},

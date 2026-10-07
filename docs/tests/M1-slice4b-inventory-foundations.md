@@ -5,6 +5,11 @@ published at `1e8abe3`; this continuation starts from `0b1cc4e` on
 `codex/m1-slice4-native`. These new changes are local, not pushed or merged.
 No new independent full-4B review or native Ubuntu CI result is claimed.
 
+**Historical checkpoint:** Tasks 4–5 are subsequently finished locally in the
+[ownership/lifetime report](M1-slice4b-ownership-leak-local-verification.md).
+Its startup/resync GC and reference proof supersede the continuation below;
+the partial results and limitations recorded here remain historical facts.
+
 ## Implemented and tested
 
 - `Runtime.Inventory` lists all containers, including stopped roots, then

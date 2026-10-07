@@ -2,10 +2,10 @@ package netns
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -13,6 +13,8 @@ import (
 	"github.com/vishvananda/netlink"
 	vnetns "github.com/vishvananda/netns"
 	"golang.org/x/sys/unix"
+
+	"github.com/Amrzxk/nephos/internal/lifecycle"
 )
 
 // InstanceTarget pins a verified instance network namespace, never a bare PID.
@@ -21,11 +23,13 @@ type InstanceTarget struct {
 	mu        sync.Mutex
 	namespace *os.File
 	inode     uint64
+	registry  *lifecycle.Registry
+	release   func()
 }
 
 // OpenInstance proves runtime membership and namespace ownership before pinning.
 // Opening the process directory once prevents PID reuse between proc reads.
-func OpenInstance(ctx context.Context, pid int, runtimeID string) (*InstanceTarget, error) {
+func OpenInstance(ctx context.Context, pid int, runtimeID string) (target *InstanceTarget, result error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -64,9 +68,11 @@ func OpenInstance(ctx context.Context, pid int, runtimeID string) (*InstanceTarg
 		return nil, err
 	}
 	accepted := false
+	releaseNamespace := trackReference(ctx, "namespace-fd", fmt.Sprintf("instance:%s/fd:%d", runtimeID, namespace.Fd()))
 	defer func() {
-		if !accepted {
-			_ = namespace.Close()
+		if !accepted || result != nil {
+			result = errors.Join(result, closeTrackedFile(ctx, namespace, releaseNamespace))
+			target = nil
 		}
 	}()
 	var fs unix.Statfs_t
@@ -104,7 +110,8 @@ func OpenInstance(ctx context.Context, pid int, runtimeID string) (*InstanceTarg
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = user.Close() }()
+	releaseUser := trackReference(ctx, "namespace-fd", fmt.Sprintf("instance-user:%s/fd:%d", runtimeID, user.Fd()))
+	defer func() { result = errors.Join(result, closeTrackedFile(ctx, user, releaseUser)) }()
 	if err := unix.Fstat(int(user.Fd()), &userStat); err != nil {
 		return nil, fmt.Errorf("inspect instance user namespace: %w", err)
 	}
@@ -118,7 +125,8 @@ func OpenInstance(ctx context.Context, pid int, runtimeID string) (*InstanceTarg
 	if err != nil {
 		return nil, fmt.Errorf("inspect network namespace owner: %w", err)
 	}
-	defer func() { _ = unix.Close(owner) }()
+	releaseOwner := trackReference(ctx, "namespace-fd", fmt.Sprintf("namespace-owner:%s/fd:%d", runtimeID, owner))
+	defer func() { result = errors.Join(result, closeTrackedFD(ctx, owner, releaseOwner)) }()
 	if err := unix.Fstat(owner, &ownerStat); err != nil {
 		return nil, fmt.Errorf("inspect owning user namespace: %w", err)
 	}
@@ -129,7 +137,12 @@ func OpenInstance(ctx context.Context, pid int, runtimeID string) (*InstanceTarg
 		return nil, err
 	}
 	accepted = true
-	return &InstanceTarget{namespace: namespace, inode: targetStat.Ino}, nil
+	rememberNamespace(ctx, targetStat.Ino)
+	registry := lifecycle.ContextRegistry(ctx)
+	if registry != nil {
+		registry.Remember("default", "runtime", runtimeID)
+	}
+	return &InstanceTarget{namespace: namespace, inode: targetStat.Ino, registry: registry, release: releaseNamespace}, nil
 }
 
 func validRuntimeID(id string) bool {
@@ -206,7 +219,13 @@ func (t *InstanceTarget) Close() error {
 	err := t.namespace.Close()
 	t.namespace = nil
 	if err != nil {
+		if t.registry != nil {
+			t.registry.ReportError("default", err)
+		}
 		return fmt.Errorf("close instance namespace: %w", err)
+	}
+	if t.release != nil {
+		t.release()
 	}
 	return nil
 }
@@ -220,7 +239,7 @@ func (t *InstanceTarget) Inode() uint64 {
 }
 
 // WithFD exposes a temporary duplicate solely for a namespace-bound operation.
-func (t *InstanceTarget) WithFD(ctx context.Context, fn func(int) error) error {
+func (t *InstanceTarget) WithFD(ctx context.Context, fn func(int) error) (result error) {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -237,33 +256,20 @@ func (t *InstanceTarget) WithFD(ctx context.Context, fn func(int) error) error {
 	if err != nil {
 		return fmt.Errorf("duplicate instance namespace: %w", err)
 	}
-	defer func() { _ = unix.Close(fd) }()
+	if t.registry != nil {
+		ctx = lifecycle.WithRegistry(ctx, t.registry)
+	}
+	release := trackReference(ctx, "namespace-duplicate", fmt.Sprintf("inode:%d/fd:%d", t.inode, fd))
+	defer func() { result = errors.Join(result, closeTrackedFD(ctx, fd, release)) }()
 	return fn(fd)
 }
 
 // WithInstanceHandle runs on a disposable thread in the already-pinned target.
 func WithInstanceHandle(ctx context.Context, target *InstanceTarget, fn func(*netlink.Handle) error) error {
+	if target != nil && target.registry != nil {
+		ctx = lifecycle.WithRegistry(ctx, target.registry)
+	}
 	return target.WithFD(ctx, func(fd int) error {
-		done := make(chan error, 1)
-		go func() {
-			runtime.LockOSThread() // no UnlockOSThread: discard every switched thread
-			if err := ctx.Err(); err != nil {
-				done <- err
-				return
-			}
-			namespace := vnetns.NsHandle(fd)
-			if err := vnetns.Set(namespace); err != nil {
-				done <- fmt.Errorf("enter pinned instance namespace: %w", err)
-				return
-			}
-			handle, err := netlink.NewHandleAt(namespace)
-			if err != nil {
-				done <- fmt.Errorf("bind instance netlink handle: %w", err)
-				return
-			}
-			defer handle.Close()
-			done <- fn(handle)
-		}()
-		return <-done
+		return withPinnedHandle(ctx, vnetns.NsHandle(fd), fn)
 	})
 }

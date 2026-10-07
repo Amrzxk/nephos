@@ -3,11 +3,14 @@ package reconcile
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/Amrzxk/nephos/internal/compute"
 	"github.com/Amrzxk/nephos/internal/model"
+	"github.com/Amrzxk/nephos/internal/network/topology"
+	"github.com/Amrzxk/nephos/internal/store"
 )
 
 type orphanRuntime struct {
@@ -15,6 +18,54 @@ type orphanRuntime struct {
 	items   []compute.ObservedContainer
 	err     error
 	removed []compute.Reference
+}
+
+type orphanNetwork struct {
+	state     topology.Inventory
+	err       error
+	collected bool
+	runtime   *orphanRuntime
+}
+
+func (n *orphanNetwork) Inventory(context.Context) (topology.Inventory, error) { return n.state, n.err }
+func (n *orphanNetwork) CollectOrphans(context.Context, []model.VPC, []model.Subnet, []model.ENI) error {
+	if len(n.runtime.removed) != 0 {
+		return errors.New("runtime parent deleted before network proof")
+	}
+	n.collected = true
+	return nil
+}
+
+func TestOrphanCollectionValidatesBothInventoriesBeforeDeletingChildren(t *testing.T) {
+	for _, fault := range []string{"none", "runtime", "network", "alias"} {
+		t.Run(fault, func(t *testing.T) {
+			ctx := context.Background()
+			s, err := store.Open(ctx, filepath.Join(t.TempDir(), "db"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = s.Close() })
+			ref := compute.Reference{Identity: compute.Identity{WorkspaceID: "default", InstanceID: "i-00000000000000001"}, ID: compute.RuntimeID(strings.Repeat("a", 64))}
+			runtime := &orphanRuntime{items: []compute.ObservedContainer{{Reference: ref, Name: ref.Identity.InstanceID, Managed: true}}}
+			network := &orphanNetwork{runtime: runtime}
+			switch fault {
+			case "runtime":
+				runtime.items[0].Managed = false
+			case "network":
+				network.err = errors.New("denied netlink")
+			case "alias":
+				network.state.Namespaces = []topology.NamespaceObservation{{Name: "nx-vpc-01", OwnershipError: "noncanonical name"}}
+			}
+			err = CollectOrphans(ctx, s, runtime, network)
+			if fault == "none" {
+				if err != nil || !network.collected || len(runtime.removed) != 1 {
+					t.Fatalf("collection=%v runtime=%+v err=%v", network.collected, runtime.removed, err)
+				}
+			} else if err == nil || network.collected || len(runtime.removed) != 0 {
+				t.Fatalf("uncertainty authorized deletion: %+v err=%v", network, err)
+			}
+		})
+	}
 }
 
 func (r *orphanRuntime) Inventory(context.Context) ([]compute.ObservedContainer, error) {

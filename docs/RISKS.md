@@ -106,8 +106,10 @@ Risks whose mitigation lands in **M0–M8** must be mitigated before v0.1.0 (see
   ambiguous peers. Local smoke preserves files and repairs running ENI drift.
   Task 3 adds expected Stop identity and effect/session lifetime accounting,
   with local process-level evidence in its
-  [checkpoint](tests/M1-slice4b-lifecycle-local-verification.md). Strict GC and
-  complete leak proof remain next. Persist reset phase/fence
+  [checkpoint](tests/M1-slice4b-lifecycle-local-verification.md). Tasks 4–5 add
+  locally verified strict GC and reference/leak foundations in the
+  [ownership/lifetime checkpoint](tests/M1-slice4b-ownership-leak-local-verification.md).
+  Native QA and reset-level proof remain open. Persist reset phase/fence
   decisions in SQLite and automatically continue interrupted operations;
   failed ownership/inspection/leak proof retains the fence for explicit
   retry. Drain uncertain effects before success, preserve events/replay/index
@@ -183,13 +185,18 @@ Risks whose mitigation lands in **M0–M8** must be mitigated before v0.1.0 (see
   before/after, with required native nftables observation. Test independent
   residual-object witnesses before outer Docker teardown, as mapped in the
   [verification plan](tests/M1-slice4-verification-plan.md).
-- **Task-4 partial mitigation:** real-appliance regressions reproduced root
+- **4B local mitigation:** real-appliance regressions reproduced root
   and cross-VPC alias acceptance, plus acceptance of a user-namespace NSFS
   mount. Namespace operations now reject these and symlinks before callbacks
   or deletion. Runtime inventory reports malformed markers and refuses
-  incomplete inspection. Network/ENI inventory/GC and complete reference/leak
-  accounting are still outstanding; this does not close T8. See the
-  [foundation checkpoint](tests/M1-slice4b-inventory-foundations.md).
+  incomplete inspection. Strict network/ENI GC, pinned kernel cleanup before
+  unlink, and registered namespace/socket/worker lifetimes now have local
+  privileged coverage. An external FD with marked residue blocks clean; a
+  socket-only helper demonstrates why proc is not universal absence proof.
+  Known namespace FDs are identified through NSFS/inode, not symlink text.
+  Live exclusive authority and complete required observation are mandatory.
+  Reset integration and native/host QA remain outstanding; this does not
+  close T8. See the [ownership/lifetime checkpoint](tests/M1-slice4b-ownership-leak-local-verification.md).
 - **Early warning:** flaky integration tests; objects appearing in the wrong namespace.
 
 ### T9. Access friction for learners

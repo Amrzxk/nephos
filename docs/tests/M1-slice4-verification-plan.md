@@ -4,7 +4,8 @@ Date: 2026-10-02. This document is the test contract, not M1 sign-off.
 4A has local implementation/evidence in its
 [checkpoint](M1-slice4a-local-verification.md). 4B Task 3 has a
 [local lifecycle checkpoint](M1-slice4b-lifecycle-local-verification.md);
-Tasks 4–5 and 4C–4E remain planned and native
+Tasks 4–5 have a [local ownership/lifetime checkpoint](M1-slice4b-ownership-leak-local-verification.md).
+4C–4E remain planned and native
 4A CI is pending. M1 roadmap acceptance boxes remain unchecked.
 
 Canonical inputs are the [slice-4 design](../superpowers/specs/2026-10-02-m1-slice-4-recovery-reset-design.md),
@@ -20,7 +21,7 @@ closure.
 
 ## Delivery and evidence map
 
-Rows below specify required behavior; the 4A and Task-3 lifecycle checkpoints
+Rows below specify required behavior; the 4A and 4B lifecycle/ownership checkpoints
 record their checks actually run. Unrecorded rows remain **planned / not run**.
 Execution records must add the
 candidate commit, exact commands, platform, result and artifact links before

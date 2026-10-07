@@ -15,7 +15,14 @@ type workspaceGate struct {
 	leases            map[*Lease]struct{}
 	waiters           int
 	exclusive, sealed bool
+	maintenance       *exclusiveLease
 }
+
+type exclusiveLease struct {
+	gate      *Gate
+	workspace string
+}
+type exclusiveContextKey struct{}
 
 // Gate serializes exclusive maintenance against fully completed effects.
 type Gate struct {
@@ -135,10 +142,24 @@ func (g *Gate) Exclusive(ctx context.Context, workspace string, fn func(context.
 	}
 	s.waiters--
 	s.exclusive = true
+	lease := &exclusiveLease{gate: g, workspace: workspace}
+	s.maintenance = lease
 	g.notify()
 	g.mu.Unlock()
-	defer func() { g.mu.Lock(); s.exclusive = false; g.notify(); g.mu.Unlock() }()
-	return fn(ctx)
+	defer func() { g.mu.Lock(); s.exclusive = false; s.maintenance = nil; g.notify(); g.mu.Unlock() }()
+	return fn(context.WithValue(ctx, exclusiveContextKey{}, lease))
+}
+
+// HoldsExclusive validates the actual current maintenance caller, not a
+// snapshot bit or a saved context from an already completed maintenance run.
+func (g *Gate) HoldsExclusive(ctx context.Context, workspace string) bool {
+	lease, _ := ctx.Value(exclusiveContextKey{}).(*exclusiveLease)
+	if lease == nil || lease.gate != g || lease.workspace != workspace {
+		return false
+	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.state(workspace).maintenance == lease
 }
 
 type leaseContextKey struct{}

@@ -12,9 +12,9 @@ import (
 	"time"
 
 	"github.com/Amrzxk/nephos/internal/compute"
-	"github.com/Amrzxk/nephos/internal/compute/podman"
 	"github.com/Amrzxk/nephos/internal/model"
 	"github.com/Amrzxk/nephos/internal/network/netns"
+	"github.com/Amrzxk/nephos/internal/network/topology"
 	"github.com/Amrzxk/nephos/internal/service"
 	"github.com/Amrzxk/nephos/internal/store"
 	"github.com/Amrzxk/nephos/internal/version"
@@ -43,6 +43,12 @@ func (b *blockingNetwork) EnsureENI(context.Context, model.VPC, model.Subnet, mo
 }
 func (b *blockingNetwork) DeleteENI(context.Context, model.VPC, model.ENI) error { return nil }
 func (b *blockingNetwork) ListVPCNames(context.Context) ([]string, error)        { return nil, nil }
+func (b *blockingNetwork) Inventory(context.Context) (topology.Inventory, error) {
+	return topology.Inventory{}, nil
+}
+func (b *blockingNetwork) CollectOrphans(context.Context, []model.VPC, []model.Subnet, []model.ENI) error {
+	return nil
+}
 
 type blockingInstanceRuntime struct {
 	entered chan struct{}
@@ -177,7 +183,7 @@ func TestServeReportsStartingUntilInitialSweepCompletes(t *testing.T) {
 	defer cancel()
 	done := make(chan error, 1)
 	go func() {
-		done <- serve(runCtx, ln, filepath.Join(t.TempDir(), "api-token"), dbPath, filepath.Join(t.TempDir(), "hook.sock"), version.Get(), engine, podman.New(filepath.Join(t.TempDir(), "podman.sock")))
+		done <- serve(runCtx, ln, filepath.Join(t.TempDir(), "api-token"), dbPath, filepath.Join(t.TempDir(), "hook.sock"), version.Get(), engine, &blockingInstanceRuntime{})
 	}()
 	select {
 	case <-engine.entered:
@@ -239,7 +245,7 @@ func TestServeCreatesTokenAndShutsDown(t *testing.T) {
 	done := make(chan error, 1)
 	engine := &blockingNetwork{entered: make(chan struct{}, 1), release: make(chan struct{})}
 	go func() {
-		done <- serve(ctx, ln, path, dbPath, filepath.Join(t.TempDir(), "hook.sock"), version.Get(), engine, podman.New(filepath.Join(t.TempDir(), "podman.sock")))
+		done <- serve(ctx, ln, path, dbPath, filepath.Join(t.TempDir(), "hook.sock"), version.Get(), engine, &blockingInstanceRuntime{})
 	}()
 
 	client := newTestHTTPClient(t)

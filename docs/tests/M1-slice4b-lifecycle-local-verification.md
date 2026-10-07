@@ -6,6 +6,11 @@ CI, reset/leak completion or M1 acceptance. The approved
 strict inventory/orphan collection to Task 4 and complete leak accounting to
 Task 5; both and the fresh full-4B boundary review remain required.
 
+**Historical Task-3 checkpoint:** Tasks 4–5 and the full-4B code review are
+subsequently complete locally in the
+[ownership/lifetime checkpoint](M1-slice4b-ownership-leak-local-verification.md).
+This report retains its original Task-3 evidence and publication limits.
+
 ## Source, authority and platform
 
 Task 3 is signed off in `1e8abe326f164ee66578270cd7809603aa13cf0e`

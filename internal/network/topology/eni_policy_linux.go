@@ -123,7 +123,9 @@ func eniSourceRecords(handle *netlink.Handle) (map[string]eniIdentity, error) {
 	}
 	records := make(map[string]eniIdentity)
 	for _, link := range links {
-		if !strings.HasPrefix(link.Attrs().Name, "ve") {
+		// Generic interface names are not ownership markers. They remain
+		// foreign even when a neighbor happens to use our name prefix.
+		if !strings.HasPrefix(link.Attrs().Alias, "nephos:") {
 			continue
 		}
 		if !canonicalENILink(link.Attrs().Name) || link.Type() != "veth" {

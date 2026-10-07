@@ -78,6 +78,7 @@ func run(ctx context.Context, logger *slog.Logger) error {
 
 type networkEngine interface {
 	reconcile.NetworkEngine
+	reconcile.OrphanNetwork
 	hook.ENIPlumber
 	DeleteENI(context.Context, model.VPC, model.ENI) error
 }
@@ -109,6 +110,7 @@ func serve(ctx context.Context, ln net.Listener, tokenPath, dbPath, hookPath str
 	defer stop()
 	gate := lifecycle.NewGate()
 	refs := lifecycle.NewRegistry()
+	lifetime = lifecycle.WithRegistry(lifetime, refs)
 	mutationFailure := make(chan error, 1)
 	starts := newOwnedRuntime(runtime, gate, mutationFailure)
 	hookListener, err := hook.Listen(ctx, hookPath)
@@ -128,9 +130,18 @@ func serve(ctx context.Context, ln net.Listener, tokenPath, dbPath, hookPath str
 	srv := &http.Server{Handler: h, ReadHeaderTimeout: 5 * time.Second, BaseContext: func(net.Listener) context.Context { return lifetime }}
 	serverDone := make(chan error, 1)
 	go func() { serverDone <- srv.Serve(ln) }()
+	orphansReady := make(chan struct{})
+	orphansDone := make(chan error, 1)
+	go func() { orphansDone <- runOrphanMaintenance(lifetime, gate, s, runtime, network, orphansReady) }()
 	networkReady := make(chan struct{})
 	controllerDone := make(chan error, 1)
 	go func() {
+		select {
+		case <-orphansReady:
+		case <-lifetime.Done():
+			controllerDone <- lifetime.Err()
+			return
+		}
 		if err := controller.Sweep(lifetime); err != nil {
 			controllerDone <- fmt.Errorf("initial VPC reconcile sweep: %w", err)
 			return
@@ -156,7 +167,7 @@ func serve(ctx context.Context, ln net.Listener, tokenPath, dbPath, hookPath str
 		instanceDone <- instances.Run(lifetime)
 	}()
 	workers := []*daemonWorker{{name: "serving the API", done: serverDone}, {name: "serve private hook", done: hookDone},
-		{name: "running VPC reconciler", done: controllerDone}, {name: "running instance reconciler", done: instanceDone}}
+		{name: "running VPC reconciler", done: controllerDone}, {name: "running instance reconciler", done: instanceDone}, {name: "collecting owned orphans", done: orphansDone}}
 	canCloseStore = false
 	var exited *daemonWorker
 	var failure error
@@ -176,6 +187,9 @@ func serve(ctx context.Context, ln net.Listener, tokenPath, dbPath, hookPath str
 	case err := <-instanceDone:
 		exited = workers[3]
 		exited.result = err
+	case err := <-orphansDone:
+		exited = workers[4]
+		exited.result = err
 	}
 	if exited != nil {
 		exited.joined = true
@@ -186,7 +200,7 @@ func serve(ctx context.Context, ln net.Listener, tokenPath, dbPath, hookPath str
 	ready.Store(false)
 	gate.Seal("default")
 	stop()
-	canCloseStore, result = shutdownDaemon(ctx, gate, refs, s, runtime, []*http.Server{srv, hookServer}, workers, budget)
+	canCloseStore, result = shutdownDaemon(lifetime, gate, refs, s, runtime, []*http.Server{srv, hookServer}, workers, budget)
 	return errors.Join(failure, result)
 }
 

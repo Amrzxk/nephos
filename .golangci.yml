@@ -116,6 +116,11 @@ linters:
         linters:
           - forbidigo
           - errcheck
+      # The independently executed namespace lifetime witness is also a main
+      # entry point, but is test-only and never copied into product images.
+      - path: '^tests/fixtures/namespacehold/main\.go$'
+        linters:
+          - forbidigo
       # Tests may print, panic, and use context.Background().
       - path: '_test\.go'
         linters:

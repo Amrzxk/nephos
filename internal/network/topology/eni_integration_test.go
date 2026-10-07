@@ -202,7 +202,7 @@ func TestENIForeignLink(t *testing.T) {
 		if link.Type() != "dummy" || link.Attrs().Alias != "foreign-test-link" {
 			return fmt.Errorf("foreign link changed: type=%q alias=%q", link.Type(), link.Attrs().Alias)
 		}
-		return nil
+		return h.LinkDel(link) // Exact test-created foreign fixture, after refusal assertions.
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -340,4 +340,7 @@ func TestENIPolicyFailureLeavesNoLivePair(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+	if err := netns.Do(ctx, name, func() error { _, err := eniCommand(t, "nft", "delete", "table", "inet", "nephos"); return err }); err != nil {
+		t.Fatal(err)
+	} // exact fixture only
 }

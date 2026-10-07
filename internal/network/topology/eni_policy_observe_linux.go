@@ -2,6 +2,7 @@ package topology
 
 import (
 	"encoding/json"
+	"net/netip"
 	"reflect"
 	"sort"
 )
@@ -19,6 +20,55 @@ const eniPolicyShape = `[
 ]`
 
 type eniPolicyEntry map[string]map[string]any
+
+// ownedENIPolicyShape permits stale set values from vanished veths, but not
+// different rules/objects. Historical set entries never authorize link removal.
+func ownedENIPolicyShape(data []byte) bool {
+	var doc struct{ Nftables []eniPolicyEntry }
+	if err := json.Unmarshal(data, &doc); err != nil {
+		return false
+	}
+	records := make(map[string]eniIdentity)
+	for _, entry := range doc.Nftables {
+		set := entry["set"]
+		if set == nil || set["family"] != "inet" || set["table"] != "nephos" {
+			continue
+		}
+		if elements, exists := set["elem"]; exists {
+			list, ok := elements.([]any)
+			if !ok {
+				return false
+			}
+			for _, raw := range list {
+				item, ok := raw.(map[string]any)
+				if !ok || len(item) != 1 {
+					return false
+				}
+				tuple, ok := item["concat"].([]any)
+				if !ok || len(tuple) != 2 {
+					return false
+				}
+				name, ok := tuple[0].(string)
+				if !ok || !canonicalENILink(name) {
+					return false
+				}
+				value, ok := tuple[1].(string)
+				if !ok {
+					return false
+				}
+				ip, err := netip.ParseAddr(value)
+				if err != nil || !ip.Is4() || ip.String() != value {
+					return false
+				}
+				if _, exists := records[name]; exists {
+					return false
+				}
+				records[name] = eniIdentity{IP: ip}
+			}
+		}
+	}
+	return eniPolicyMatches(records, data)
+}
 
 // eniPolicyMatches is pure and rejects unknown/extra owned policy objects.
 // Other tables and their rules are outside this engine's ownership.

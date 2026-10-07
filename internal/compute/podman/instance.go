@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/Amrzxk/nephos/internal/compute"
+	"github.com/Amrzxk/nephos/internal/lifecycle"
 	"github.com/Amrzxk/nephos/internal/model"
 )
 
@@ -75,7 +76,14 @@ func (c *Client) inspectOwned(ctx context.Context, ref compute.Reference) (conta
 	if doc.ID != string(ref.ID) {
 		return doc, fmt.Errorf("runtime identity changed")
 	}
+	rememberRuntime(ctx, doc.ID)
 	return doc, nil
+}
+
+func rememberRuntime(ctx context.Context, id string) {
+	if r := lifecycle.ContextRegistry(ctx); r != nil {
+		r.Remember("default", "runtime", id)
+	}
 }
 
 // EnsureImage requires the locally built M1 development AMI.
@@ -149,6 +157,7 @@ func (c *Client) Lookup(ctx context.Context, identity compute.Identity) (compute
 	if err := expected(doc, identity); err != nil {
 		return compute.Reference{}, err
 	}
+	rememberRuntime(ctx, doc.ID)
 	return compute.Reference{Identity: identity, ID: compute.RuntimeID(doc.ID)}, nil
 }
 

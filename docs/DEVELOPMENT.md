@@ -277,8 +277,11 @@ privileged integration, and WSL2/Docker Desktop retained-root/ENI/ping proof.
 4A is pushed through `6c696ce`, not merged; native Ubuntu CI is pending.
 The [lifecycle checkpoint](tests/M1-slice4b-lifecycle-local-verification.md)
 records Task 3's effect/console/hook ownership, graceful nested stop and
-process-level cleanup tests at `1e8abe3`. Native Ubuntu CI remains pending;
-strict orphan collection, complete leak accounting and full 4B review remain.
+process-level cleanup tests at `1e8abe3`. Tasks 4–5 now add strict orphan
+collection and complete leak accounting locally, not published or merged;
+the [ownership/lifetime checkpoint](tests/M1-slice4b-ownership-leak-local-verification.md)
+records commands and independent kernel/FD/socket witnesses. Native Ubuntu CI
+remains pending. Next is 4C durable soft reset, not M2 or milestone closure.
 The slice-4
 [design](superpowers/specs/2026-10-02-m1-slice-4-recovery-reset-design.md),
 [implementation plan](superpowers/plans/2026-10-02-m1-slice-4-recovery-reset.md),

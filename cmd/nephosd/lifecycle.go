@@ -223,6 +223,18 @@ func stopNested(ctx context.Context, s *store.Store, runtime compute.Runtime) er
 	stopCtx, cancel := context.WithTimeout(ctx, nestedStopBudget)
 	defer cancel()
 	var errs []error
+	items, err := runtime.Inventory(stopCtx)
+	if err != nil {
+		return fmt.Errorf("inventory shutdown roots: %w", err)
+	}
+	refs := make(map[compute.RuntimeID]compute.Reference)
+	for _, item := range items {
+		ref := item.Reference
+		if !item.Managed || item.OwnershipError != "" || ref.Identity.WorkspaceID != "default" || ref.Identity.InstanceID != item.Name || ref.ID == "" {
+			return fmt.Errorf("ambiguous shutdown root %s: %s", ref.ID, item.OwnershipError)
+		}
+		refs[ref.ID] = ref
+	}
 	after := ""
 	for {
 		page, err := s.ListInstancePage(stopCtx, "default", after, 100)
@@ -230,7 +242,7 @@ func stopNested(ctx context.Context, s *store.Store, runtime compute.Runtime) er
 			return errors.Join(append(errs, fmt.Errorf("inventory nested instances: %w", err))...)
 		}
 		if len(page) == 0 {
-			return errors.Join(errs...)
+			break
 		}
 		for i := range page {
 			instance := &page[i]
@@ -242,16 +254,20 @@ func stopNested(ctx context.Context, s *store.Store, runtime compute.Runtime) er
 				errs = append(errs, fmt.Errorf("inspect shutdown instance %s: %w", instance.ID, err))
 				continue
 			}
-			remaining := nestedStopBudget
-			if deadline, ok := stopCtx.Deadline(); ok {
-				remaining = time.Until(deadline)
-			}
-			if err := runtime.Stop(stopCtx, ref, remaining); err != nil {
-				errs = append(errs, fmt.Errorf("stop nested instance %s: %w", instance.ID, err))
-			}
+			refs[ref.ID] = ref
 		}
 		after = page[len(page)-1].ID
 	}
+	for _, ref := range refs {
+		remaining := nestedStopBudget
+		if deadline, ok := stopCtx.Deadline(); ok {
+			remaining = time.Until(deadline)
+		}
+		if err := runtime.Stop(stopCtx, ref, remaining); err != nil {
+			errs = append(errs, fmt.Errorf("stop nested instance %s: %w", ref.Identity.InstanceID, err))
+		}
+	}
+	return errors.Join(errs...)
 }
 
 func shutdownDaemon(ctx context.Context, gate *lifecycle.Gate, refs *lifecycle.Registry,

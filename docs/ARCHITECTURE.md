@@ -408,6 +408,12 @@ The local [4A checkpoint](tests/M1-slice4a-local-verification.md) adds retained
 root/ENI/IP/MAC/runtime identity and bidirectional-ping evidence through a
 whole-appliance restart, plus already-running ENI drift repair. It does not
 extend the historical native CI result above to new recovery code.
+The local [4B ownership/lifetime checkpoint](tests/M1-slice4b-ownership-leak-local-verification.md)
+reruns real packet/spoof/isolation regressions around stricter orphan GC and
+pinned teardown. It adds no AWS traffic feature and does not change the
+network fidelity rows above. Namespace unlink does not prove destruction;
+independent FD and socket-only witnesses pin that Linux lifetime distinction.
+Native verification and reset integration remain open.
 
 ## 6. API, CLI, and naming conventions
 
@@ -500,7 +506,7 @@ The full design is in [ADR-0007](adr/0007-sqlite-state-and-reconciliation.md). O
   the default VPC arrive in M3; NAT gateways arrive in M5.
 - **Resync:** every 60 seconds, reconcilers compare observed kernel and runtime state with desired state and repair drift. For example, a namespace deleted by hand gets recreated.
 
-**M1 slice-4 refinement (4A and 4B Task 3 implemented; remainder planned):**
+**M1 slice-4 refinement (4A and 4B implemented locally; 4C–4E planned):**
 the [design](superpowers/specs/2026-10-02-m1-slice-4-recovery-reset-design.md)
 and [plan](superpowers/plans/2026-10-02-m1-slice-4-recovery-reset.md) define
 retained-root recovery, owned-lifetime cleanup and reset closure. Runtime
@@ -535,15 +541,21 @@ inventory or a readable exited pidfd alone does not prove reaping. One daemon
 budget is 25 seconds, with nested stop at most 15 within it; Docker allows 35.
 The entrypoint waits for daemon cleanup before terminating Podman. See the
 [lifecycle checkpoint](tests/M1-slice4b-lifecycle-local-verification.md).
-Task 4 now has broad runtime list/inspect and a runtime-only collector
-foundation, with local unit/privileged tests. Candidate ambiguity blocks all
-root deletion; pending/stale-cache desired identities are preserved. Namespace
-mount checks reject root/cross-VPC aliases and require actual network NSFS
-identity, not just a reserved pathname. This collector is not yet wired into
-startup/resync. Network/ENI inventory/GC, exclusive collection coordination,
-namespace/socket leak accounting and reset remain planned. See the
-[foundation checkpoint](tests/M1-slice4b-inventory-foundations.md); it is not
-a complete inventory or zero-leak result.
+Tasks 4–5 add consistent SQL desired snapshots, broad runtime/network inventory,
+and exclusive startup/periodic collection. Ambiguity blocks deletion; desired
+pending/stale-cache identities and generic foreign neighbors survive. ENI GC
+requires actual pinned peer/alias/MAC/IP/route proof; parent cleanup rejects
+foreign kernel residue, including IPv6 rules and route attributes. Both normal
+and orphan VPC deletion clean owned kernel children before identity-checked
+mount detach. Exact owned nft structure permits historical canonical source
+tuples after veth loss; those values grant no link deletion authority.
+Namespace/network handles, duplicates, sockets and workers now register their
+actual lifetimes, with close/restore uncertainty retained. The non-destructive
+checker combines required inventories, resource/lease counts, known-identity
+task/FD/cgroup evidence and the caller's live exclusive token. It does not claim
+proc can enumerate external socket-only holds. See the
+[ownership/lifetime checkpoint](tests/M1-slice4b-ownership-leak-local-verification.md).
+These changes are local, not merged; reset integration and native QA remain planned.
 
 Option A uses a SQLite reset operation and creation fence, with atomic
 instance→subnet→VPC phase decisions, automatic continuation after
@@ -768,8 +780,8 @@ nephos/
 │   ├── model/                   # domain types shared by services, reconcilers, explain
 │   ├── store/                   # SQLite: migrations, sqlc queries, generated code
 │   ├── reconcile/               # controller framework and reconcilers
-│   ├── lifecycle/               # planned M1 slice-4 ephemeral leases, admission and lifetime accounting
-│   ├── leakcheck/               # planned M1 slice-4 complete owned-runtime/kernel verification
+│   ├── lifecycle/               # ephemeral leases, admission and actual lifetime accounting
+│   ├── leakcheck/               # owned inventories, complete/clean results and reference corroboration
 │   ├── semantics/               # AWS behavior catalog: defaults, ordering, reserved ranges
 │   ├── network/
 │   │   ├── netns/               # the ONLY package allowed to switch network namespaces

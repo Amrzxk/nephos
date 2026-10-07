@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/Amrzxk/nephos/internal/compute"
+	"github.com/Amrzxk/nephos/internal/lifecycle"
 )
 
 // Inventory observes every container, including stopped roots and candidates
@@ -61,6 +62,9 @@ func (c *Client) Inventory(ctx context.Context) ([]compute.ObservedContainer, er
 			candidate.OwnershipError = err.Error()
 		} else {
 			candidate.Managed = true
+			if r := lifecycle.ContextRegistry(ctx); r != nil {
+				r.Remember(candidate.Reference.Identity.WorkspaceID, "runtime", doc.ID)
+			}
 		}
 		observed = append(observed, candidate)
 	}

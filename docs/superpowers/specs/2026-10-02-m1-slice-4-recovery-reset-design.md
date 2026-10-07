@@ -9,7 +9,10 @@ records review, actual tests and limits; 4A is published through `6c696ce`,
 not merged. 4B Task 3 is implemented/reviewed locally in `1e8abe3` and
 published on the same branch, not merged; native Ubuntu CI is pending. Its
 [lifecycle checkpoint](../../tests/M1-slice4b-lifecycle-local-verification.md)
-records process-level proof. Tasks 4–5, full 4B review and 4C–4E remain
+records process-level proof. Tasks 4–5 finish strict inventory/exclusive GC and
+registered namespace/socket/worker lifetime proof locally, with independent
+full-4B code approval; [checkpoint](../../tests/M1-slice4b-ownership-leak-local-verification.md).
+These additions are not published or merged. 4C–4E and native CI remain
 planned; M1 is not complete. These progress notes do not change the design.
 
 **Intent:** finish M1's reliability boundary without adding M2 features.

@@ -14,16 +14,20 @@ Each entry names the milestone it belongs to; see [docs/ROADMAP.md](docs/ROADMAP
 ### Added
 
 - **M1 — runtime inventory and namespace ownership foundations (slice 4B
-  Task 4, in progress).** Broad all-container list/inspect retains malformed
+  Tasks 4–5; local branch implementation).** Broad all-container list/inspect retains malformed
   Nephos candidates and rejects incomplete inspection. The runtime-only
   collector preserves desired owners with empty or stale cached IDs and
   prevalidates all candidates before removing owned rowless roots. Namespace
   operations reject root/cross-VPC aliases, symlinks and non-network NSFS
   mounts. Unit and isolated-appliance evidence is recorded in the
-  [foundation checkpoint](docs/tests/M1-slice4b-inventory-foundations.md).
-  Collection is not yet wired into startup/resync; network/ENI inventory,
-  exclusive coordination, complete leak accounting and the full 4B review
-  remain required. These changes are local, not pushed or merged.
+  [ownership/lifetime checkpoint](docs/tests/M1-slice4b-ownership-leak-local-verification.md).
+  Consistent SQLite snapshots and exclusive startup/resync GC remove strictly
+  proven runtime/ENI orphans children-first, preserving desired/foreign objects.
+  Non-destructive complete/clean results require actual exclusive authority,
+  empty desired resources and joined FD/socket/worker/effect lifetimes. Real
+  external FD/socket-only witnesses pin the observation limits; owned kernel
+  children are cleaned before namespace unlink. Reset and native platform QA
+  remain pending. These changes are local, not pushed or merged.
 - **M1 — lifecycle foundations (slice 4B Task 3; branch implementation).**
   Daemon-owned effect/verified-hook-child leases and console references drain
   before nested stop. Real PTY/non-PTY cleanup includes session-scoped exec
@@ -33,8 +37,8 @@ Each entry names the milestone it belongs to; see [docs/ROADMAP.md](docs/ROADMAP
   inspection and uncertain submitted mutation/cleanup fail closed. Local
   unit/race/cross-build, privileged lifecycle/adapter/hook tests and independent
   review are recorded in the [checkpoint](docs/tests/M1-slice4b-lifecycle-local-verification.md).
-  Strict orphan collection, complete leak checking, reset and full 4B/M1
-  closure remain pending. This implementation (`1e8abe3`) is published on
+  Tasks 4–5 add ownership/GC/leak foundations below this published checkpoint;
+  reset and full M1 closure remain pending. This implementation (`1e8abe3`) is published on
   `codex/m1-slice4-native`, not merged; native Ubuntu CI remains pending.
 - **M1 — retained-root recovery (slice 4A; local implementation).**
   Runtime operations bind the expected workspace/instance and full container
@@ -161,7 +165,8 @@ Each entry names the milestone it belongs to; see [docs/ROADMAP.md](docs/ROADMAP
   are approved for native execution. 4A is implemented and independently
   reviewed locally and published on the dedicated branch. Task 3 lifecycle
   is implemented/reviewed locally and published on the same branch; Tasks
-  4–5, full 4B review, 4C–4E, merge and native CI remain outstanding. See the
+  4–5 ownership/GC/lifetime proof are implemented locally, not published.
+  4C–4E, merge and native CI remain outstanding. See the
   [4A checkpoint](docs/tests/M1-slice4a-local-verification.md) and
   [lifecycle checkpoint](docs/tests/M1-slice4b-lifecycle-local-verification.md).
   The milestone is not complete

@@ -15,6 +15,14 @@ existence alone is not proof that packets traverse them. The
 [local execution checkpoint](M1-slice3-local-verification.md) also records
 the independent review, console-cancellation regression, and remaining gates.
 
+The 2026-10-07 local [4B ownership/lifetime checkpoint](M1-slice4b-ownership-leak-local-verification.md)
+reruns the complete privileged topology suite, including cross-subnet packets,
+spoof counters and overlapping-VPC isolation, around exclusive orphan GC and
+kernel-before-unlink cleanup. Owned rowless ENIs are removed while desired and
+unmarked foreign neighbors survive; foreign address/route/rule/policy and alias
+cases fail closed. This is new WSL2/Docker Desktop regression evidence, not an
+extension of the historical native CI result or M1 reset closure.
+
 | Case | AWS-style behavior / Nephos constraint | Slice and assertion |
 |---|---|---|
 | Two VPCs both `10.0.0.0/16` | VPC address spaces are independent; overlapping ranges are legal | Slice 2: both become `available`, have different `nx-vpc-*` namespace names/short indexes, and keep separate gateways. |

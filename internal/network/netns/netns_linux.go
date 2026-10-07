@@ -58,8 +58,8 @@ func namespacePath(name string) string {
 	return filepath.Join(namespaceDir, name)
 }
 
-func requireNamespaceMount(path string) error {
-	identity, err := namespaceMountIdentity(path)
+func requireNamespaceMount(ctx context.Context, path string) error {
+	identity, err := namespaceMountIdentity(ctx, path)
 	if err != nil {
 		return err
 	}
@@ -81,7 +81,7 @@ func requireNamespaceMount(path string) error {
 		}
 		// Required alias inspection must not become an empty desired set.
 		// Never follow symlinks or grant deletion authority to malformed paths.
-		stat, err := namespaceMountIdentity(other)
+		stat, err := namespaceMountIdentity(ctx, other)
 		if err != nil {
 			return fmt.Errorf("inspect namespace alias candidate %s: %w", other, err)
 		}
@@ -92,8 +92,7 @@ func requireNamespaceMount(path string) error {
 	return nil
 }
 
-func namespaceMountIdentity(path string) (unix.Stat_t, error) {
-	var identity unix.Stat_t
+func namespaceMountIdentity(ctx context.Context, path string) (identity unix.Stat_t, result error) {
 	fi, err := os.Lstat(path)
 	if err != nil {
 		return identity, fmt.Errorf("inspect namespace mount %s: %w", path, err)
@@ -105,7 +104,8 @@ func namespaceMountIdentity(path string) (unix.Stat_t, error) {
 	if err != nil {
 		return identity, fmt.Errorf("open namespace mount %s: %w", path, err)
 	}
-	defer func() { _ = unix.Close(fd) }()
+	release := trackReference(ctx, "namespace-fd", path)
+	defer func() { result = errors.Join(result, closeTrackedFD(ctx, fd, release)) }()
 	var stat unix.Statfs_t
 	if err := unix.Fstatfs(fd, &stat); err != nil {
 		return identity, fmt.Errorf("stat namespace filesystem %s: %w", path, err)
@@ -143,7 +143,7 @@ func Ensure(ctx context.Context, name string) error {
 	}
 	path := namespacePath(name)
 	if _, err := os.Lstat(path); err == nil {
-		return requireNamespaceMount(path)
+		return requireNamespaceMount(ctx, path)
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("inspect VPC namespace %s: %w", name, err)
 	}
@@ -159,36 +159,68 @@ func Ensure(ctx context.Context, name string) error {
 		return fmt.Errorf("close namespace mount point %s: %w", name, err)
 	}
 
-	// unshare is thread-local. The locked thread is deliberately discarded.
+	root, err := vnetns.GetFromPath("/proc/1/ns/net")
+	if err != nil {
+		return errors.Join(fmt.Errorf("pin appliance namespace: %w", err), os.Remove(path))
+	}
+	releaseRoot := trackReference(ctx, "control-plane-namespace-fd", fmt.Sprintf("fd:%d", root))
+	// Do not expose completion until the worker has returned to the appliance
+	// namespace. Discarding the locked thread alone is not a joined lifetime.
+	releaseWorker := trackReference(ctx, "namespace-worker", name)
 	done := make(chan error, 1)
 	go func() {
 		runtime.LockOSThread() // no UnlockOSThread: never reuse a switched thread
+		var result error
+		changed := false
+		defer func() {
+			if changed {
+				if err := vnetns.Set(root); err != nil {
+					reportCleanup(ctx, err)
+					result = errors.Join(result, err)
+				} else {
+					releaseWorker()
+				}
+			} else {
+				releaseWorker()
+			}
+			done <- result
+		}()
 		if err := ctx.Err(); err != nil {
-			done <- err
+			result = err
 			return
 		}
 		if err := unix.Unshare(unix.CLONE_NEWNET); err != nil {
-			done <- fmt.Errorf("unshare VPC namespace %s: %w", name, err)
+			result = fmt.Errorf("unshare VPC namespace %s: %w", name, err)
 			return
 		}
+		changed = true
+		var identity unix.Stat_t
+		if err := unix.Stat("/proc/thread-self/ns/net", &identity); err != nil {
+			result = fmt.Errorf("observe created namespace: %w", err)
+			return
+		}
+		rememberNamespace(ctx, identity.Ino)
 		if err := unix.Mount("/proc/thread-self/ns/net", path, "none", unix.MS_BIND, ""); err != nil {
-			done <- fmt.Errorf("bind VPC namespace %s: %w", name, err)
+			result = fmt.Errorf("bind VPC namespace %s: %w", name, err)
 			return
 		}
-		done <- nil
 	}()
-	if err := <-done; err != nil {
+	if err := errors.Join(<-done, closeTrackedFD(ctx, int(root), releaseRoot)); err != nil {
 		if removeErr := os.Remove(path); removeErr != nil {
 			return errors.Join(err, fmt.Errorf("remove failed namespace mount point %s: %w", name, removeErr))
 		}
 		return err
 	}
-	return requireNamespaceMount(path)
+	return requireNamespaceMount(ctx, path)
 }
 
 // Do runs fn in a VPC namespace on a disposable locked OS thread. fn must not
 // launch goroutines that assume they inherit its namespace.
 func Do(ctx context.Context, name string, fn func() error) error {
+	return withNamedPin(ctx, name, 0, func(target vnetns.NsHandle) error { return runInPinnedNamespace(ctx, target, fn) })
+}
+
+func withNamedPin(ctx context.Context, name string, inode uint64, fn func(vnetns.NsHandle) error) error {
 	if err := validateName(name); err != nil {
 		return err
 	}
@@ -196,50 +228,77 @@ func Do(ctx context.Context, name string, fn func() error) error {
 		return err
 	}
 	path := namespacePath(name)
-	if err := requireNamespaceMount(path); err != nil {
+	if err := requireNamespaceMount(ctx, path); err != nil {
 		return err
 	}
-	done := make(chan error, 1)
-	go func() {
-		runtime.LockOSThread() // no UnlockOSThread after setns
-		target, err := vnetns.GetFromPath(path)
-		if err != nil {
-			done <- fmt.Errorf("open VPC namespace %s: %w", name, err)
-			return
+	return withInspectionPin(ctx, name, inode, func(target vnetns.NsHandle) error {
+		if err := requireNamespaceMount(ctx, path); err != nil {
+			return err
 		}
-		defer func() { _ = target.Close() }()
-		if err := ctx.Err(); err != nil {
-			done <- err
-			return
+		var stat unix.Stat_t
+		if err := unix.Fstat(int(target), &stat); err != nil {
+			return err
 		}
-		if err := vnetns.Set(target); err != nil {
-			done <- fmt.Errorf("enter VPC namespace %s: %w", name, err)
-			return
-		}
-		done <- fn()
-	}()
-	return <-done
+		rememberNamespace(ctx, stat.Ino)
+		return fn(target)
+	})
+}
+
+// WithInspectionHandle is for broad read-only inventory of named namespaces,
+// including foreign names. It grants no ownership or deletion authority.
+func WithInspectionHandle(ctx context.Context, name string, inode uint64, fn func(*netlink.Handle) error) error {
+	return withInspectionPin(ctx, name, inode, func(target vnetns.NsHandle) error { return withPinnedHandle(ctx, target, fn) })
+}
+
+func withInspectionPin(ctx context.Context, name string, inode uint64, fn func(vnetns.NsHandle) error) (result error) {
+	if name == "" || name == "." || name == ".." || strings.Contains(name, "/") {
+		return fmt.Errorf("invalid namespace inspection name %q", name)
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	path := namespacePath(name)
+	fd, err := unix.Open(path, unix.O_RDONLY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
+	if err != nil {
+		return fmt.Errorf("pin VPC namespace %s: %w", name, err)
+	}
+	release := trackReference(ctx, "namespace-fd", fmt.Sprintf("%s/fd:%d", name, fd))
+	defer func() { result = errors.Join(result, closeTrackedFD(ctx, fd, release)) }()
+	var stat unix.Stat_t
+	var fs unix.Statfs_t
+	kind, kindErr := unix.IoctlRetInt(fd, unix.NS_GET_NSTYPE)
+	if err := errors.Join(unix.Fstat(fd, &stat), unix.Fstatfs(fd, &fs), kindErr); err != nil {
+		return fmt.Errorf("inspect pinned namespace: %w", err)
+	}
+	identity, err := namespaceMountIdentity(ctx, path)
+	if err != nil {
+		return err
+	}
+	if kind != unix.CLONE_NEWNET || fs.Type != unix.NSFS_MAGIC || stat.Dev != identity.Dev || stat.Ino != identity.Ino || (inode != 0 && stat.Ino != inode) {
+		return fmt.Errorf("namespace %s identity changed before operation", name)
+	}
+	return fn(vnetns.NsHandle(fd))
 }
 
 // WithHandle binds a netlink socket explicitly to the entered namespace.
 func WithHandle(ctx context.Context, name string, fn func(*netlink.Handle) error) error {
-	return Do(ctx, name, func() error {
-		current, err := vnetns.Get()
-		if err != nil {
-			return fmt.Errorf("capture entered namespace %s: %w", name, err)
-		}
-		defer func() { _ = current.Close() }()
-		handle, err := netlink.NewHandleAt(current)
-		if err != nil {
-			return fmt.Errorf("open bound netlink handle for %s: %w", name, err)
-		}
-		defer handle.Close()
-		return fn(handle)
-	})
+	return WithIdentityHandle(ctx, name, 0, fn)
+}
+
+// WithIdentityHandle binds validation and effects to the observed namespace
+// identity; a replaced mount cannot receive mutations before unlink refusal.
+func WithIdentityHandle(ctx context.Context, name string, inode uint64, fn func(*netlink.Handle) error) error {
+	return withNamedPin(ctx, name, inode, func(target vnetns.NsHandle) error { return withPinnedHandle(ctx, target, fn) })
 }
 
 // Delete removes only a valid VPC namespace mount and refuses foreign files.
 func Delete(ctx context.Context, name string) error {
+	return DeleteIdentity(ctx, name, 0)
+}
+
+// DeleteIdentity rejects a mount replaced since its pinned kernel cleanup.
+// A zero inode is used only for ordinary desired-row namespace teardown.
+func DeleteIdentity(ctx context.Context, name string, inode uint64) error {
 	if err := validateName(name); err != nil {
 		return err
 	}
@@ -254,10 +313,22 @@ func Delete(ctx context.Context, name string) error {
 	} else if err != nil {
 		return fmt.Errorf("inspect VPC namespace %s: %w", name, err)
 	}
-	if err := requireNamespaceMount(path); err != nil {
+	if err := requireNamespaceMount(ctx, path); err != nil {
 		return err
 	}
-	if err := unix.Unmount(path, 0); err != nil {
+	if inode != 0 {
+		identity, err := namespaceMountIdentity(ctx, path)
+		if err != nil {
+			return err
+		}
+		if identity.Ino != inode {
+			return fmt.Errorf("namespace %s was replaced before unlink", name)
+		}
+	}
+	// A verified external pin must not prevent removing the named mount.
+	// Callers clean owned kernel children first; the checker observes retained
+	// references independently. Detach is not proof that the namespace died.
+	if err := unix.Unmount(path, unix.MNT_DETACH); err != nil {
 		return fmt.Errorf("unmount VPC namespace %s: %w", name, err)
 	}
 	if err := os.Remove(path); err != nil {
@@ -286,7 +357,7 @@ func List(ctx context.Context) ([]string, error) {
 		if validateName(entry.Name()) != nil {
 			continue
 		}
-		if err := requireNamespaceMount(namespacePath(entry.Name())); err != nil {
+		if err := requireNamespaceMount(ctx, namespacePath(entry.Name())); err != nil {
 			return nil, err
 		}
 		names = append(names, entry.Name())
