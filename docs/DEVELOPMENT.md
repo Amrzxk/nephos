@@ -309,39 +309,28 @@ cleanup verifies container identity and volume creation time/ownership labels.
 The [M1 connectivity matrix](tests/M1-connectivity-matrix.md) records the
 exact packet paths and distinguishes local 4A restart proof from pending reset.
 
-### Slice-4 recovery progress and planned reset workflow
+### Slice-4 recovery and reset workflow
 
-**4A and 4B Task 3 are published on `codex/m1-slice4-native`, not merged.** The
-[4A checkpoint](tests/M1-slice4a-local-verification.md) records unit/race,
-privileged integration, and WSL2/Docker Desktop retained-root/ENI/ping proof.
-4A is pushed through `6c696ce`, not merged; native Ubuntu CI is pending.
-The [lifecycle checkpoint](tests/M1-slice4b-lifecycle-local-verification.md)
-records Task 3's effect/console/hook ownership, graceful nested stop and
-process-level cleanup tests at `1e8abe3`. Tasks 4–5 now add strict orphan
-collection and complete leak accounting locally, not published or merged;
-the [ownership/lifetime checkpoint](tests/M1-slice4b-ownership-leak-local-verification.md)
-records commands and independent kernel/FD/socket witnesses. Native Ubuntu CI
-remains pending. Next is 4C durable soft reset, not M2 or milestone closure.
-The slice-4
-[design](superpowers/specs/2026-10-02-m1-slice-4-recovery-reset-design.md),
-[implementation plan](superpowers/plans/2026-10-02-m1-slice-4-recovery-reset.md),
-and [verification plan](tests/M1-slice4-verification-plan.md) describe the next
-work. M1 remains incomplete. `make e2e` is still a failing placeholder;
-`nephos reset`, `nephos reset --hard`, and the replayable `docs/demos/M1.md`
-are future deliverables. The examples below specify future behavior and are
-not a runnable acceptance procedure for the current tree:
+4A (retained-root recovery) and 4B (lifecycle, ownership inventory, orphan
+collection, leak checker) are in [PR #7](https://github.com/Amrzxk/nephos/pull/7).
+4C adds the soft reset; 4D adds `nephos down --purge` and `nephos reset --hard`;
+4E adds the replayable `docs/demos/M1.md` and a real `make e2e`. The
+[simplified reset plan](superpowers/plans/2026-11-13-m1-slice-4cd-simplified-reset.md)
+is current; the older slice-4 design and plan remain as history. The
+[ROADMAP](ROADMAP.md) records what has landed.
 
 ```text
-# Full future acceptance workflow; reset/e2e are not yet implemented.
-make dev-ami
-make appliance
-make build
 nephos down
 nephos up             # same instance IDs, ENIs, MACs, private IPs, roots and files
-nephos reset          # waits for durable deletion and an in-appliance leak check
-nephos reset --hard   # remove verified old container/volume, then start fresh
-make e2e             # replay the demo using freshly built images/binaries above
+nephos reset          # remove every instance, subnet and VPC, then run the leak check
+nephos reset --timeout 10m -o json   # longer budget, machine-readable result
+bash tests/reset-smoke.sh            # throwaway appliance; refuses an existing nephos container
 ```
+
+`nephos reset` exits 0 only when the workspace is empty and the in-appliance
+leak check is complete and clean. `LeakDetected` lists each finding;
+`ResetTimeout` means resources are still being removed, and rerunning the
+reset continues. Creates fail with `ResetInProgress` while a reset runs.
 
 4A recovery keeps the original Podman container and writable root;
 it fails the instance visibly if a provisioned root is missing, rather than

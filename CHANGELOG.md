@@ -13,6 +13,13 @@ Each entry names the milestone it belongs to; see [docs/ROADMAP.md](docs/ROADMAP
 
 ### Added
 
+- **M1 — soft reset (slice 4C).** `nephos reset [--timeout]` and
+  `POST /v1/workspaces/default/reset` terminate every instance, then delete
+  every subnet and VPC, then run exclusive orphan collection and the leak
+  checker. The call succeeds only when the check is complete and clean
+  (`409 LeakDetected` otherwise, `504 ResetTimeout` when time runs out;
+  rerunning continues). Creates return `409 ResetInProgress` during a reset.
+  `tests/reset-smoke.sh` runs in native CI.
 - **M1 — hardening before reset.** `make test-integration` runs every
   `integration`-tagged package inside a throwaway privileged appliance, and the
   native-Docker CI job now runs it on every pull request. `make dev-up`
