@@ -35,6 +35,7 @@ type Network struct {
 	store   *store.Store
 	enqueue func(string)
 	now     func() time.Time
+	resets  *ResetGuard
 }
 
 // NewNetwork wires persistence, post-commit enqueue, and an injectable clock.
@@ -45,8 +46,14 @@ func NewNetwork(s *store.Store, enqueue func(string), now func() time.Time) *Net
 	return &Network{store: s, enqueue: enqueue, now: now}
 }
 
+// GuardResets makes creates fail with ResetInProgress while guard is held.
+func (n *Network) GuardResets(guard *ResetGuard) { n.resets = guard }
+
 // CreateVPC records a pending VPC and event atomically, then enqueues it.
 func (n *Network) CreateVPC(ctx context.Context, input CreateVPCInput, key string) (model.VPC, error) {
+	if err := n.resets.check(); err != nil {
+		return model.VPC{}, err
+	}
 	name, err := ValidateName(input.Name)
 	if err != nil {
 		return model.VPC{}, err
@@ -197,6 +204,9 @@ func (n *Network) DeleteVPC(ctx context.Context, id string) (model.VPC, error) {
 
 // CreateSubnet validates its VPC and siblings inside one transaction.
 func (n *Network) CreateSubnet(ctx context.Context, input CreateSubnetInput, key string) (model.Subnet, error) {
+	if err := n.resets.check(); err != nil {
+		return model.Subnet{}, err
+	}
 	name, err := ValidateName(input.Name)
 	if err != nil {
 		return model.Subnet{}, err

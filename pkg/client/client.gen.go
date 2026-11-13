@@ -234,6 +234,37 @@ type InstancesPage struct {
 	NextPageToken *string    `json:"next_page_token,omitempty"`
 }
 
+// LeakCheck defines model for LeakCheck.
+type LeakCheck struct {
+	// Clean Complete and no Nephos-owned residue was found
+	Clean bool `json:"clean"`
+
+	// Complete Every runtime, kernel and process inventory was observed
+	Complete         bool          `json:"complete"`
+	Findings         []LeakFinding `json:"findings"`
+	InspectionErrors []string      `json:"inspection_errors"`
+}
+
+// LeakFinding defines model for LeakFinding.
+type LeakFinding struct {
+	Identity string `json:"identity"`
+	Kind     string `json:"kind"`
+	Reason   string `json:"reason"`
+}
+
+// ResetError defines model for ResetError.
+type ResetError struct {
+	Code      string     `json:"code"`
+	LeakCheck *LeakCheck `json:"leak_check,omitempty"`
+	Message   string     `json:"message"`
+}
+
+// ResetResult defines model for ResetResult.
+type ResetResult struct {
+	LeakCheck LeakCheck `json:"leak_check"`
+	Workspace string    `json:"workspace"`
+}
+
 // RunInstanceRequest defines model for RunInstanceRequest.
 type RunInstanceRequest struct {
 	Name     string `json:"name"`
@@ -319,6 +350,9 @@ type Conflict = Error
 // NotFound defines model for NotFound.
 type NotFound = Error
 
+// ServiceUnavailable defines model for ServiceUnavailable.
+type ServiceUnavailable = Error
+
 // TooManyRequests defines model for TooManyRequests.
 type TooManyRequests = Error
 
@@ -340,6 +374,12 @@ type ListInstancesParams struct {
 type RunInstanceParams struct {
 	// IdempotencyKey Replays identical creates for 24 hours
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// ResetWorkspaceParams defines parameters for ResetWorkspace.
+type ResetWorkspaceParams struct {
+	// Timeout Seconds to wait for teardown and verification
+	Timeout *int `form:"timeout,omitempty" json:"timeout,omitempty"`
 }
 
 // ListSubnetsParams defines parameters for ListSubnets.
@@ -479,6 +519,11 @@ type ClientInterface interface {
 	//
 	// Authenticated serial console WebSocket, the explicitly labeled exception to learner traffic entering through nx-edge. This is not SSH. Clients negotiate the nephos.console.v1 subprotocol. The complete message framing, limits, and failure semantics are in api/console-v1.md.
 	GetInstanceConsole(ctx context.Context, workspace Workspace, id ResourceID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ResetWorkspace performs a POST /v1/workspaces/{workspace}/reset (the `ResetWorkspace` operationId) request.
+	//
+	// Soft reset. Terminates every instance, then deletes every subnet and VPC, then verifies under exclusive admission that no Nephos kernel, Podman or process residue remains. The call is synchronous. Creates are refused while it runs. Resources already marked for deletion keep being removed after a timeout, so rerunning continues the reset.
+	ResetWorkspace(ctx context.Context, workspace Workspace, params *ResetWorkspaceParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListSubnets performs a GET /v1/workspaces/{workspace}/subnets (the `ListSubnets` operationId) request.
 	ListSubnets(ctx context.Context, workspace Workspace, params *ListSubnetsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -626,6 +671,21 @@ func (c *Client) GetInstance(ctx context.Context, workspace Workspace, id Resour
 // Authenticated serial console WebSocket, the explicitly labeled exception to learner traffic entering through nx-edge. This is not SSH. Clients negotiate the nephos.console.v1 subprotocol. The complete message framing, limits, and failure semantics are in api/console-v1.md.
 func (c *Client) GetInstanceConsole(ctx context.Context, workspace Workspace, id ResourceID, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetInstanceConsoleRequest(c.Server, workspace, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ResetWorkspace performs a POST /v1/workspaces/{workspace}/reset (the `ResetWorkspace` operationId) request.
+//
+// Soft reset. Terminates every instance, then deletes every subnet and VPC, then verifies under exclusive admission that no Nephos kernel, Podman or process residue remains. The call is synchronous. Creates are refused while it runs. Resources already marked for deletion keep being removed after a timeout, so rerunning continues the reset.
+func (c *Client) ResetWorkspace(ctx context.Context, workspace Workspace, params *ResetWorkspaceParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewResetWorkspaceRequest(c.Server, workspace, params)
 	if err != nil {
 		return nil, err
 	}
@@ -1117,6 +1177,67 @@ func NewGetInstanceConsoleRequest(server string, workspace Workspace, id Resourc
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewResetWorkspaceRequest constructs an http.Request for the ResetWorkspace method
+func NewResetWorkspaceRequest(server string, workspace Workspace, params *ResetWorkspaceParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "workspace", workspace, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/workspaces/%s/reset", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Timeout != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "timeout", *params.Timeout, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -1648,6 +1769,13 @@ type ClientWithResponsesInterface interface {
 	//
 	// Returns a wrapper object for the known response body format(s).
 	GetInstanceConsoleWithResponse(ctx context.Context, workspace Workspace, id ResourceID, reqEditors ...RequestEditorFn) (*GetInstanceConsoleResponse, error)
+
+	// ResetWorkspaceWithResponse performs a POST /v1/workspaces/{workspace}/reset (the `ResetWorkspace` operationId) request.
+	//
+	// Soft reset. Terminates every instance, then deletes every subnet and VPC, then verifies under exclusive admission that no Nephos kernel, Podman or process residue remains. The call is synchronous. Creates are refused while it runs. Resources already marked for deletion keep being removed after a timeout, so rerunning continues the reset.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	ResetWorkspaceWithResponse(ctx context.Context, workspace Workspace, params *ResetWorkspaceParams, reqEditors ...RequestEditorFn) (*ResetWorkspaceResponse, error)
 
 	// ListSubnetsWithResponse performs a GET /v1/workspaces/{workspace}/subnets (the `ListSubnets` operationId) request.
 	//
@@ -2204,6 +2332,89 @@ func (r GetInstanceConsoleResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r GetInstanceConsoleResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ResetWorkspaceResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ResetResult
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *BadRequest
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthorized
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *ResetError
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *ServiceUnavailable
+	// JSON504 the response for an HTTP 504 `application/json` response
+	JSON504 *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ResetWorkspaceResponse) GetJSON200() *ResetResult {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r ResetWorkspaceResponse) GetJSON400() *BadRequest {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r ResetWorkspaceResponse) GetJSON401() *Unauthorized {
+	return r.JSON401
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r ResetWorkspaceResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r ResetWorkspaceResponse) GetJSON409() *ResetError {
+	return r.JSON409
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r ResetWorkspaceResponse) GetJSON503() *ServiceUnavailable {
+	return r.JSON503
+}
+
+// GetJSON504 returns the response for an HTTP 504 `application/json` response
+func (r ResetWorkspaceResponse) GetJSON504() *Error {
+	return r.JSON504
+}
+
+// GetBody returns the raw response body bytes
+func (r ResetWorkspaceResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ResetWorkspaceResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ResetWorkspaceResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ResetWorkspaceResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -2863,6 +3074,19 @@ func (c *ClientWithResponses) GetInstanceConsoleWithResponse(ctx context.Context
 	return ParseGetInstanceConsoleResponse(rsp)
 }
 
+// ResetWorkspaceWithResponse performs a POST /v1/workspaces/{workspace}/reset (the `ResetWorkspace` operationId) request.
+//
+// Soft reset. Terminates every instance, then deletes every subnet and VPC, then verifies under exclusive admission that no Nephos kernel, Podman or process residue remains. The call is synchronous. Creates are refused while it runs. Resources already marked for deletion keep being removed after a timeout, so rerunning continues the reset.
+//
+// Returns a wrapper object for the known response body format(s).
+func (c *ClientWithResponses) ResetWorkspaceWithResponse(ctx context.Context, workspace Workspace, params *ResetWorkspaceParams, reqEditors ...RequestEditorFn) (*ResetWorkspaceResponse, error) {
+	rsp, err := c.ResetWorkspace(ctx, workspace, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseResetWorkspaceResponse(rsp)
+}
+
 // ListSubnetsWithResponse performs a GET /v1/workspaces/{workspace}/subnets (the `ListSubnets` operationId) request.
 //
 // Returns a wrapper object for the known response body format(s).
@@ -3360,6 +3584,74 @@ func ParseGetInstanceConsoleResponse(rsp *http.Response) (*GetInstanceConsoleRes
 			return nil, err
 		}
 		response.JSON429 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseResetWorkspaceResponse parses an HTTP response from a ResetWorkspaceWithResponse call
+func ParseResetWorkspaceResponse(rsp *http.Response) (*ResetWorkspaceResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ResetWorkspaceResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ResetResult
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest ResetError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 504:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON504 = &dest
 
 	}
 

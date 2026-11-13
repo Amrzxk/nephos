@@ -343,6 +343,61 @@ paths:
           $ref: '#/components/responses/Conflict'
         '429':
           $ref: '#/components/responses/TooManyRequests'
+  /v1/workspaces/{workspace}/reset:
+    parameters:
+      - $ref: '#/components/parameters/Workspace'
+    post:
+      operationId: resetWorkspace
+      description: >-
+        Soft reset. Terminates every instance, then deletes every subnet and
+        VPC, then verifies under exclusive admission that no Nephos kernel,
+        Podman or process residue remains. The call is synchronous. Creates
+        are refused while it runs. Resources already marked for deletion keep
+        being removed after a timeout, so rerunning continues the reset.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: timeout
+          in: query
+          required: false
+          description: Seconds to wait for teardown and verification
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1800
+            default: 300
+      responses:
+        '200':
+          description: The workspace is empty and the leak check is clean
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResetResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: >-
+            ResetInProgress (another reset is running) or LeakDetected (the
+            leak check found residue or could not observe everything; see
+            leak_check)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResetError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+        '504':
+          description: >-
+            ResetTimeout: resources were still being removed when the timeout
+            expired. Rerun the reset to continue.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
   /v1/events:
     get:
       operationId: getEvents
@@ -553,6 +608,49 @@ components:
         api_version: {type: string}
         build_version: {type: string}
         build_commit: {type: string}
+    LeakFinding:
+      type: object
+      additionalProperties: false
+      required: [kind, identity, reason]
+      properties:
+        kind: {type: string}
+        identity: {type: string}
+        reason: {type: string}
+    LeakCheck:
+      type: object
+      additionalProperties: false
+      required: [complete, clean, findings, inspection_errors]
+      properties:
+        complete:
+          type: boolean
+          description: Every runtime, kernel and process inventory was observed
+        clean:
+          type: boolean
+          description: Complete and no Nephos-owned residue was found
+        findings:
+          type: array
+          items:
+            $ref: '#/components/schemas/LeakFinding'
+        inspection_errors:
+          type: array
+          items: {type: string}
+    ResetResult:
+      type: object
+      additionalProperties: false
+      required: [workspace, leak_check]
+      properties:
+        workspace: {type: string}
+        leak_check:
+          $ref: '#/components/schemas/LeakCheck'
+    ResetError:
+      type: object
+      additionalProperties: false
+      required: [code, message]
+      properties:
+        code: {type: string}
+        message: {type: string}
+        leak_check:
+          $ref: '#/components/schemas/LeakCheck'
     Error:
       type: object
       additionalProperties: false
@@ -583,6 +681,12 @@ components:
             $ref: '#/components/schemas/Error'
     Unauthorized:
       description: Missing or invalid bearer token
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    ServiceUnavailable:
+      description: The appliance is starting or a dependent service is not ready
       content:
         application/json:
           schema:

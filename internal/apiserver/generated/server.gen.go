@@ -231,6 +231,37 @@ type InstancesPage struct {
 	NextPageToken *string    `json:"next_page_token,omitempty"`
 }
 
+// LeakCheck defines model for LeakCheck.
+type LeakCheck struct {
+	// Clean Complete and no Nephos-owned residue was found
+	Clean bool `json:"clean"`
+
+	// Complete Every runtime, kernel and process inventory was observed
+	Complete         bool          `json:"complete"`
+	Findings         []LeakFinding `json:"findings"`
+	InspectionErrors []string      `json:"inspection_errors"`
+}
+
+// LeakFinding defines model for LeakFinding.
+type LeakFinding struct {
+	Identity string `json:"identity"`
+	Kind     string `json:"kind"`
+	Reason   string `json:"reason"`
+}
+
+// ResetError defines model for ResetError.
+type ResetError struct {
+	Code      string     `json:"code"`
+	LeakCheck *LeakCheck `json:"leak_check,omitempty"`
+	Message   string     `json:"message"`
+}
+
+// ResetResult defines model for ResetResult.
+type ResetResult struct {
+	LeakCheck LeakCheck `json:"leak_check"`
+	Workspace string    `json:"workspace"`
+}
+
 // RunInstanceRequest defines model for RunInstanceRequest.
 type RunInstanceRequest struct {
 	Name     string `json:"name"`
@@ -316,6 +347,9 @@ type Conflict = Error
 // NotFound defines model for NotFound.
 type NotFound = Error
 
+// ServiceUnavailable defines model for ServiceUnavailable.
+type ServiceUnavailable = Error
+
 // TooManyRequests defines model for TooManyRequests.
 type TooManyRequests = Error
 
@@ -337,6 +371,12 @@ type ListInstancesParams struct {
 type RunInstanceParams struct {
 	// IdempotencyKey Replays identical creates for 24 hours
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// ResetWorkspaceParams defines parameters for ResetWorkspace.
+type ResetWorkspaceParams struct {
+	// Timeout Seconds to wait for teardown and verification
+	Timeout *int `form:"timeout,omitempty" json:"timeout,omitempty"`
 }
 
 // ListSubnetsParams defines parameters for ListSubnets.
@@ -398,6 +438,9 @@ type ServerInterface interface {
 
 	// (GET /v1/workspaces/{workspace}/instances/{id}/console)
 	GetInstanceConsole(w http.ResponseWriter, r *http.Request, workspace Workspace, id ResourceID)
+
+	// (POST /v1/workspaces/{workspace}/reset)
+	ResetWorkspace(w http.ResponseWriter, r *http.Request, workspace Workspace, params ResetWorkspaceParams)
 
 	// (GET /v1/workspaces/{workspace}/subnets)
 	ListSubnets(w http.ResponseWriter, r *http.Request, workspace Workspace, params ListSubnetsParams)
@@ -703,6 +746,48 @@ func (siw *ServerInterfaceWrapper) GetInstanceConsole(w http.ResponseWriter, r *
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetInstanceConsole(w, r, workspace, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ResetWorkspace operation middleware
+func (siw *ServerInterfaceWrapper) ResetWorkspace(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "workspace" -------------
+	var workspace Workspace
+
+	err = runtime.BindStyledParameterWithOptions("simple", "workspace", r.PathValue("workspace"), &workspace, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workspace", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ResetWorkspaceParams
+
+	// ------------- Optional query parameter "timeout" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "timeout", r.URL.Query(), &params.Timeout, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "timeout"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "timeout", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ResetWorkspace(w, r, workspace, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1197,6 +1282,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/workspaces/{workspace}/instances/{id}", wrapper.TerminateInstance)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/workspaces/{workspace}/instances/{id}", wrapper.GetInstance)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/workspaces/{workspace}/instances/{id}/console", wrapper.GetInstanceConsole)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/workspaces/{workspace}/reset", wrapper.ResetWorkspace)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/events", wrapper.GetEvents)
 
 	return m
