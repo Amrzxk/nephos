@@ -13,6 +13,13 @@ Each entry names the milestone it belongs to; see [docs/ROADMAP.md](docs/ROADMAP
 
 ### Added
 
+- **M1 — hard reset and purge (slice 4D).** `nephos down --purge` removes
+  the appliance container and its `nephos-data` volume; `nephos reset --hard`
+  does the same and starts a fresh appliance with the old limits unless new
+  ones are passed. Both refuse objects without the Nephos ownership label,
+  remove the container by its inspected ID, recheck the volume's creation
+  time, delete the host credential file, and ask for confirmation (or
+  `--yes`).
 - **M1 — soft reset (slice 4C).** `nephos reset [--timeout]` and
   `POST /v1/workspaces/default/reset` terminate every instance, then delete
   every subnet and VPC, then run exclusive orphan collection and the leak

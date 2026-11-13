@@ -578,12 +578,13 @@ roots. Every unexpected server/controller failure uses that same lifetime
 cleanup path. Effect draining accounts for verified child work: an admitted
 Podman Start must still complete its private OCI hook while independent
 effects are blocked. Parent completion cannot hide outstanding hook children.
-Hard purge prevalidates both Docker objects, targets the
-captured container ID and rechecks owned volume creation identity; fresh
-bootstrap occurs only after verified removal. It bypasses unhealthy
-API/SQLite, preserves observed limits unless overridden, and atomically
-replaces credentials only after fresh readiness. See the design for precise
-budgets, key/retry and partial-failure contracts; these are planning claims.
+Hard purge (`nephos down --purge`, and `nephos reset --hard`, which purges
+then runs `up`) prevalidates both Docker objects' ownership labels before
+deleting anything, removes the container by its inspected ID, and removes
+the volume only if its creation time is unchanged. It bypasses the API and
+SQLite, removes the host credential file, and preserves the old container's
+observed limits unless the caller overrides them. A refused or failed purge
+never starts a fresh appliance.
 
 **Reset levels:**
 
