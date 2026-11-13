@@ -195,6 +195,9 @@ jobs:
       - name: Check soft reset, hard reset and purge
         run: bash tests/reset-smoke.sh
 
+      - name: Replay the M1 demo end to end
+        run: bash tests/m1-e2e.sh
+
       - name: Appliance logs on failure
         if: failure()
         run: docker logs nephos || true
