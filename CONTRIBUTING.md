@@ -12,6 +12,9 @@ unchanged.
 
 Nephos requires a [DCO](https://developercertificate.org/) sign-off on every
 commit. There is no CLA ([ADR-0011](docs/adr/0011-apache-2-license-with-dco.md)).
+The one exception is Dependabot's own commits on pull requests that GitHub
+reports as opened by Dependabot; a bot cannot certify origin, and a maintainer
+reviews those updates instead.
 
 ```bash
 git commit -s

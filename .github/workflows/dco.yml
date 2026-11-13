@@ -25,6 +25,7 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
         run: |
           set -euo pipefail
           failed=0
@@ -36,6 +37,13 @@ jobs:
           for sha in $commits; do
             subject=$(git log -1 --format='%s' "$sha")
             author=$(git log -1 --format='%ae' "$sha")
+            # Dependabot cannot sign off. The DCO certifies human contributions,
+            # so its own commits are exempt, but only on pull requests GitHub
+            # reports as opened by Dependabot: an author email alone can be forged.
+            if [ "$PR_AUTHOR" = "dependabot[bot]" ] && [ "$author" = "49699333+dependabot[bot]@users.noreply.github.com" ]; then
+              echo "skip   $sha (Dependabot) $subject"
+              continue
+            fi
             # Merge commits are created by GitHub and carry no sign-off.
             if [ "$(git rev-list --parents -n 1 "$sha" | wc -w)" -gt 2 ]; then
               echo "skip   $sha (merge commit) $subject"

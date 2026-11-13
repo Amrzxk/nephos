@@ -25,5 +25,12 @@ updates:
       - /images/dev-ami
     schedule:
       interval: weekly
+    # Base-image versions are deliberate: the dev AMI is Ubuntu 24.04 LTS,
+    # the appliance tracks Debian stable, and the Go builder image must match
+    # the go.mod toolchain. Only patch-level and digest updates are proposed;
+    # release jumps go through a normal change that updates all of them.
+    ignore:
+      - dependency-name: "*"
+        update-types: [version-update:semver-major, version-update:semver-minor]
     commit-message:
       prefix: chore(deps)
