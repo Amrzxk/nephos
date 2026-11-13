@@ -1,5 +1,10 @@
 # M1 Slice 4: Recovery, Reset, and Closure Implementation Plan
 
+> **Superseded in part (2026-11-13).** The durable soft-reset coordinator,
+> creation fence and hard-reset sections (Tasks 6–9) are replaced by the
+> [simplified reset plan](2026-11-13-m1-slice-4cd-simplified-reset.md). The crash-safe reset moves to M8. 4A and 4B
+> are unchanged.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** retain M1 instance roots across appliance restart, make both reset
