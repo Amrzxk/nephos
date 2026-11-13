@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -55,9 +56,48 @@ func TestCredentialStoreWritesRestrictedToken(t *testing.T) {
 	if err != nil || string(data) != testToken() {
 		t.Fatalf("credential bytes=%q err=%v", data, err)
 	}
-	info, err := os.Stat(path)
-	if err != nil || info.Mode().Perm() != 0o600 {
-		t.Fatalf("credential mode=%v err=%v", info, err)
+	// Windows has no Unix mode bits; restrictToOwner sets a DACL there instead.
+	if runtime.GOOS != "windows" {
+		info, err := os.Stat(path)
+		if err != nil || info.Mode().Perm() != 0o600 {
+			t.Fatalf("credential mode=%v err=%v", info, err)
+		}
+	}
+	got, err := LoadCredential(path)
+	if err != nil || got != testToken() {
+		t.Fatalf("LoadCredential = %q, %v", got, err)
+	}
+}
+
+func TestLoadCredentialRejectsUnsafeFiles(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name, body string, mode os.FileMode) string {
+		path := filepath.Join(dir, name)
+		if err := os.WriteFile(path, []byte(body), mode); err != nil {
+			t.Fatal(err)
+		}
+		return path
+	}
+	tests := []struct {
+		name string
+		path string
+		unix bool // relies on Unix permission bits
+	}{
+		{"missing", filepath.Join(dir, "absent"), false},
+		{"malformed", write("malformed", "not-a-token", 0o600), false},
+		{"oversized", write("oversized", strings.Repeat("A", 4096), 0o600), false},
+		{"directory", dir, false},
+		{"group readable", write("shared", testToken(), 0o640), true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.unix && runtime.GOOS == "windows" {
+				t.Skip("Unix permission bits do not exist on Windows; access is DACL-based")
+			}
+			if _, err := LoadCredential(tt.path); err == nil {
+				t.Fatal("accepted an unsafe credential")
+			}
+		})
 	}
 }
 

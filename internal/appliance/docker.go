@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/netip"
+	"os"
 	"slices"
 
 	cerrdefs "github.com/containerd/errdefs"
@@ -18,9 +19,20 @@ type dockerEngine struct {
 	client *client.Client
 }
 
-// NewDockerEngine connects to the user's configured Docker daemon.
+// NewDockerEngine connects to the user's configured Docker daemon: DOCKER_HOST
+// when set, otherwise the active Docker CLI context, otherwise the platform
+// default (Unix socket, or the Docker Desktop named pipe on Windows).
 func NewDockerEngine() (Engine, error) {
-	cli, err := client.New(client.FromEnv)
+	home, _ := os.UserHomeDir() // without a home directory, only env and defaults apply
+	host, err := dockerContextHost(os.Getenv, home)
+	if err != nil {
+		return nil, fmt.Errorf("resolve Docker context: %w", err)
+	}
+	opts := []client.Opt{client.FromEnv}
+	if host != "" {
+		opts = append(opts, client.WithHost(host))
+	}
+	cli, err := client.New(opts...)
 	if err != nil {
 		return nil, fmt.Errorf("configure Docker client: %w", err)
 	}

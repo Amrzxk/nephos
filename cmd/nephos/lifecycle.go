@@ -29,7 +29,7 @@ func newManager() (appliance.Manager, error) {
 	}, nil
 }
 
-func runUp(args []string, stdout, stderr *os.File) int {
+func runUp(ctx context.Context, args []string, stdout, stderr *os.File) int {
 	fs := flag.NewFlagSet("up", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	memory := fs.String("memory", "4g", "appliance memory limit")
@@ -63,7 +63,7 @@ func runUp(args []string, stdout, stderr *os.File) int {
 			limits.Explicit.PIDs = true
 		}
 	})
-	if err := m.Up(context.Background(), limits); err != nil {
+	if err := m.Up(ctx, limits); err != nil {
 		fmt.Fprintf(stderr, "nephos up: %v\n", err)
 		return 1
 	}
@@ -71,7 +71,7 @@ func runUp(args []string, stdout, stderr *os.File) int {
 	return exitOK
 }
 
-func runDown(args []string, stdout, stderr *os.File) int {
+func runDown(ctx context.Context, args []string, stdout, stderr *os.File) int {
 	if len(args) != 0 {
 		fmt.Fprintln(stderr, "nephos down: unexpected arguments")
 		return exitUsage
@@ -81,7 +81,7 @@ func runDown(args []string, stdout, stderr *os.File) int {
 		fmt.Fprintf(stderr, "nephos down: %v\n", err)
 		return 1
 	}
-	if err := m.Down(context.Background()); err != nil {
+	if err := m.Down(ctx); err != nil {
 		fmt.Fprintf(stderr, "nephos down: %v\n", err)
 		return 1
 	}
@@ -89,7 +89,7 @@ func runDown(args []string, stdout, stderr *os.File) int {
 	return exitOK
 }
 
-func runStatus(args []string, stdout, stderr *os.File) int {
+func runStatus(ctx context.Context, args []string, stdout, stderr *os.File) int {
 	if len(args) != 0 {
 		fmt.Fprintln(stderr, "nephos status: unexpected arguments")
 		return exitUsage
@@ -99,7 +99,7 @@ func runStatus(args []string, stdout, stderr *os.File) int {
 		fmt.Fprintf(stderr, "nephos status: %v\n", err)
 		return 1
 	}
-	status, err := m.Status(context.Background())
+	status, err := m.Status(ctx)
 	if err != nil {
 		fmt.Fprintf(stderr, "nephos status: %v\n", err)
 		return 1

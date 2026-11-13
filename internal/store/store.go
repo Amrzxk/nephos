@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 
 	_ "modernc.org/sqlite"
 )
@@ -64,7 +65,14 @@ func Open(ctx context.Context, path string) (*Store, error) {
 	if err != nil {
 		return nil, fmt.Errorf("resolve state file path: %w", err)
 	}
-	uri := url.URL{Scheme: "file", Path: absPath}
+	// SQLite URIs use forward slashes and need a leading slash before a
+	// Windows drive letter (file:///C:/...). The appliance is Linux-only, but
+	// the CLI tests run an in-process daemon on every supported host OS.
+	uriPath := filepath.ToSlash(absPath)
+	if !strings.HasPrefix(uriPath, "/") {
+		uriPath = "/" + uriPath
+	}
+	uri := url.URL{Scheme: "file", Path: uriPath}
 	params := uri.Query()
 	params.Set("_busy_timeout", "5000")
 	params.Set("_foreign_keys", "on")
