@@ -39,6 +39,7 @@ func (e CreateSubnetRequestAvailabilityZone) Valid() bool {
 
 // Defines values for HealthResponseStatus.
 const (
+	Degraded HealthResponseStatus = "degraded"
 	Ready    HealthResponseStatus = "ready"
 	Starting HealthResponseStatus = "starting"
 )
@@ -46,6 +47,8 @@ const (
 // Valid indicates whether the value is a known member of the HealthResponseStatus enum.
 func (e HealthResponseStatus) Valid() bool {
 	switch e {
+	case Degraded:
+		return true
 	case Ready:
 		return true
 	case Starting:
@@ -315,6 +318,9 @@ type Conflict = Error
 
 // NotFound defines model for NotFound.
 type NotFound = Error
+
+// TooManyRequests defines model for TooManyRequests.
+type TooManyRequests = Error
 
 // Unauthorized defines model for Unauthorized.
 type Unauthorized = Error
@@ -1705,6 +1711,8 @@ type GetEventsResponse struct {
 	JSON404 *NotFound
 	// JSON409 the response for an HTTP 409 `application/json` response
 	JSON409 *Conflict
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *TooManyRequests
 }
 
 // GetJSON400 returns the response for an HTTP 400 `application/json` response
@@ -1725,6 +1733,11 @@ func (r GetEventsResponse) GetJSON404() *NotFound {
 // GetJSON409 returns the response for an HTTP 409 `application/json` response
 func (r GetEventsResponse) GetJSON409() *Conflict {
 	return r.JSON409
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r GetEventsResponse) GetJSON429() *TooManyRequests {
+	return r.JSON429
 }
 
 // GetBody returns the raw response body bytes
@@ -2139,6 +2152,8 @@ type GetInstanceConsoleResponse struct {
 	JSON404 *NotFound
 	// JSON409 the response for an HTTP 409 `application/json` response
 	JSON409 *Conflict
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *TooManyRequests
 }
 
 // GetJSON400 returns the response for an HTTP 400 `application/json` response
@@ -2159,6 +2174,11 @@ func (r GetInstanceConsoleResponse) GetJSON404() *NotFound {
 // GetJSON409 returns the response for an HTTP 409 `application/json` response
 func (r GetInstanceConsoleResponse) GetJSON409() *Conflict {
 	return r.JSON409
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r GetInstanceConsoleResponse) GetJSON429() *TooManyRequests {
+	return r.JSON429
 }
 
 // GetBody returns the raw response body bytes
@@ -2995,6 +3015,13 @@ func ParseGetEventsResponse(rsp *http.Response) (*GetEventsResponse, error) {
 		}
 		response.JSON409 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest TooManyRequests
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
 	}
 
 	return response, nil
@@ -3326,6 +3353,13 @@ func ParseGetInstanceConsoleResponse(rsp *http.Response) (*GetInstanceConsoleRes
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest TooManyRequests
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
 
 	}
 

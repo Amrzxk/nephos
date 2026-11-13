@@ -36,6 +36,7 @@ func (e CreateSubnetRequestAvailabilityZone) Valid() bool {
 
 // Defines values for HealthResponseStatus.
 const (
+	Degraded HealthResponseStatus = "degraded"
 	Ready    HealthResponseStatus = "ready"
 	Starting HealthResponseStatus = "starting"
 )
@@ -43,6 +44,8 @@ const (
 // Valid indicates whether the value is a known member of the HealthResponseStatus enum.
 func (e HealthResponseStatus) Valid() bool {
 	switch e {
+	case Degraded:
+		return true
 	case Ready:
 		return true
 	case Starting:
@@ -312,6 +315,9 @@ type Conflict = Error
 
 // NotFound defines model for NotFound.
 type NotFound = Error
+
+// TooManyRequests defines model for TooManyRequests.
+type TooManyRequests = Error
 
 // Unauthorized defines model for Unauthorized.
 type Unauthorized = Error

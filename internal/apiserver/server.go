@@ -16,14 +16,18 @@ import (
 )
 
 type server struct {
-	build        version.Info
-	ready        func() bool
-	resources    *service.Network
-	instances    *service.Instances
-	events       *store.Store
-	console      consoleRuntime
-	admitConsole func(context.Context, model.Instance) (context.Context, func() error, error)
-	references   *lifecycle.Registry
+	build    version.Info
+	ready    func() bool
+	degraded func() bool
+
+	consoleSessions sessionLimit
+	eventStreams    sessionLimit
+	resources       *service.Network
+	instances       *service.Instances
+	events          *store.Store
+	console         consoleRuntime
+	admitConsole    func(context.Context, model.Instance) (context.Context, func() error, error)
+	references      *lifecycle.Registry
 }
 
 type consoleRuntime interface {
@@ -32,7 +36,8 @@ type consoleRuntime interface {
 
 // New returns the generated routes behind M1's localhost and bearer boundary.
 func New(token string, build version.Info, ready func() bool, resources *service.Network, instances *service.Instances, events *store.Store, console consoleRuntime, options ...Option) http.Handler {
-	s := &server{build: build, ready: ready, resources: resources, instances: instances, events: events, console: console}
+	s := &server{build: build, ready: ready, resources: resources, instances: instances, events: events, console: console,
+		consoleSessions: newSessionLimit(defaultMaxConsoleSessions), eventStreams: newSessionLimit(defaultMaxEventStreams)}
 	for _, option := range options {
 		option(s)
 	}
@@ -52,12 +57,21 @@ func WithConsoleLifecycle(admit func(context.Context, model.Instance) (context.C
 	return func(s *server) { s.admitConsole = admit; s.references = references }
 }
 
+// WithDegraded reports reconciliation that is retrying after transient
+// failures. A ready appliance then answers 200 with status "degraded".
+func WithDegraded(degraded func() bool) Option {
+	return func(s *server) { s.degraded = degraded }
+}
+
 func (s *server) GetHealth(w http.ResponseWriter, _ *http.Request) {
 	status := generated.Starting
 	code := http.StatusServiceUnavailable
 	if s.ready() {
 		status = generated.Ready
 		code = http.StatusOK
+		if s.degraded != nil && s.degraded() {
+			status = generated.Degraded
+		}
 	}
 	writeJSON(w, code, generated.HealthResponse{Status: status})
 }

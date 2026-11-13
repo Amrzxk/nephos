@@ -54,6 +54,11 @@ func (s *server) GetInstanceConsole(w http.ResponseWriter, r *http.Request, work
 		writeAPIError(w, http.StatusBadRequest, "InvalidParameterValue", "nephos.console.v1 subprotocol is required", id)
 		return
 	}
+	releaseSlot, ok := s.consoleSessions.acquire(w, "console", id)
+	if !ok {
+		return
+	}
+	defer releaseSlot()
 	if s.admitConsole != nil {
 		admitted, release, err := s.admitConsole(r.Context(), instance)
 		if err != nil {
