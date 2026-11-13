@@ -68,6 +68,7 @@ for pkg in "${ordered[@]}"; do
     CGO_ENABLED=0 GOOS=linux go test -tags integration -c -o "$work/$name" "$pkg"
 done
 CGO_ENABLED=0 GOOS=linux go build -o "$work/namespacehold" ./tests/fixtures/namespacehold
+CGO_ENABLED=0 GOOS=linux go build -o "$work/task-limit-helper" ./tests/fixtures/tasklimit
 
 echo "== starting privileged fixture appliance"
 container="$(docker run -d \
@@ -90,6 +91,10 @@ done
 docker exec "$container" podman image exists nephos-ubuntu:dev || fail "fixture appliance never became ready"
 
 docker cp "$work/." "$container:/tmp/itest/" >/dev/null
+# Some tests re-exec their binary as nobody (65534), and the pids-limit test
+# reads its helper from a fixed path inside the appliance.
+docker exec "$container" sh -c 'chmod 0755 /tmp/itest /tmp/itest/* && cp /tmp/itest/task-limit-helper /run/task-limit-helper' \
+    || fail "could not stage integration fixtures"
 
 failed=()
 for pkg in "${ordered[@]}"; do
