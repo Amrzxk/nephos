@@ -32,9 +32,7 @@ func newManager() (appliance.Manager, error) {
 func runUp(ctx context.Context, args []string, stdout, stderr *os.File) int {
 	fs := flag.NewFlagSet("up", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	memory := fs.String("memory", "4g", "appliance memory limit")
-	cpus := fs.Float64("cpus", 2, "appliance CPU limit")
-	pids := fs.Int64("pids-limit", 4096, "appliance PID limit")
+	limitFlags := addLimitFlags(fs)
 	if err := fs.Parse(args); err != nil {
 		return exitUsage
 	}
@@ -42,9 +40,9 @@ func runUp(ctx context.Context, args []string, stdout, stderr *os.File) int {
 		fmt.Fprintln(stderr, "nephos up: unexpected positional arguments")
 		return exitUsage
 	}
-	bytes, err := parseMemory(*memory)
-	if err != nil || math.IsNaN(*cpus) || math.IsInf(*cpus, 0) || *cpus <= 0 || *cpus > 128 || *pids <= 0 {
-		fmt.Fprintln(stderr, "nephos up: invalid resource limits")
+	limits, err := limitFlags.limits()
+	if err != nil {
+		fmt.Fprintf(stderr, "nephos up: %v\n", err)
 		return exitUsage
 	}
 	m, err := newManager()
@@ -52,17 +50,6 @@ func runUp(ctx context.Context, args []string, stdout, stderr *os.File) int {
 		fmt.Fprintf(stderr, "nephos up: %v\n", err)
 		return 1
 	}
-	limits := appliance.Limits{MemoryBytes: bytes, NanoCPUs: int64(*cpus * 1e9), PIDs: *pids}
-	fs.Visit(func(f *flag.Flag) {
-		switch f.Name {
-		case "memory":
-			limits.Explicit.Memory = true
-		case "cpus":
-			limits.Explicit.CPUs = true
-		case "pids-limit":
-			limits.Explicit.PIDs = true
-		}
-	})
 	if err := m.Up(ctx, limits); err != nil {
 		fmt.Fprintf(stderr, "nephos up: %v\n", err)
 		return 1
@@ -71,10 +58,25 @@ func runUp(ctx context.Context, args []string, stdout, stderr *os.File) int {
 	return exitOK
 }
 
-func runDown(ctx context.Context, args []string, stdout, stderr *os.File) int {
-	if len(args) != 0 {
+// runDown stops the appliance; --purge also deletes it and its data volume.
+func runDown(ctx context.Context, args []string, stdin, stdout, stderr *os.File) int {
+	fs := flag.NewFlagSet("down", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	purge := fs.Bool("purge", false, "also remove the appliance container and its data volume")
+	yes := fs.Bool("yes", false, "with --purge: do not ask for confirmation")
+	if err := fs.Parse(args); err != nil {
+		return exitUsage
+	}
+	if fs.NArg() != 0 {
 		fmt.Fprintln(stderr, "nephos down: unexpected arguments")
 		return exitUsage
+	}
+	if *yes && !*purge {
+		fmt.Fprintln(stderr, "nephos down: --yes is only valid with --purge")
+		return exitUsage
+	}
+	if *purge {
+		return runPurge(ctx, *yes, stdin, stdout, stderr)
 	}
 	m, err := newManager()
 	if err != nil {

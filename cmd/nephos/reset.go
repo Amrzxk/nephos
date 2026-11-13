@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/Amrzxk/nephos/pkg/client"
@@ -15,18 +16,53 @@ import (
 // runReset is the soft reset: the appliance keeps running, every Nephos
 // resource in the default workspace is removed, and the result is verified
 // by the leak checker before the command succeeds.
-func runReset(ctx context.Context, args []string, stdout, stderr *os.File, cfg resourceConfig) int {
+//
+// With --hard it instead purges the appliance container and data volume
+// without using the API, then starts a fresh appliance (ADR-0003).
+func runReset(ctx context.Context, args []string, stdin, stdout, stderr *os.File, cfg resourceConfig) int {
 	fs := flag.NewFlagSet("reset", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	timeout := fs.Duration("timeout", 5*time.Minute, "how long to wait for teardown and the leak check (max 30m)")
 	output := "human"
 	fs.StringVar(&output, "o", "human", "output format: human or json")
 	fs.StringVar(&output, "output", "human", "output format: human or json")
+	hard := fs.Bool("hard", false, "delete the appliance and its data volume, then start a fresh appliance")
+	yes := fs.Bool("yes", false, "with --hard: do not ask for confirmation")
+	limitFlags := addLimitFlags(fs)
 	if err := fs.Parse(args); err != nil {
 		return exitUsage
 	}
 	if fs.NArg() != 0 {
 		fmt.Fprintln(stderr, "nephos reset: unexpected positional arguments")
+		return exitUsage
+	}
+	var softOnly, hardOnly []string
+	fs.Visit(func(f *flag.Flag) {
+		name := "--" + f.Name
+		if len(f.Name) == 1 {
+			name = "-" + f.Name
+		}
+		switch f.Name {
+		case "timeout", "o", "output":
+			softOnly = append(softOnly, name)
+		case "yes", "memory", "cpus", "pids-limit":
+			hardOnly = append(hardOnly, name)
+		}
+	})
+	if *hard {
+		if len(softOnly) != 0 {
+			fmt.Fprintf(stderr, "nephos reset: %s cannot be combined with --hard\n", strings.Join(softOnly, ", "))
+			return exitUsage
+		}
+		limits, err := limitFlags.limits()
+		if err != nil {
+			fmt.Fprintf(stderr, "nephos reset: %v\n", err)
+			return exitUsage
+		}
+		return runHardReset(ctx, limits, *yes, stdin, stdout, stderr)
+	}
+	if len(hardOnly) != 0 {
+		fmt.Fprintf(stderr, "nephos reset: %s is only valid with --hard\n", strings.Join(hardOnly, ", "))
 		return exitUsage
 	}
 	if output != "human" && output != "json" {
