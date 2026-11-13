@@ -1,6 +1,6 @@
 # Nephos Roadmap
 
-**Status:** M0 complete; M1 code-complete and merged, waiting only on Windows 10 manual QA (November 2026). The MVP is **v0.1.0 = milestones M0–M8**. This file is the single place that records milestone progress.
+**Status:** M0 complete; M1 code-complete and merged, waiting only on Windows 10 manual QA; M2 active (November 2026). The MVP is **v0.1.0 = milestones M0–M8**. This file is the single place that records milestone progress.
 
 ## How this roadmap works
 
@@ -205,7 +205,7 @@ nephos reset
 - Key pairs: create (the private key is returned once) and import.
 - Instance lifecycle: stop, start, reboot, terminate. Terminated instances stay visible for one hour.
 - Instance types `t3.nano` through `t3.medium` with enforced limits; capacity checks (`InsufficientInstanceCapacity`); running-instance quota.
-- AMI pipeline: `images/amis/ubuntu-24.04` built and published by CI; image pull and cache; `ami-` IDs pinned to digests.
+- AMI pipeline: `images/amis/ubuntu-24.04` built reproducibly by CI and imported by the appliance; `ami-` IDs pinned to digests. Publishing to a registry moves to M8. Design and slices: [M2 plan](superpowers/plans/2026-11-13-m2-real-machines.md).
 - Instance metadata service (IMDSv1 and IMDSv2) serving `meta-data`, `public-keys`, and `user-data`; cloud-init integration.
 - VPC DNS resolver: private hostnames and upstream forwarding.
 - `nephos instance console-output`.
@@ -405,7 +405,7 @@ nephos explain --from app-1 --to internet --port tcp/443
 - **Install:** an install script published with each GitHub release (Linux, macOS, WSL); Windows CLI binaries; a Homebrew tap (stretch goal).
 - **Release engineering:**
   - CLI binaries built with GoReleaser.
-  - Multi-arch appliance and AMI images on GHCR, signed with cosign.
+  - Multi-arch appliance and AMI images on GHCR, signed with cosign; Nephos pulls and caches the published AMI by digest (deferred from M2).
   - SBOMs and a third-party license report.
 - **Operations:** a complete `nephos doctor`; default quotas and capacity; resource flags on `nephos up`.
 - **Reliability:**

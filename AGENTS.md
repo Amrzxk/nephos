@@ -18,17 +18,18 @@ for the product boundary.
 
 ## Current milestone
 
-M0 is complete. The active milestone is **M1** in
-[docs/ROADMAP.md](docs/ROADMAP.md): `nephos up`/`down`, the SQLite store and
-reconcile framework, the OpenAPI skeleton, and two instances in different
-subnets that can ping each other, plus restart recovery, reset and an e2e
-demo. The roadmap's delivery-slice table and acceptance checkboxes are
-authoritative for what is done; read them instead of trusting any summary.
+M0 is complete. M1 (appliance, SQLite store and reconcilers, VPCs, subnets,
+instances that ping across subnets, restart recovery, reset, e2e demo) is
+merged; only its Windows 10 manual-QA box is open. The active milestone is
+**M2** in [docs/ROADMAP.md](docs/ROADMAP.md): instance types and lifecycle, key
+pairs, a cloud-init AMI, IMDS and VPC DNS. Its design and slices are in the
+[M2 plan](docs/superpowers/plans/2026-11-13-m2-real-machines.md). The
+roadmap's acceptance checkboxes are authoritative for what is done; read them
+instead of trusting any summary.
 
-M1 uses one implicit `default` workspace and explicitly created VPCs. Its
-contributor workflow builds the appliance and development AMI locally before
-`nephos up`. Default VPCs, the simulated internet edge, arbitrary tags, and
-broader list filters belong to M3; DNS and IMDS belong to M2. Keep the
+There is still one implicit `default` workspace and no default VPC. Default
+VPCs, the simulated internet edge, arbitrary tags and broader list filters
+belong to M3; registry publishing of images belongs to M8. Keep the
 `/v1/workspaces/default/...` API shape from ADR-0008. Do not implement work
 from a later milestone unless the roadmap is updated first.
 
@@ -69,6 +70,7 @@ evidence.
 | Instances, runtime, AMIs | [ADR-0004](docs/adr/0004-instances-as-system-containers.md) |
 | Networking, firewalls, gateways | [ADR-0005](docs/adr/0005-nephos-owned-routed-network-plane.md), [ADR-0006](docs/adr/0006-learner-access-through-simulated-internet.md), ARCHITECTURE §5 |
 | State, reconcilers, reset | [ADR-0007](docs/adr/0007-sqlite-state-and-reconciliation.md) |
+| M2 design and slices | [M2 plan](docs/superpowers/plans/2026-11-13-m2-real-machines.md), [ROADMAP M2](docs/ROADMAP.md#m2-real-machines), [SP4](docs/spikes/SP4-cloud-init-imds.md) |
 | M1 retained-root recovery, reset, leak checks, and closure | [Slice-4 design](docs/superpowers/specs/2026-10-02-m1-slice-4-recovery-reset-design.md), [slice-4 implementation plan](docs/superpowers/plans/2026-10-02-m1-slice-4-recovery-reset.md), [ROADMAP M1](docs/ROADMAP.md#m1-thinnest-end-to-end-slice-two-instances-ping) |
 | API or CLI shape | [ADR-0008](docs/adr/0008-rest-openapi-api-not-aws-compatible.md), ARCHITECTURE §6 |
 | Web console | [ADR-0009](docs/adr/0009-web-console-react-typescript.md) |
