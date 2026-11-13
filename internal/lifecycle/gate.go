@@ -150,6 +150,32 @@ func (g *Gate) Exclusive(ctx context.Context, workspace string, fn func(context.
 	return fn(context.WithValue(ctx, exclusiveContextKey{}, lease))
 }
 
+// TryExclusive runs fn with exclusivity only if the workspace is idle right
+// now: no admitted leases, no other maintenance and no waiter. Unlike
+// Exclusive it never registers as a waiter, so it cannot close admission
+// while it waits. Opportunistic periodic maintenance uses it so that a long
+// console session neither blocks it forever nor makes new consoles and
+// reconciles fail while it is pending. It reports whether fn ran.
+func (g *Gate) TryExclusive(ctx context.Context, workspace string, fn func(context.Context) error) (bool, error) {
+	g.mu.Lock()
+	if err := ctx.Err(); err != nil {
+		g.mu.Unlock()
+		return false, err
+	}
+	s := g.state(workspace)
+	if s.sealed || s.exclusive || s.waiters > 0 || len(s.leases) > 0 {
+		g.mu.Unlock()
+		return false, nil
+	}
+	s.exclusive = true
+	lease := &exclusiveLease{gate: g, workspace: workspace}
+	s.maintenance = lease
+	g.notify()
+	g.mu.Unlock()
+	defer func() { g.mu.Lock(); s.exclusive = false; s.maintenance = nil; g.notify(); g.mu.Unlock() }()
+	return true, fn(context.WithValue(ctx, exclusiveContextKey{}, lease))
+}
+
 // HoldsExclusive validates the actual current maintenance caller, not a
 // snapshot bit or a saved context from an already completed maintenance run.
 func (g *Gate) HoldsExclusive(ctx context.Context, workspace string) bool {

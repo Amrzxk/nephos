@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 	"time"
 
@@ -12,14 +11,14 @@ import (
 	"github.com/Amrzxk/nephos/internal/store"
 )
 
-// A busy periodic wait may skip, but failure after admission is systemic.
-// Existing consoles are not canceled merely to obtain maintenance admission.
+// orphanMaintenanceCycle runs fn under exclusive effect admission. Startup
+// (skipBusy=false) waits up to wait for every admitted effect to finish.
+// Periodic maintenance (skipBusy=true) runs only if the workspace is idle at
+// that moment: it never queues as an exclusive waiter, so an open console is
+// neither canceled nor causes new consoles and reconciles to be refused while
+// maintenance waits. Failure after admission is systemic and seals the gate.
 func orphanMaintenanceCycle(ctx context.Context, gate *lifecycle.Gate, wait time.Duration, skipBusy bool, fn func(context.Context) error) (bool, error) {
-	waitCtx, cancel := context.WithTimeout(ctx, wait)
-	defer cancel()
-	ran := false
-	err := gate.Exclusive(waitCtx, "default", func(admitted context.Context) error {
-		ran = true
+	work := func(admitted context.Context) error {
 		// Waiting and effect budgets are separate. Preserve the live exclusive
 		// token, but bind work cancellation to the daemon, not the expired wait.
 		workCtx, stop := context.WithTimeout(context.WithoutCancel(admitted), 60*time.Second)
@@ -31,10 +30,17 @@ func orphanMaintenanceCycle(ctx context.Context, gate *lifecycle.Gate, wait time
 			return err
 		}
 		return nil
-	})
-	if !ran && skipBusy && ctx.Err() == nil && errors.Is(err, context.DeadlineExceeded) {
-		return false, nil
 	}
+	if skipBusy {
+		return gate.TryExclusive(ctx, "default", work)
+	}
+	waitCtx, cancel := context.WithTimeout(ctx, wait)
+	defer cancel()
+	ran := false
+	err := gate.Exclusive(waitCtx, "default", func(admitted context.Context) error {
+		ran = true
+		return work(admitted)
+	})
 	return ran, err
 }
 
@@ -51,7 +57,7 @@ func runOrphanMaintenance(ctx context.Context, gate *lifecycle.Gate, s *store.St
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-ticker.C:
-			ran, err := orphanMaintenanceCycle(ctx, gate, 5*time.Second, true, collect)
+			ran, err := orphanMaintenanceCycle(ctx, gate, 0, true, collect)
 			if err != nil {
 				return err
 			}
