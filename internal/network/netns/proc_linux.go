@@ -11,6 +11,8 @@ import (
 	"github.com/vishvananda/netlink"
 	vnetns "github.com/vishvananda/netns"
 	"golang.org/x/sys/unix"
+
+	"github.com/Amrzxk/nephos/internal/procfs"
 )
 
 // ProcessReference corroborates a known namespace identity. Socket-only holds
@@ -46,7 +48,7 @@ func observeKnown(ctx context.Context, root string, known []uint64, onlyPID int)
 		}
 		taskDir := filepath.Join(root, process.Name(), "task")
 		tasks, err := os.ReadDir(taskDir)
-		if errors.Is(err, os.ErrNotExist) {
+		if procfs.Gone(err) {
 			continue
 		}
 		if err != nil {
@@ -56,7 +58,7 @@ func observeKnown(ctx context.Context, root string, known []uint64, onlyPID int)
 			base := filepath.Join(taskDir, task.Name())
 			path := filepath.Join(base, "ns", "net")
 			var stat unix.Stat_t
-			if err := unix.Stat(path, &stat); errors.Is(err, unix.ENOENT) {
+			if err := unix.Stat(path, &stat); procfs.Gone(err) {
 				continue
 			} else if err != nil {
 				return nil, fmt.Errorf("inspect task namespace %s: %w", path, err)
@@ -66,7 +68,7 @@ func observeKnown(ctx context.Context, root string, known []uint64, onlyPID int)
 			}
 			fdDir := filepath.Join(base, "fd")
 			fds, err := os.ReadDir(fdDir)
-			if errors.Is(err, os.ErrNotExist) {
+			if procfs.Gone(err) {
 				continue
 			}
 			if err != nil {
@@ -74,7 +76,7 @@ func observeKnown(ctx context.Context, root string, known []uint64, onlyPID int)
 			}
 			for _, fd := range fds {
 				path := filepath.Join(fdDir, fd.Name())
-				if err := unix.Stat(path, &stat); errors.Is(err, unix.ENOENT) {
+				if err := unix.Stat(path, &stat); procfs.Gone(err) {
 					continue
 				} else if err != nil {
 					return nil, fmt.Errorf("inspect namespace FD %s: %w", path, err)
@@ -84,7 +86,7 @@ func observeKnown(ctx context.Context, root string, known []uint64, onlyPID int)
 					// possibly with "(deleted)", not necessarily net:[inode].
 					// Prove NSFS on the actual target instead of filtering text.
 					var fs unix.Statfs_t
-					if err := unix.Statfs(path, &fs); errors.Is(err, unix.ENOENT) {
+					if err := unix.Statfs(path, &fs); procfs.Gone(err) {
 						continue
 					} else if err != nil {
 						return nil, fmt.Errorf("inspect known namespace FD filesystem: %w", err)
@@ -114,7 +116,7 @@ func WithObservedHandle(ctx context.Context, inode uint64, fn func(int, *netlink
 	}
 	for _, ref := range refs {
 		fd, err := unix.Open(ref.Path, unix.O_RDONLY|unix.O_CLOEXEC, 0)
-		if errors.Is(err, unix.ENOENT) {
+		if procfs.Gone(err) {
 			continue
 		}
 		if err != nil {
