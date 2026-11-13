@@ -1,0 +1,29 @@
+# RISKS S7 (supply chain): surface dependency, action and base-image updates
+# as reviewable pull requests instead of letting them drift silently.
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      go-minor-and-patch:
+        update-types: [minor, patch]
+    commit-message:
+      prefix: chore(deps)
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: ci(deps)
+
+  - package-ecosystem: docker
+    directories:
+      - /images/appliance
+      - /images/dev-ami
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore(deps)

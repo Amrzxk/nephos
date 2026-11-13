@@ -7,12 +7,18 @@ COPY cmd/ cmd/
 COPY internal/ internal/
 ARG TARGETARCH
 ARG BUILD_COMMIT=unknown
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH go build -trimpath \
-        -ldflags "-X github.com/Amrzxk/nephos/internal/version.commit=$BUILD_COMMIT" \
-        -o /out/nephosd ./cmd/nephosd \
+ARG BUILD_VERSION=dev
+ARG BUILD_DATE=unknown
+# Same version stamping as the Makefile's LDFLAGS, so `nephos version` and
+# /v1/version agree about what produced the appliance binaries.
+RUN LDFLAGS="-s -w \
+        -X github.com/Amrzxk/nephos/internal/version.version=$BUILD_VERSION \
+        -X github.com/Amrzxk/nephos/internal/version.commit=$BUILD_COMMIT \
+        -X github.com/Amrzxk/nephos/internal/version.date=$BUILD_DATE" \
     && CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH go build -trimpath \
-        -ldflags "-X github.com/Amrzxk/nephos/internal/version.commit=$BUILD_COMMIT" \
-        -o /out/nephos-hook ./cmd/nephos-hook
+        -ldflags "$LDFLAGS" -o /out/nephosd ./cmd/nephosd \
+    && CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH go build -trimpath \
+        -ldflags "$LDFLAGS" -o /out/nephos-hook ./cmd/nephos-hook
 
 FROM debian:trixie-slim
 

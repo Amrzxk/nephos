@@ -13,8 +13,10 @@ SHELL := /bin/bash
 export CGO_ENABLED := 0
 
 GO              ?= go
-GOLANGCI_LINT   ?= $(shell go env GOPATH)/bin/golangci-lint
+GOLANGCI_LINT   ?= $(shell $(GO) env GOPATH)/bin/golangci-lint
 GOLANGCI_VERSION ?= v2.15.0
+# Pinned so that a new release cannot change CI results without a commit.
+GOVULNCHECK_VERSION ?= v1.9.0
 
 BIN_DIR   := bin
 DIST_DIR  := dist
@@ -96,6 +98,14 @@ tidy: ## Tidy and verify the module graph
 	$(GO) mod tidy
 	$(GO) mod verify
 
+.PHONY: tidy-check
+tidy-check: ## Fail if go.mod or go.sum is not tidy (CI)
+	$(GO) mod tidy -diff
+
+.PHONY: vuln
+vuln: ## Scan for known vulnerabilities with a pinned govulncheck (CI)
+	$(GO) run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION) ./...
+
 .PHONY: cross
 cross: ## Cross-build every release target with CGO disabled
 	@mkdir -p $(DIST_DIR)
@@ -137,24 +147,63 @@ web: ## Build the web console
 appliance: ## Build the local appliance image (after make dev-ami)
 	@test -f $(DIST_DIR)/ubuntu-24.04.oci.tar || { \
 		echo "appliance: missing development AMI archive; run 'make dev-ami' first"; exit 1; }
-	docker build --build-arg BUILD_COMMIT=$(COMMIT) -t nephos-appliance:dev -f images/appliance/Dockerfile .
+	docker build --build-arg BUILD_COMMIT=$(COMMIT) --build-arg BUILD_VERSION=$(VERSION) \
+		--build-arg BUILD_DATE=$(DATE) -t nephos-appliance:dev -f images/appliance/Dockerfile .
+
+# The OCI exporter needs either a docker-container Buildx builder (nephos-oci)
+# or Docker's containerd image store. Docker Desktop sometimes hangs while it
+# creates the BuildKit container, so when nephos-oci cannot start within
+# DEV_AMI_BOOTSTRAP_TIMEOUT seconds, dev-ami falls back to the built-in
+# "default" builder, which uses the same exporter when the containerd image
+# store is enabled. DEV_AMI_BUILDER=default skips the wait.
+DEV_AMI_BUILDER ?= nephos-oci
+DEV_AMI_BOOTSTRAP_TIMEOUT ?= 90
 
 .PHONY: dev-ami
 dev-ami: ## Build the local Ubuntu 24.04 development AMI as an OCI archive
 	@mkdir -p $(DIST_DIR)
-	@if ! docker buildx inspect nephos-oci >/dev/null 2>&1; then \
-		docker buildx create --name nephos-oci --driver docker-container >/dev/null; \
-	fi
-	docker buildx build --builder nephos-oci \
+	@builder='$(DEV_AMI_BUILDER)'; \
+	if [ "$$builder" = nephos-oci ]; then \
+		if ! docker buildx inspect nephos-oci >/dev/null 2>&1; then \
+			docker buildx create --name nephos-oci --driver docker-container >/dev/null; \
+		fi; \
+		if ! timeout $(DEV_AMI_BOOTSTRAP_TIMEOUT) docker buildx inspect --bootstrap nephos-oci >/dev/null 2>&1; then \
+			echo "dev-ami: Buildx builder nephos-oci did not start within $(DEV_AMI_BOOTSTRAP_TIMEOUT)s; trying the default builder"; \
+			builder=default; \
+		fi; \
+	fi; \
+	if [ "$$builder" = default ] && ! docker info --format '{{json .DriverStatus}}' | grep -q io.containerd.snapshotter; then \
+		echo "dev-ami: the default builder cannot export OCI archives without Docker's containerd image store;"; \
+		echo "         enable it (Docker Desktop: Settings > General) or fix the nephos-oci builder"; \
+		exit 1; \
+	fi; \
+	echo "  dev-ami  builder=$$builder"; \
+	docker buildx build --builder "$$builder" \
 		--output type=oci,name=nephos-ubuntu:dev,dest=$(DIST_DIR)/ubuntu-24.04.oci.tar \
 		-f images/dev-ami/Dockerfile images/dev-ami
+
+.PHONY: dev-up
+dev-up: dev-ami appliance build ## Rebuild everything and restart the appliance on the new image (keeps the nephos-data volume)
+	@owner="$$(docker inspect -f '{{index .Config.Labels "io.nephos.appliance"}}' nephos 2>/dev/null || true)"; \
+	if [ "$$owner" = true ]; then \
+		echo "  replace  Nephos-owned container 'nephos' (volume nephos-data is kept)"; \
+		$(BIN_DIR)/nephos down; \
+		docker container rm nephos >/dev/null; \
+	elif docker container inspect nephos >/dev/null 2>&1; then \
+		echo "dev-up: container 'nephos' exists but is not Nephos-owned; refusing to replace it"; exit 1; \
+	fi
+	$(BIN_DIR)/nephos up
+
+.PHONY: test-integration
+test-integration: ## Run integration-tagged tests in a throwaway privileged appliance (after make dev-ami appliance)
+	bash tests/integration-in-appliance.sh
 
 .PHONY: e2e
 e2e: ## Run the end-to-end suite (needs Docker and a privileged container)
 	@echo "e2e: not until M1." && exit 1
 
 .PHONY: ci
-ci: fmt-check vet lint test test-race cross ## Everything CI runs on a pull request
+ci: fmt-check vet lint test test-race cross generate-check tidy-check vuln ## Every Go check CI runs on a pull request (Docker jobs excluded)
 
 .PHONY: clean
 clean: ## Remove build output

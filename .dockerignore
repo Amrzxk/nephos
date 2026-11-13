@@ -9,3 +9,5 @@ README.md
 CHANGELOG.md
 CONTRIBUTING.md
 AGENTS.md
+dist/*
+!dist/ubuntu-24.04.oci.tar

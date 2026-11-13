@@ -16,6 +16,7 @@ linters:
   enable:
     - bodyclose
     - copyloopvar
+    - depguard # ARCHITECTURE §13 import layering; rules are under settings
     - errorlint # wrapping with %w, and correct error comparison
     - forbidigo
     - gocritic
