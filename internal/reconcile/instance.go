@@ -24,16 +24,16 @@ type InstanceNetwork interface {
 
 // InstanceController converges SQLite instance intent into local runtime state.
 type InstanceController struct {
+	workQueue
+	degradation
 	gate     *lifecycle.Gate
 	store    *store.Store
 	network  InstanceNetwork
 	runtime  compute.Runtime
 	interval time.Duration
 	workMu   sync.Mutex
-	mu       sync.Mutex
-	pending  map[string]struct{}
-	retries  map[string]retryEntry
-	wake     chan struct{}
+	waitMu   sync.Mutex
+	waiting  map[string]struct{}
 }
 
 // NewInstances creates a bounded controller; the daemon calls Sweep at startup.
@@ -41,73 +41,59 @@ func NewInstances(s *store.Store, network InstanceNetwork, runtime compute.Runti
 	if interval <= 0 {
 		interval = defaultInterval
 	}
-	c := &InstanceController{store: s, network: network, runtime: runtime, interval: interval,
-		pending: make(map[string]struct{}), retries: make(map[string]retryEntry), wake: make(chan struct{}, 1)}
+	c := &InstanceController{workQueue: newWorkQueue(), store: s, network: network, runtime: runtime, interval: interval,
+		waiting: make(map[string]struct{})}
 	if len(gates) > 0 {
 		c.gate = gates[0]
 	}
 	return c
 }
 
-// Enqueue accelerates convergence without making the queue authoritative.
-func (c *InstanceController) Enqueue(id string) {
-	if id == "" {
-		return
+// WakeWaiting re-enqueues every instance whose last reconcile found its
+// network prerequisites not yet converged. The VPC controller calls it after
+// a topology converges, so a launch right after its subnet does not wait for
+// the periodic resync.
+func (c *InstanceController) WakeWaiting() {
+	c.waitMu.Lock()
+	ids := make([]string, 0, len(c.waiting))
+	for id := range c.waiting {
+		ids = append(ids, id)
 	}
-	c.mu.Lock()
-	if len(c.pending) < queueLimit {
-		c.pending[id] = struct{}{}
-	}
-	c.mu.Unlock()
-	select {
-	case c.wake <- struct{}{}:
-	default:
+	clear(c.waiting)
+	c.waitMu.Unlock()
+	for _, id := range ids {
+		c.Enqueue(id)
 	}
 }
 
-func (c *InstanceController) pop() string {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	for id := range c.pending {
-		delete(c.pending, id)
-		return id
-	}
-	return ""
-}
-func (c *InstanceController) retry(id string) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	entry := c.retries[id]
-	if len(c.retries) >= queueLimit && entry.attempt == 0 {
+func (c *InstanceController) setWaiting(id string, waiting bool) {
+	c.waitMu.Lock()
+	defer c.waitMu.Unlock()
+	if !waiting {
+		delete(c.waiting, id)
 		return
 	}
-	entry.attempt++
-	delay := retryBase
-	for n := 1; n < entry.attempt && delay < retryMax; n++ {
-		delay *= 2
-		if delay > retryMax {
-			delay = retryMax
-		}
+	if len(c.waiting) < queueLimit {
+		c.waiting[id] = struct{}{}
 	}
-	entry.due = time.Now().Add(delay)
-	c.retries[id] = entry
 }
-func (c *InstanceController) clearRetry(id string) {
-	c.mu.Lock()
-	delete(c.retries, id)
-	c.mu.Unlock()
-}
-func (c *InstanceController) enqueueDueRetries() {
-	now := time.Now()
-	c.mu.Lock()
-	for id, entry := range c.retries {
-		if !entry.due.After(now) && len(c.pending) < queueLimit {
-			c.pending[id] = struct{}{}
-			entry.due = now.Add(retryMax)
-			c.retries[id] = entry
-		}
+
+// handle applies the controller error policy to one instance's failure.
+func (c *InstanceController) handle(ctx context.Context, id string, err error) error {
+	if err == nil {
+		c.clear(id)
+		return nil
 	}
-	c.mu.Unlock()
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return ctxErr
+	}
+	if IsFatal(err) {
+		return err
+	}
+	slog.Warn("instance reconcile will retry after a transient failure", "instance_id", id, "error", err)
+	c.mark(id)
+	c.retry(id)
+	return nil
 }
 
 // Run processes hints, bounded retries and periodic durable resync.
@@ -121,7 +107,7 @@ func (c *InstanceController) Run(ctx context.Context) error {
 			if err := ctx.Err(); err != nil {
 				return err
 			}
-			if err := c.reconcile(ctx, id); err != nil {
+			if err := c.handle(ctx, id, c.reconcile(ctx, id)); err != nil {
 				return err
 			}
 		}
@@ -132,21 +118,30 @@ func (c *InstanceController) Run(ctx context.Context) error {
 		case <-retries.C:
 			c.enqueueDueRetries()
 		case <-resync.C:
-			if err := c.Sweep(ctx); err != nil {
-				return err
+			if err := c.Sweep(ctx); err != nil && !errors.Is(err, ErrNotAdmitted) {
+				if ctxErr := ctx.Err(); ctxErr != nil {
+					return ctxErr
+				}
+				if IsFatal(err) {
+					return err
+				}
+				slog.Warn("periodic instance resync failed; next resync retries", "error", err)
 			}
 		}
 	}
 }
 
-// Sweep repairs dropped hints and converges every committed instance.
+// Sweep repairs dropped hints and converges every committed instance. Like
+// the VPC sweep it isolates per-instance failures, returns ErrNotAdmitted when
+// draining, and returns other errors only when the desired set is unreadable
+// or an invariant broke.
 func (c *InstanceController) Sweep(ctx context.Context) error {
 	ctx, done, admitted, err := enterEffect(ctx, c.gate)
 	if err != nil {
 		return err
 	}
 	if !admitted {
-		return nil
+		return ErrNotAdmitted
 	}
 	defer done()
 	c.workMu.Lock()
@@ -161,7 +156,7 @@ func (c *InstanceController) Sweep(ctx context.Context) error {
 			return nil
 		}
 		for i := range page {
-			if err := c.reconcileLocked(ctx, page[i].ID); err != nil {
+			if err := c.handle(ctx, page[i].ID, c.reconcileLocked(ctx, page[i].ID)); err != nil {
 				return err
 			}
 		}
@@ -186,21 +181,30 @@ func (c *InstanceController) reconcileLocked(ctx context.Context, id string) err
 	instance, err := c.store.GetInstance(ctx, "default", id)
 	if errors.Is(err, sql.ErrNoRows) {
 		c.clearRetry(id)
+		c.setWaiting(id, false)
 		return nil
 	}
 	if err != nil {
 		return fmt.Errorf("load instance %s: %w", id, err)
 	}
 	if instance.DeletionRequested {
+		c.setWaiting(id, false)
 		return c.terminate(ctx, instance)
 	}
+	// Register as waiting before the check, so a VPC that converges while
+	// Ready runs still wakes this instance; a spurious wake is harmless.
+	c.setWaiting(id, true)
 	ready, err := c.network.Ready(ctx, instance)
 	if err != nil {
+		c.setWaiting(id, false)
 		return c.fail(ctx, instance, err)
 	}
 	if !ready {
-		return nil // the next hint or durable resync checks prerequisites again
+		// WakeWaiting (after the VPC converges) or the durable resync
+		// checks prerequisites again.
+		return nil
 	}
+	c.setWaiting(id, false)
 	created, err := c.lookupOrCreate(ctx, instance)
 	if err != nil {
 		return c.fail(ctx, instance, err)

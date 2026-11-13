@@ -29,23 +29,17 @@ type NetworkEngine interface {
 	ListVPCNames(context.Context) ([]string, error)
 }
 
-type retryEntry struct {
-	attempt int
-	due     time.Time
-}
-
 // Controller owns a bounded, deduplicated acceleration queue. SQLite remains
 // the source of truth; startup and periodic sweeps repair any dropped enqueue.
 type Controller struct {
-	gate     *lifecycle.Gate
-	store    *store.Store
-	network  NetworkEngine
-	interval time.Duration
-	workMu   sync.Mutex
-	mu       sync.Mutex
-	pending  map[string]struct{}
-	retries  map[string]retryEntry
-	wake     chan struct{}
+	workQueue
+	degradation
+	gate      *lifecycle.Gate
+	store     *store.Store
+	network   NetworkEngine
+	interval  time.Duration
+	workMu    sync.Mutex
+	converged func()
 }
 
 // New wires durable state and the network engine.
@@ -53,76 +47,35 @@ func New(s *store.Store, network NetworkEngine, interval time.Duration, gates ..
 	if interval <= 0 {
 		interval = defaultInterval
 	}
-	c := &Controller{store: s, network: network, interval: interval,
-		pending: make(map[string]struct{}), retries: make(map[string]retryEntry), wake: make(chan struct{}, 1)}
+	c := &Controller{workQueue: newWorkQueue(), store: s, network: network, interval: interval}
 	if len(gates) > 0 {
 		c.gate = gates[0]
 	}
 	return c
 }
 
-// Enqueue hints that one VPC changed. A full resync remains authoritative.
-func (c *Controller) Enqueue(vpcID string) {
-	if vpcID == "" {
-		return
-	}
-	c.mu.Lock()
-	if len(c.pending) < queueLimit {
-		c.pending[vpcID] = struct{}{}
-	}
-	c.mu.Unlock()
-	select {
-	case c.wake <- struct{}{}:
-	default:
-	}
-}
+// OnConverged registers a callback run after any VPC topology converges, so
+// that work blocked on network prerequisites (instances waiting for their
+// subnet gateway) is retried immediately instead of at the next resync.
+// It must be set before Run and must not block.
+func (c *Controller) OnConverged(fn func()) { c.converged = fn }
 
-func (c *Controller) pop() string {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	for id := range c.pending {
-		delete(c.pending, id)
-		return id
+// handle applies the controller error policy to one resource's failure.
+func (c *Controller) handle(ctx context.Context, id string, err error) error {
+	if err == nil {
+		c.clear(id)
+		return nil
 	}
-	return ""
-}
-
-func (c *Controller) retry(vpcID string) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	entry := c.retries[vpcID]
-	if len(c.retries) >= queueLimit && entry.attempt == 0 {
-		return
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return ctxErr
 	}
-	entry.attempt++
-	delay := retryBase
-	for n := 1; n < entry.attempt && delay < retryMax; n++ {
-		delay *= 2
-		if delay > retryMax {
-			delay = retryMax
-		}
+	if IsFatal(err) {
+		return err
 	}
-	entry.due = time.Now().Add(delay)
-	c.retries[vpcID] = entry
-}
-
-func (c *Controller) clearRetry(vpcID string) {
-	c.mu.Lock()
-	delete(c.retries, vpcID)
-	c.mu.Unlock()
-}
-
-func (c *Controller) enqueueDueRetries() {
-	now := time.Now()
-	c.mu.Lock()
-	for id, entry := range c.retries {
-		if !entry.due.After(now) && len(c.pending) < queueLimit {
-			c.pending[id] = struct{}{}
-			entry.due = now.Add(retryMax)
-			c.retries[id] = entry
-		}
-	}
-	c.mu.Unlock()
+	slog.Warn("VPC reconcile will retry after a transient failure", "vpc_id", id, "error", err)
+	c.mark(id)
+	c.retry(id)
+	return nil
 }
 
 // Run processes hints and retries, with a full resync at the configured
@@ -134,10 +87,7 @@ func (c *Controller) Run(ctx context.Context) error {
 	defer retries.Stop()
 	for {
 		for id := c.pop(); id != ""; id = c.pop() {
-			if err := c.reconcile(ctx, id); err != nil {
-				if ctx.Err() != nil {
-					return ctx.Err()
-				}
+			if err := c.handle(ctx, id, c.reconcile(ctx, id)); err != nil {
 				return err
 			}
 		}
@@ -148,11 +98,14 @@ func (c *Controller) Run(ctx context.Context) error {
 		case <-retries.C:
 			c.enqueueDueRetries()
 		case <-resync.C:
-			if err := c.Sweep(ctx); err != nil {
-				if ctx.Err() != nil {
-					return ctx.Err()
+			if err := c.Sweep(ctx); err != nil && !errors.Is(err, ErrNotAdmitted) {
+				if ctxErr := ctx.Err(); ctxErr != nil {
+					return ctxErr
 				}
-				return err
+				if IsFatal(err) {
+					return err
+				}
+				slog.Warn("periodic VPC resync failed; next resync retries", "error", err)
 			}
 		}
 	}
@@ -184,12 +137,12 @@ func (c *Controller) reconcileLocked(ctx context.Context, id string) error {
 	}
 	subnets, err := c.store.ListSubnetsByVPC(ctx, id)
 	if err != nil {
-		return err
+		return fmt.Errorf("list subnets of VPC %s: %w", id, err)
 	}
 	var effectErr error
 	if vpc.DeletionRequested {
 		if len(subnets) != 0 {
-			return fmt.Errorf("deleting VPC %s still has %d subnets", id, len(subnets))
+			return fmt.Errorf("%w: deleting VPC %s still has %d subnets", errInvariant, id, len(subnets))
 		}
 		effectErr = c.network.DeleteVPC(ctx, vpc)
 	} else {
@@ -217,6 +170,9 @@ func (c *Controller) reconcileLocked(ctx context.Context, id string) error {
 		c.retry(id)
 	} else {
 		c.clearRetry(id)
+		if c.converged != nil && !vpc.DeletionRequested {
+			c.converged()
+		}
 	}
 	return nil
 }

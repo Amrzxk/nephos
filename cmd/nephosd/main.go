@@ -123,10 +123,12 @@ func serve(ctx context.Context, ln net.Listener, tokenPath, dbPath, hookPath str
 	go func() { hookDone <- hookServer.Serve(hookListener) }()
 	controller := reconcile.New(s, network, 60*time.Second, gate)
 	instances := reconcile.NewInstances(s, instanceNetwork{store: s, engine: network}, starts, 60*time.Second, gate)
+	controller.OnConverged(instances.WakeWaiting)
 	resources := service.NewNetwork(s, controller.Enqueue, nil)
 	instanceService := service.NewInstances(s, instances.Enqueue, nil)
 	var ready atomic.Bool
-	h := apiserver.New(token, build, func() bool { return ready.Load() && !starts.failed.Load() }, resources, instanceService, s, starts, apiserver.WithConsoleLifecycle(consoleAdmission(gate), refs))
+	h := apiserver.New(token, build, func() bool { return ready.Load() && !starts.failed.Load() }, resources, instanceService, s, starts, apiserver.WithConsoleLifecycle(consoleAdmission(gate), refs),
+		apiserver.WithDegraded(func() bool { return controller.Degraded() || instances.Degraded() }))
 	srv := &http.Server{Handler: h, ReadHeaderTimeout: 5 * time.Second, BaseContext: func(net.Listener) context.Context { return lifetime }}
 	serverDone := make(chan error, 1)
 	go func() { serverDone <- srv.Serve(ln) }()
@@ -142,8 +144,8 @@ func serve(ctx context.Context, ln net.Listener, tokenPath, dbPath, hookPath str
 			controllerDone <- lifetime.Err()
 			return
 		}
-		if err := controller.Sweep(lifetime); err != nil {
-			controllerDone <- fmt.Errorf("initial VPC reconcile sweep: %w", err)
+		if err := sweepUntilComplete(lifetime, "VPC", controller.Sweep); err != nil {
+			controllerDone <- err
 			return
 		}
 		close(networkReady)
@@ -157,8 +159,8 @@ func serve(ctx context.Context, ln net.Listener, tokenPath, dbPath, hookPath str
 			instanceDone <- lifetime.Err()
 			return
 		}
-		if err := instances.Sweep(lifetime); err != nil {
-			instanceDone <- fmt.Errorf("initial instance reconcile sweep: %w", err)
+		if err := sweepUntilComplete(lifetime, "instance", instances.Sweep); err != nil {
+			instanceDone <- err
 			return
 		}
 		if lifetime.Err() == nil {
