@@ -3,8 +3,11 @@
 package podman
 
 import (
+	"io/fs"
 	"os"
 	"testing"
+
+	"golang.org/x/sys/unix"
 
 	"github.com/Amrzxk/nephos/internal/compute"
 )
@@ -46,5 +49,21 @@ func TestSupervisorExitsDuringPinningRetainsReapingWitness(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestProcEntryGoneCoversBothReapTimings(t *testing.T) {
+	for name, tt := range map[string]struct {
+		err  error
+		gone bool
+	}{
+		"directory gone":         {err: &fs.PathError{Op: "open", Path: "/proc/1/comm", Err: unix.ENOENT}, gone: true},
+		"task gone during read":  {err: &fs.PathError{Op: "read", Path: "/proc/1/comm", Err: unix.ESRCH}, gone: true},
+		"permission is not gone": {err: &fs.PathError{Op: "open", Path: "/proc/1/comm", Err: unix.EACCES}},
+		"no error":               {},
+	} {
+		if got := procEntryGone(tt.err); got != tt.gone {
+			t.Errorf("%s: procEntryGone=%v want %v", name, got, tt.gone)
+		}
 	}
 }
