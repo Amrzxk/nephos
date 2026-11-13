@@ -1,6 +1,6 @@
 # Nephos Roadmap
 
-**Status:** M0 complete; M1 in progress (November 2026). The MVP is **v0.1.0 = milestones M0–M8**. This file is the single place that records milestone progress.
+**Status:** M0 complete; M1 code-complete and merged, waiting only on Windows 10 manual QA (November 2026). The MVP is **v0.1.0 = milestones M0–M8**. This file is the single place that records milestone progress.
 
 ## How this roadmap works
 
@@ -123,7 +123,7 @@ network rule is exposed or implied as enforced.
 | 1 | Locally built appliance, startup preflight, token bootstrap, public health, and authenticated API access | Implemented and merged in [PR #3](https://github.com/Amrzxk/nephos/pull/3); native-Docker bootstrap passed in [CI run 35920433115](https://github.com/Amrzxk/nephos/actions/runs/35920433115). |
 | 2 | VPC/subnet CLI and API through SQLite, reconciliation, and real namespaces | Implemented and merged in [PR #4](https://github.com/Amrzxk/nephos/pull/4); native-Docker VPC/subnet smoke passed in [CI run 36327904611](https://github.com/Amrzxk/nephos/actions/runs/36327904611). |
 | 3 | Instance run, OCI hook, console, and cross-subnet ping | Implemented and merged in [PR #6](https://github.com/Amrzxk/nephos/pull/6), with fixed 512-task limits and both console modes. WSL2/Docker Desktop and native Ubuntu packet/failure evidence is recorded in the [matrix](tests/M1-connectivity-matrix.md); all native checks passed in [CI run 36973066755](https://github.com/Amrzxk/nephos/actions/runs/36973066755). [Execution plan](superpowers/plans/2026-09-27-m1-slice-3-instances-ping.md). |
-| 4 | Restart recovery, reset and leak checks, native-Docker e2e CI, and Windows manual QA | 4A (retained-root recovery) and 4B (lifecycle, ownership inventory, orphan GC, leak checker) are in review in [PR #7](https://github.com/Amrzxk/nephos/pull/7), where the native-Docker smoke passes. Local evidence: [4A](tests/M1-slice4a-local-verification.md), [4B lifecycle](tests/M1-slice4b-lifecycle-local-verification.md), [4B ownership/leak](tests/M1-slice4b-ownership-leak-local-verification.md). Hardening is in [PR #8](https://github.com/Amrzxk/nephos/pull/8), the 4C soft reset in [PR #9](https://github.com/Amrzxk/nephos/pull/9), and the 4D hard reset and purge in [PR #10](https://github.com/Amrzxk/nephos/pull/10); `tests/reset-smoke.sh` passes locally on WSL2. The 4E demo/e2e is in [PR #11](https://github.com/Amrzxk/nephos/pull/11) and passes locally on WSL2. Remaining: native CI evidence on the merged stack and the Windows 10 manual QA (PowerShell and WSL2) recorded in [docs/demos/M1.md](demos/M1.md). |
+| 4 | Restart recovery, reset and leak checks, native-Docker e2e CI, and Windows manual QA | Merged: 4A/4B ([PR #7](https://github.com/Amrzxk/nephos/pull/7)), hardening ([PR #8](https://github.com/Amrzxk/nephos/pull/8)), 4C soft reset ([PR #9](https://github.com/Amrzxk/nephos/pull/9)), 4D hard reset and purge ([PR #10](https://github.com/Amrzxk/nephos/pull/10)), 4E demo and `make e2e` ([PR #11](https://github.com/Amrzxk/nephos/pull/11)). Every suite and the demo pass in [main CI run 43489497067](https://github.com/Amrzxk/nephos/actions/runs/43489497067). Remaining: Windows 10 manual QA. |
 
 Slices 1–3 provide appliance bootstrap, resource state, and real instance
 connectivity. Slice 3 adds packet-level evidence beyond namespace/gateway
@@ -185,14 +185,14 @@ nephos reset
 
 **Acceptance criteria:**
 
-- [ ] The demo runs from locally built appliance and development AMI images as an automated e2e test on GitHub Actions `ubuntu-24.04`.
-- [ ] The demo passes manually on Windows 10 with WSL2 and Docker Desktop.
-- [ ] Instances in different subnets of one VPC can reach each other. Instances in different VPCs, even with overlapping CIDRs, cannot.
-- [ ] `nephos down && nephos up` restores VPCs, subnets, running instances, their private IPs, and a file written to an instance's root filesystem.
-- [ ] `nephos reset` leaves the default workspace empty and zero Nephos kernel or Podman leaks. `nephos reset --hard` removes the old container and volume, then starts a fresh appliance with empty state.
-- [ ] VPC or subnet CIDRs outside /16–/28, subnets outside the VPC CIDR or overlapping, and duplicate names are rejected with AWS-style error codes; reserved IPs are never allocated, and concurrent allocation never assigns the same IP twice.
-- [ ] Authentication rejects absent or invalid tokens; create retries with one idempotency key return one resource; list pagination and `/v1/events` work for M1 resources; `--wait` reports terminal errors and timeouts clearly.
-- [ ] A failed OCI hook leaves the instance `failed`, not `running`; the e2e suite verifies overlapping-VPC isolation, appliance host hygiene, and leak-free cleanup.
+- [x] The demo runs from locally built appliance and development AMI images as an automated e2e test on GitHub Actions `ubuntu-24.04`. Evidence: `tests/m1-e2e.sh` in [main CI run 43489497067](https://github.com/Amrzxk/nephos/actions/runs/43489497067).
+- [ ] The demo passes manually on Windows 10 with WSL2 and Docker Desktop. Open: the maintainer's PowerShell and WSL passes are recorded in [docs/demos/M1.md](demos/M1.md). (The automated demo already passed under WSL2 and Docker Desktop on Windows 10 on 2026-11-13.)
+- [x] Instances in different subnets of one VPC can reach each other. Instances in different VPCs, even with overlapping CIDRs, cannot. Evidence: `tests/instance-ping-smoke.sh` (bidirectional cross-subnet ICMP; overlapping-VPC isolation with a remote-only witness) in [main CI run 43489497067](https://github.com/Amrzxk/nephos/actions/runs/43489497067).
+- [x] `nephos down && nephos up` restores VPCs, subnets, running instances, their private IPs, and a file written to an instance's root filesystem. Evidence: `tests/instance-ping-smoke.sh` and `tests/m1-e2e.sh` in [main CI run 43489497067](https://github.com/Amrzxk/nephos/actions/runs/43489497067).
+- [x] `nephos reset` leaves the default workspace empty and zero Nephos kernel or Podman leaks. `nephos reset --hard` removes the old container and volume, then starts a fresh appliance with empty state. Evidence: `tests/reset-smoke.sh` in [main CI run 43489497067](https://github.com/Amrzxk/nephos/actions/runs/43489497067).
+- [x] VPC or subnet CIDRs outside /16–/28, subnets outside the VPC CIDR or overlapping, and duplicate names are rejected with AWS-style error codes; reserved IPs are never allocated, and concurrent allocation never assigns the same IP twice. Evidence: `internal/service` validation, IPAM and concurrent-allocation tests and `tests/vpc-subnet-smoke.sh` in [main CI run 43489497067](https://github.com/Amrzxk/nephos/actions/runs/43489497067).
+- [x] Authentication rejects absent or invalid tokens; create retries with one idempotency key return one resource; list pagination and `/v1/events` work for M1 resources; `--wait` reports terminal errors and timeouts clearly. Evidence: apiserver, service and CLI tests (bearer, idempotency, pagination, events, `--wait`) and `tests/appliance-smoke.sh` in [main CI run 43489497067](https://github.com/Amrzxk/nephos/actions/runs/43489497067).
+- [x] A failed OCI hook leaves the instance `failed`, not `running`; the e2e suite verifies overlapping-VPC isolation, appliance host hygiene, and leak-free cleanup. Evidence: `tests/instance-ping-smoke.sh` (failed hook, host snapshots) and `tests/reset-smoke.sh` in [main CI run 43489497067](https://github.com/Amrzxk/nephos/actions/runs/43489497067).
 
 **Effort:** 45–55 h is provisional; re-estimate after the M1 design is split into implementation plans.
 

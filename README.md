@@ -2,7 +2,7 @@
 
 **A local cloud you can break, fix, and understand.** Nephos (Greek *νέφος*, "cloud") is an open source cloud simulator for **learning** infrastructure: real instances you can SSH into, and VPC networking that fails the way a real cloud fails.
 
-> **Status: early development.** [M0](docs/ROADMAP.md#m0-foundations-and-spikes) is complete. [M1](docs/ROADMAP.md#m1-thinnest-end-to-end-slice-two-instances-ping) slices 1–3 are merged: a locally built appliance, an authenticated API, SQLite-backed VPCs and subnets with real router namespaces, and real system-container instances that ping each other across subnets through the console. Restart recovery and orphan cleanup (slice 4A/4B) are in review; `nephos reset` and the end-to-end demo are still to come, so M1 is not complete. Follow the [development guide](docs/DEVELOPMENT.md#m1-local-appliance-workflow) to try it.
+> **Status: early development.** [M0](docs/ROADMAP.md#m0-foundations-and-spikes) is complete. [M1](docs/ROADMAP.md#m1-thinnest-end-to-end-slice-two-instances-ping) is code-complete: a locally built appliance, an authenticated API, SQLite-backed VPCs and subnets with real router namespaces, real system-container instances that ping each other across subnets, restart recovery, `nephos reset` with a leak check, and `nephos reset --hard`. The [M1 demo](docs/demos/M1.md) runs in CI; Windows manual QA is the last open item. Follow the [development guide](docs/DEVELOPMENT.md#m1-local-appliance-workflow) to try it.
 
 ## What it will do
 
