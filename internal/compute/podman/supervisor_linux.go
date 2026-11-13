@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -220,7 +221,7 @@ func scanExecSupervisors(ctx context.Context, ref compute.Reference, id string) 
 			continue
 		}
 		comm, err := os.ReadFile(filepath.Join(procRoot, entry.Name(), "comm"))
-		if os.IsNotExist(err) {
+		if procEntryGone(err) {
 			continue
 		}
 		if err != nil {
@@ -230,7 +231,7 @@ func scanExecSupervisors(ctx context.Context, ref compute.Reference, id string) 
 			continue
 		}
 		raw, err := os.ReadFile(filepath.Join(procRoot, entry.Name(), "cmdline"))
-		if os.IsNotExist(err) {
+		if procEntryGone(err) {
 			continue
 		}
 		if err != nil {
@@ -252,6 +253,13 @@ func scanExecSupervisors(ctx context.Context, ref compute.Reference, id string) 
 		}
 	}
 	return pins, nil
+}
+
+// procEntryGone reports a process that was reaped after /proc was listed.
+// Depending on timing the kernel returns ENOENT (directory gone) or ESRCH
+// (directory still open, task gone); both mean the same thing here.
+func procEntryGone(err error) bool {
+	return err != nil && (errors.Is(err, fs.ErrNotExist) || errors.Is(err, unix.ESRCH))
 }
 
 func pinExecSupervisor(pid int, ref compute.Reference, id string) (_ execSupervisor, result error) {
