@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 )
@@ -16,6 +17,17 @@ const maxTokenBytes = 128
 // LocalCredentialStore writes the host-side token to one private file.
 type LocalCredentialStore struct {
 	Path string
+}
+
+// Remove deletes the token after a purge, so no stale credential remains.
+func (s LocalCredentialStore) Remove() error {
+	if s.Path == "" {
+		return fmt.Errorf("credential path is empty")
+	}
+	if err := os.Remove(s.Path); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("remove credential: %w", err)
+	}
+	return nil
 }
 
 // Save verifies the Docker TAR archive before atomically replacing the token.

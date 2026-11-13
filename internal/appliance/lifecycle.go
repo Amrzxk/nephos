@@ -44,6 +44,8 @@ type HealthProbe interface {
 // CredentialStore validates and saves the token copied from the appliance.
 type CredentialStore interface {
 	Save(context.Context, io.Reader) error
+	// Remove deletes the saved token; a missing token is not an error.
+	Remove() error
 }
 
 // Manager owns the single named appliance and its credential bootstrap.

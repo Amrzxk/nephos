@@ -24,7 +24,17 @@ type fakeEngine struct {
 	starts        int
 	stops         int
 	copies        int
+	// Purge bookkeeping.
+	removes        int
+	volumeRemoves  int
+	volumeCreated  string
+	volumeInspects int
+	// replaceVolumeOnInspect simulates a different volume appearing under
+	// the same name from the given InspectVolume call onward.
+	replaceVolumeOnInspect int
 }
+
+const fakeContainerID = "c0ffee"
 
 func (f *fakeEngine) Ping(context.Context) error                { return nil }
 func (f *fakeEngine) Info(context.Context) (HostInfo, error)    { return f.host, nil }
@@ -33,13 +43,18 @@ func (f *fakeEngine) Inspect(context.Context) (ContainerState, error) {
 	if !f.container {
 		return ContainerState{}, ErrNotFound
 	}
-	return ContainerState{Running: f.running, Owned: f.owned, Volume: volumeName, Image: imageName, Limits: f.limits, HealthStatus: f.healthStatus}, nil
+	return ContainerState{ID: fakeContainerID, Running: f.running, Owned: f.owned, Volume: volumeName, Image: imageName, Limits: f.limits, HealthStatus: f.healthStatus}, nil
 }
 func (f *fakeEngine) InspectVolume(context.Context) (VolumeState, error) {
 	if !f.volume {
 		return VolumeState{}, ErrNotFound
 	}
-	return VolumeState{Owned: f.volumeOwned}, nil
+	f.volumeInspects++
+	created := f.volumeCreated
+	if f.replaceVolumeOnInspect != 0 && f.volumeInspects >= f.replaceVolumeOnInspect {
+		created = "replaced"
+	}
+	return VolumeState{Owned: f.volumeOwned, CreatedAt: created}, nil
 }
 func (f *fakeEngine) CreateVolume(context.Context) error {
 	f.volume = true
@@ -64,9 +79,29 @@ func (f *fakeEngine) Stop(context.Context) error {
 	f.stops++
 	return nil
 }
-func (f *fakeEngine) Remove(context.Context) error { return errors.New("unexpected remove") }
+func (f *fakeEngine) Remove(_ context.Context, id string) error {
+	switch {
+	case !f.container:
+		return ErrNotFound
+	case id != fakeContainerID:
+		return errors.New("container removed by the wrong ID")
+	case f.running:
+		return errors.New("container removed while running")
+	}
+	f.container = false
+	f.removes++
+	return nil
+}
 func (f *fakeEngine) RemoveVolume(context.Context) error {
-	return errors.New("unexpected volume remove")
+	switch {
+	case !f.volume:
+		return ErrNotFound
+	case f.container:
+		return errors.New("volume is in use")
+	}
+	f.volume = false
+	f.volumeRemoves++
+	return nil
 }
 func (f *fakeEngine) CopyFile(context.Context) (io.ReadCloser, error) {
 	f.copies++
@@ -77,7 +112,12 @@ type fakeHealth struct{ state HealthState }
 
 func (h fakeHealth) Check(context.Context) (HealthState, error) { return h.state, nil }
 
-type fakeCredentials struct{ saves int }
+type fakeCredentials struct{ saves, removes int }
+
+func (c *fakeCredentials) Remove() error {
+	c.removes++
+	return nil
+}
 
 func (c *fakeCredentials) Save(_ context.Context, r io.Reader) error {
 	if _, err := io.Copy(io.Discard, r); err != nil {
