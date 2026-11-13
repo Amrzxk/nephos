@@ -199,8 +199,23 @@ test-integration: ## Run integration-tagged tests in a throwaway privileged appl
 	bash tests/integration-in-appliance.sh
 
 .PHONY: e2e
-e2e: ## Run the end-to-end suite (needs Docker and a privileged container)
-	@echo "e2e: not until M1." && exit 1
+# The same scripts, in the same order, as the native-Docker CI job. Each one
+# refuses to touch an existing `nephos` container or `nephos-data` volume.
+E2E_SCRIPTS := \
+	tests/appliance-smoke-failed-start.sh \
+	tests/appliance-smoke.sh \
+	tests/appliance-cli-smoke.sh \
+	tests/vpc-subnet-smoke.sh \
+	tests/instance-ping-smoke.sh \
+	tests/reset-smoke.sh \
+	tests/m1-e2e.sh
+
+e2e: build ## Run every real-appliance smoke and the M1 demo (after make dev-ami appliance)
+	@for script in $(E2E_SCRIPTS); do \
+		echo "== $$script"; \
+		bash "$$script" || { echo "e2e: $$script failed"; exit 1; }; \
+	done
+	@echo "e2e: all $(words $(E2E_SCRIPTS)) suites passed"
 
 .PHONY: ci
 ci: fmt-check vet lint test test-race cross generate-check tidy-check vuln ## Every Go check CI runs on a pull request (Docker jobs excluded)

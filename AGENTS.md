@@ -177,10 +177,12 @@ required by the changed area:
   test binaries on the host.
 - `make dev-up` — rebuild images and binaries and restart a Nephos-owned
   appliance on the new image, keeping its volume. Run only when asked.
-- `make appliance`, `make e2e`, the `tests/*.sh` smokes and spike scripts —
-  require Docker and, where documented, a privileged container. Some targets
-  intentionally remain unavailable until their owning milestone implements
-  them.
+- `make e2e` — every real-appliance smoke plus the M1 demo, in the same order
+  as CI (after `make dev-ami appliance`). Each suite starts a throwaway
+  appliance and refuses an existing `nephos` container or volume.
+- `make appliance`, the individual `tests/*.sh` smokes and spike scripts —
+  require Docker and, where documented, a privileged container. `make web`
+  stays unavailable until M6.
 - The CLI ships for Windows and macOS: keep `cmd/nephos` and
   `internal/appliance` portable (no Unix-only permission or path assumptions)
   and their tests passing on Windows. CI runs them on Windows and macOS.

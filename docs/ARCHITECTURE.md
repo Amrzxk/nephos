@@ -729,13 +729,14 @@ After the MVP (M11): VPC flow logs (nftables log group → NFLOG → `nephosd`, 
 implemented, and the native-Docker smoke passed in CI on the slice-4 branch.
 4B adds shutdown, session/supervisor, verified hook-child drain,
 namespace-reference and foreign-ownership fixtures; `make test-integration`
-now runs all of them in CI. Reset and hard-reset fixtures arrive with 4C/4D. The full local-build demo/e2e must pass
+now runs all of them in CI. `tests/reset-smoke.sh` covers soft reset, hard
+reset and purge (4C/4D), and `tests/m1-e2e.sh` replays the M1 demo (4E). The full local-build demo/e2e must pass
 on native Ubuntu 24.04 and manually on Windows 10/WSL2/Docker Desktop; no
 SG/NACL, lab, explain, or M8 random-chaos coverage is implied. Verify leaks
 inside the live appliance before outer teardown, save redacted artifacts
 before cleanup, and distinguish post-start inner-operation host snapshots
 from whole-lifecycle snapshots. The slice-4 verification plan maps these
-requirements; `make e2e` remains a placeholder until implementation.
+requirements; `make e2e` runs every real-appliance suite in CI order.
 
 ## 12. Platform support
 
@@ -816,7 +817,7 @@ nephos/
 │   └── amis/
 │       └── ubuntu-24.04/        # systemd, sshd, cloud-init configured for Nephos IMDS
 ├── tests/                       # existing appliance/network/instance smoke and contract tests
-│   ├── e2e/                     # planned M1 slice-4 tagged full-demo runner
+│   ├── m1-e2e.sh                # the M1 demo, replayed with assertions (make e2e runs it last)
 │   └── fixtures/                # test-only helpers; never shipped in product images
 ├── scripts/                     # install.sh and development helpers
 └── docs/

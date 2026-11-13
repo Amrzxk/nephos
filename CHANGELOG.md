@@ -13,6 +13,12 @@ Each entry names the milestone it belongs to; see [docs/ROADMAP.md](docs/ROADMAP
 
 ### Added
 
+- **M1 — replayable demo and `make e2e` (slice 4E).** `docs/demos/M1.md` is
+  the manual demo and the Windows 10 QA record; `tests/m1-e2e.sh` replays it
+  with assertions (cross-subnet ping, restart keeping IPs and a root-filesystem
+  file, clean reset). `make e2e` runs every real-appliance suite in the same
+  order as the native-Docker CI job, which now ends with the demo; a contract
+  test keeps the two lists identical.
 - **M1 — hard reset and purge (slice 4D).** `nephos down --purge` removes
   the appliance container and its `nephos-data` volume; `nephos reset --hard`
   does the same and starts a fresh appliance with the old limits unless new

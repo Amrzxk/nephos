@@ -111,9 +111,12 @@ make ci           # every Go check a pull request runs (the Docker jobs are sepa
 make clean
 ```
 
-`make web` and `make e2e` remain placeholders until their owning slices are
-implemented. `make ci` matches the Go jobs in CI; the native-Docker job also
-runs the appliance smokes in `tests/*.sh` and `make test-integration`.
+`make web` remains a placeholder until M6. `make ci` matches the Go jobs in
+CI. The native-Docker job runs `make test-integration`, then the same
+real-appliance suites as `make e2e`, in the same order, ending with the M1
+demo (`tests/m1-e2e.sh`); a contract test keeps the two lists identical.
+Each suite starts its own throwaway appliance and refuses to touch an
+existing `nephos` container or `nephos-data` volume.
 
 **Integration tests never run on your host.** Files tagged
 `//go:build linux && integration` create real namespaces, veths, nftables state
@@ -135,8 +138,8 @@ command consoles. WSL2/Docker Desktop tests and native Ubuntu
 pass, including the native host nftables check. The
 [roadmap](ROADMAP.md#m1-thinnest-end-to-end-slice-two-instances-ping) tracks
 completion. Retained instance-root restart recovery, reset, leak closure and
-the full replayable e2e demo remain slice 4; do not use the roadmap's complete
-restart/reset demo as a slice-3 acceptance claim.
+the replayable demo ([docs/demos/M1.md](demos/M1.md), automated as
+`tests/m1-e2e.sh`) arrived in slice 4.
 
 Run these commands inside native Linux or WSL2, not PowerShell. Docker must be
 rootful, support cgroup v2 and privileged containers, expose a Linux 5.15+
