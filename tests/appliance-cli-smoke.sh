@@ -19,7 +19,7 @@ test -x bin/nephos || fail "run make build first"
 
 # The contributor path must explain both preserving and discarding volume state.
 grep -Fq 'docker rm nephos' docs/DEVELOPMENT.md || fail "appliance refresh instructions missing"
-grep -Fq 'docker volume rm nephos-data' docs/DEVELOPMENT.md || fail "AMI refresh instructions missing"
+grep -Fq 'nephos reset --hard' docs/DEVELOPMENT.md || fail "AMI refresh instructions missing"
 
 test_home="$(mktemp -d /tmp/nephos-cli-smoke.XXXXXX)"
 [[ "$test_home" == /tmp/nephos-cli-smoke.* ]] || fail "unexpected temporary home path"
