@@ -251,13 +251,21 @@ func TestConsoleRealShutdownRetainsStoppedRoots(t *testing.T) {
 		}
 		t.Logf("retained root %s (%s), stopped PID=0, exec inventory=0; Podman still alive", ref.Identity.InstanceID, ref.ID)
 	}
-	if supervisors := ownedConmons(t, refs); len(supervisors) != 0 {
-		t.Fatalf("owned supervisors remained before outer teardown: %v", supervisors)
-	}
 	// Podman reports a container stopped while its conmon may still be in
 	// the last moments of exit (state D, already reparented to PID 1). Give
-	// reaping a bounded window; a supervisor that never goes away still fails.
+	// exit and reaping one bounded window; a supervisor that never goes away
+	// still fails.
 	reapDeadline := time.Now().Add(10 * time.Second)
+	for {
+		supervisors := ownedConmons(t, refs)
+		if len(supervisors) == 0 {
+			break
+		}
+		if time.Now().After(reapDeadline) {
+			t.Fatalf("owned supervisors remained 10s after shutdown: %v", supervisors)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
 	for _, witness := range append(supervisors, initWitnesses...) {
 		for {
 			raw, err := os.ReadFile(witness)
