@@ -14,7 +14,7 @@ export CGO_ENABLED := 0
 
 GO              ?= go
 GOLANGCI_LINT   ?= $(shell go env GOPATH)/bin/golangci-lint
-GOLANGCI_VERSION ?= v2.13.2
+GOLANGCI_VERSION ?= v2.15.0
 
 BIN_DIR   := bin
 DIST_DIR  := dist

@@ -9,9 +9,9 @@ This is the setup guide. For *what to build and why*, read
 
 | | |
 |---|---|
-| **Go** | The version pinned in `go.mod` (currently 1.27.1) |
+| **Go** | The version pinned in `go.mod` (currently 1.27.4) |
 | **Docker** | Docker Engine on Linux, or Docker Desktop on Windows/macOS. Must be **rootful** and on a **cgroup v2** host |
-| **golangci-lint** | v2.13.2, for `make lint` |
+| **golangci-lint** | v2.15.0, for `make lint` |
 | **Node 22** | Only from M6 onward, for the web console |
 
 Integration and end-to-end tests additionally need Docker and the ability to run
@@ -22,11 +22,11 @@ a **privileged** container.
 ```bash
 sudo apt-get install -y build-essential git jq
 # Go: use the official tarball, not the distribution package, which lags.
-curl -fsSLO https://go.dev/dl/go1.27.1.linux-amd64.tar.gz
-sudo rm -rf /usr/local/go && sudo tar -C /usr/local -xzf go1.27.1.linux-amd64.tar.gz
+curl -fsSLO https://go.dev/dl/go1.27.4.linux-amd64.tar.gz
+sudo rm -rf /usr/local/go && sudo tar -C /usr/local -xzf go1.27.4.linux-amd64.tar.gz
 echo 'export PATH="/usr/local/go/bin:$HOME/go/bin:$PATH"' >> ~/.bashrc && . ~/.bashrc
 
-go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2
+go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
 
 git clone https://github.com/Amrzxk/nephos.git ~/src/nephos
 cd ~/src/nephos && make ci
