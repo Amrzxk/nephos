@@ -71,6 +71,8 @@ Lifecycle commands: `nephos down` stops the appliance. `nephos down --purge` rem
 - there is enough free memory and disk;
 - the architecture is amd64 or arm64.
 
+> **Staging note (2026-11-13).** This records how the decision is delivered, not a change to it. Until M8 ships the `nephos doctor` command, `nephos up` enforces the same refuse-to-start rule through a built-in startup preflight. The CLI checks Docker reachability, cgroup v2, the kernel floor and the requested limits. The appliance entrypoint fails closed if cgroup controllers cannot be delegated, if memory or disk is insufficient, or if nftables, veth or namespace probes fail. The rootless-Docker check and a standalone, explainable report arrive with `doctor` in M8 ([ROADMAP](../ROADMAP.md)).
+
 The appliance image uses a Debian stable base. It contains `nephosd`, `nephos-hook`, Podman with crun and conmon, nftables, iproute2, and a minimal init.
 
 ## Consequences

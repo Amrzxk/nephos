@@ -1,8 +1,11 @@
 # AGENTS.md: working on Nephos
 
-Repository guidance for Codex and contributors. Keep this file focused on
-always-applicable workflow and safety rules; use the linked documents as the
-canonical source for detailed design and project context.
+Repository guidance for AI coding agents (Claude Code reads it through
+`CLAUDE.md`; Codex reads it directly) and for human contributors. Keep this
+file focused on always-applicable workflow and safety rules; use the linked
+documents as the canonical source for detailed design and project context.
+Do not record per-commit progress here: [docs/ROADMAP.md](docs/ROADMAP.md) is
+the single place for milestone status and evidence links.
 
 ## Purpose and scope
 
@@ -15,77 +18,23 @@ for the product boundary.
 
 ## Current milestone
 
-M0 is complete. The active implementation milestone is M1 in
+M0 is complete. The active milestone is **M1** in
 [docs/ROADMAP.md](docs/ROADMAP.md): `nephos up`/`down`, the SQLite store and
 reconcile framework, the OpenAPI skeleton, and two instances in different
-subnets that can ping each other. The roadmap and its checkboxes are
-authoritative; update this summary if they move ahead.
+subnets that can ping each other, plus restart recovery, reset and an e2e
+demo. The roadmap's delivery-slice table and acceptance checkboxes are
+authoritative for what is done; read them instead of trusting any summary.
 
 M1 uses one implicit `default` workspace and explicitly created VPCs. Its
 contributor workflow builds the appliance and development AMI locally before
 `nephos up`. Default VPCs, the simulated internet edge, arbitrary tags, and
 broader list filters belong to M3; DNS and IMDS belong to M2. Keep the
-`/v1/workspaces/default/...` API shape from ADR-0008, and implement its core
-contract for resources that M1 introduces. See the M1 boundary and delivery
-slices in the roadmap before adding a resource or endpoint.
+`/v1/workspaces/default/...` API shape from ADR-0008. Do not implement work
+from a later milestone unless the roadmap is updated first.
 
-The M0 spikes pass on both WSL2 with Docker Desktop and native Ubuntu 24.04
-with Docker. Pull requests #1 and #2 are merged, the standard GitHub CI
-workflow passes, and the native-Docker `Spikes` workflow passed all four spikes in
-[run 35698867324](https://github.com/Amrzxk/nephos/actions/runs/35698867324).
-M1 is now the active implementation milestone. Do not implement work from a
-later milestone unless the roadmap is updated first.
-
-M1 slices 1 and 2 are implemented and merged in
-[PR #3](https://github.com/Amrzxk/nephos/pull/3) and
-[PR #4](https://github.com/Amrzxk/nephos/pull/4). They provide appliance
-bootstrap, SQLite-backed VPC/subnet CRUD, durable events, reconciliation,
-real namespaces and gateway addresses, and native-Docker smoke coverage.
-See the [roadmap progress](docs/ROADMAP.md#m1-thinnest-end-to-end-slice-two-instances-ping)
-and [connectivity matrix](docs/tests/M1-connectivity-matrix.md) for the evidence.
-Slice 3 is implemented and merged in [PR #6](https://github.com/Amrzxk/nephos/pull/6):
-durable ENI/IP allocation, instance reconciliation, a private fail-closed
-createRuntime hook, real veth
-networking and source checks, fixed `t3.micro` limits (2 vCPU, 1 GiB, 512
-tasks), and authenticated instance API/CLI and PTY/non-PTY console modes.
-Its [implementation plan](docs/superpowers/plans/2026-09-27-m1-slice-3-instances-ping.md)
-and [console protocol](api/console-v1.md) describe the contracts. The matrix
-records local WSL2/Docker Desktop and native Ubuntu packet evidence. All
-checks passed in [CI run 36973066755](https://github.com/Amrzxk/nephos/actions/runs/36973066755),
-including the required native host nftables snapshot.
-The [slice-3 checkpoint](docs/tests/M1-slice3-local-verification.md) records
-the independent review, addressed findings, verification limits and rulings.
-Slice 4 still owns retained-root instance restart recovery, orphan collection,
-reset and leak closure, the replayable demo/e2e target, and full platform QA.
-Its [design](docs/superpowers/specs/2026-10-02-m1-slice-4-recovery-reset-design.md)
-and [implementation plan](docs/superpowers/plans/2026-10-02-m1-slice-4-recovery-reset.md)
-were approved for native execution on 2026-10-02, with independent reviews at
-each 4A–4E delivery boundary. They select a durable SQLite reset coordinator with
-automatic continuation after interruption and a synchronous caller wait;
-runtime identity and ownership checks protect retained roots, and leak checks
-must verify cleanup before reset succeeds. Delivery proceeds through
-retained-root recovery, lifecycle/leak-check foundations, durable soft reset, hard purge,
-then demo/e2e and platform closure. 4A is implemented locally on
-`codex/m1-slice4-native`: expected runtime identity/provenance, guarded cache
-repair, durable provisioning history, retained-root restart and running ENI
-repair. The [4A checkpoint](docs/tests/M1-slice4a-local-verification.md)
-records independent review and local evidence. 4A is pushed through `6c696ce`
-on that branch, not merged; native Ubuntu CI remains pending. 4B Task 3 is
-implemented and reviewed locally in `1e8abe3`, published on the same branch
-but not merged: effect/hook-child leases,
-console and supervisor closure, and graceful nested stop. Its
-[lifecycle checkpoint](docs/tests/M1-slice4b-lifecycle-local-verification.md)
-records tests and limits. Tasks 4–5 now implement consistent desired snapshots,
-strict runtime/ENI inventory and exclusive startup/resync GC, plus non-destructive
-complete-versus-clean leak checks and registered FD/socket/worker lifetimes.
-The [ownership/lifetime checkpoint](docs/tests/M1-slice4b-ownership-leak-local-verification.md)
-records real orphan/foreign/refusal tests and independent FD/socket witnesses,
-with independent full-4B code approval;
-new changes are local, not pushed or merged. 4C (Tasks 6–8) is next: durable
-soft reset and API/CLI waiting. 4D–4E and native CI remain planned. M1 is
-**not** complete. Do not repeat completed slice-1/2/3 or 4A/4B checklists, or inherit permission to
-push/merge new implementation.
-Namespace and gateway checks alone must never be reported as packet connectivity.
+Namespace and gateway checks alone must never be reported as packet
+connectivity. Milestone checkboxes change only against CI or named manual QA
+evidence.
 
 ## Start-of-task workflow
 
@@ -208,7 +157,7 @@ The `spikes/` tree is throwaway and uses separate Go modules. Root
 ## Development and verification
 
 Development is supported on native Linux and Windows with WSL2 plus Docker
-Desktop; macOS is best effort. Run project commands inside Linux or WSL, not
+Desktop; macOS is best effort and not yet validated. Run project commands inside Linux or WSL, not
 PowerShell. Keep WSL working copies on its ext4 filesystem. See
 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for setup and platform details.
 
@@ -220,13 +169,21 @@ required by the changed area:
 - `make test-race` — tests under the race detector.
 - `make lint` — `golangci-lint` and formatting checks.
 - `make generate` — regenerate API-derived code.
-- `make ci` — the Go pull-request suite (formatting, vet, lint, unit/race
-  tests, cross-builds). Run `make generate-check` separately for generated
-  freshness; it compares before/after snapshots and accepts a dirty candidate
-  tree. Docker smoke/e2e and vulnerability checks are also separate CI steps.
-- `make appliance`, `make e2e`, and spike scripts — require Docker and, where
-  documented, a privileged container. Some targets intentionally remain
-  unavailable until their owning milestone implements them.
+- `make ci` — every Go check CI runs: formatting, vet, lint (including
+  depguard layering), unit/race tests, cross-builds, generated-code freshness,
+  `go.mod` tidiness and a pinned `govulncheck`.
+- `make test-integration` — privileged kernel/Podman tests inside a throwaway
+  appliance (after `make dev-ami appliance`). Never run `-tags integration`
+  test binaries on the host.
+- `make dev-up` — rebuild images and binaries and restart a Nephos-owned
+  appliance on the new image, keeping its volume. Run only when asked.
+- `make appliance`, `make e2e`, the `tests/*.sh` smokes and spike scripts —
+  require Docker and, where documented, a privileged container. Some targets
+  intentionally remain unavailable until their owning milestone implements
+  them.
+- The CLI ships for Windows and macOS: keep `cmd/nephos` and
+  `internal/appliance` portable (no Unix-only permission or path assumptions)
+  and their tests passing on Windows. CI runs them on Windows and macOS.
 
 ## Git and pull requests
 
