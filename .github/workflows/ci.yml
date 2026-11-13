@@ -192,7 +192,7 @@ jobs:
       - name: Check real instance packets and console
         run: bash tests/instance-ping-smoke.sh
 
-      - name: Check soft reset leaves no Nephos state
+      - name: Check soft reset, hard reset and purge
         run: bash tests/reset-smoke.sh
 
       - name: Appliance logs on failure

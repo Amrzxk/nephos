@@ -84,7 +84,7 @@ func (d *dockerEngine) Inspect(ctx context.Context) (ContainerState, error) {
 		return ContainerState{}, objectError("inspect appliance container", err)
 	}
 	c := result.Container
-	state := ContainerState{}
+	state := ContainerState{ID: c.ID}
 	if c.State != nil {
 		state.Running = c.State.Running
 		state.Status = string(c.State.Status)
@@ -116,7 +116,7 @@ func (d *dockerEngine) InspectVolume(ctx context.Context) (VolumeState, error) {
 	if err != nil {
 		return VolumeState{}, objectError("inspect appliance volume", err)
 	}
-	return VolumeState{Owned: result.Volume.Labels[ownerLabel] == "true"}, nil
+	return VolumeState{Owned: result.Volume.Labels[ownerLabel] == "true", CreatedAt: result.Volume.CreatedAt}, nil
 }
 
 func (d *dockerEngine) CreateVolume(ctx context.Context) error {
@@ -174,8 +174,11 @@ func (d *dockerEngine) Stop(ctx context.Context) error {
 	return nil
 }
 
-func (d *dockerEngine) Remove(ctx context.Context) error {
-	_, err := d.client.ContainerRemove(ctx, containerName, client.ContainerRemoveOptions{})
+func (d *dockerEngine) Remove(ctx context.Context, id string) error {
+	if id == "" {
+		return fmt.Errorf("remove appliance container: no container ID")
+	}
+	_, err := d.client.ContainerRemove(ctx, id, client.ContainerRemoveOptions{})
 	if err != nil {
 		return objectError("remove appliance container", err)
 	}

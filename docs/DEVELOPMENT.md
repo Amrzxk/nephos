@@ -261,17 +261,16 @@ need before running it; do not use this procedure on a volume you want to keep:
 ```bash
 make dev-ami
 make appliance
-bin/nephos down
-test "$(docker inspect -f '{{index .Config.Labels "io.nephos.appliance"}}' nephos)" = true
-test "$(docker volume inspect -f '{{index .Labels "io.nephos.appliance"}}' nephos-data)" = true
-docker rm nephos
-docker volume rm nephos-data
-bin/nephos up
+bin/nephos reset --hard   # asks for confirmation; --yes in scripts
 ```
 
-If no `nephos` container exists yet, just build and run `bin/nephos up`.
-The M1 slice-4 purge/reset commands will make the data-destructive case less
-manual; they are not available in this slice.
+`reset --hard` refuses unless both the `nephos` container and the
+`nephos-data` volume carry the `io.nephos.appliance` label, removes the
+container by its inspected ID, removes the volume only if its creation time is
+unchanged, deletes `~/.nephos/credentials`, and then starts a fresh appliance
+with the old CPU, memory and PID limits unless you pass new ones.
+`bin/nephos down --purge` does the same removal without starting again. If no
+`nephos` container exists yet, just build and run `bin/nephos up`.
 
 The API token lives in the `nephos-data` volume. On first startup, the
 CLI copies it through Docker's archive API to
@@ -349,27 +348,11 @@ Task 3 fixture proves supervisor/init disappearance and empty instance
 cgroups before outer teardown; the historical 4A restart smoke alone does
 not prove this. No new learner stop/start command or console protocol exists.
 
-Soft reset is planned as a durable SQLite operation. Its transaction fences
-resource creation, and its worker deletes instances before subnets before
-VPCs. The CLI waits for completion, but disconnecting or timing out does not
-cancel the admitted operation. Startup resumes unfinished work. Replaying a
-completed operation's idempotency key returns its recorded result without
-deleting resources created afterward. Leak failure keeps the create fence
-until an explicit retry of that failed operation succeeds. AMI cache, event
-history, request replay history and allocated kernel-index history remain.
-The default workspace stays empty; M1 has no default VPC.
-The future `reset --status` reads progress; `reset --retry` explicitly resumes
-the failed operation by its ID. The ordinary reset waiter defaults to two
-minutes, with a `--timeout` override; its timeout does not cancel the worker.
-
-Hard reset is planned to work even when the API is unhealthy or SQLite cannot
-open. It verifies both old Docker objects and any volume consumers before
-deletion, pins the old container ID, rechecks the volume's creation identity,
-and refuses foreign consumers. It starts fresh only after both old objects
-are confirmed absent; partial purge is an error, not a reason to call `up`.
-The fresh appliance gets a new token and an atomic mode-0600 credential
-replacement. Actual old appliance CPU, memory and PID limits are retained
-unless the caller explicitly overrides them.
+Soft reset is synchronous; see the workflow above for its exit codes. Hard
+reset and `down --purge` bypass the API and SQLite, so they work when the
+appliance is unhealthy. They check ownership of both Docker objects before
+deleting anything, skip objects that are already gone, and never call `up`
+after a refused or failed purge.
 
 Future e2e runs must build the development AMI, appliance, CLI and test-only
 helpers from the candidate source, and record exact source/image/package

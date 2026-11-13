@@ -49,6 +49,7 @@ type HostInfo struct {
 
 // ContainerState is the observed state of the fixed Nephos container.
 type ContainerState struct {
+	ID           string
 	Running      bool
 	Owned        bool
 	Status       string
@@ -60,7 +61,8 @@ type ContainerState struct {
 
 // VolumeState is the observed state of the fixed Nephos data volume.
 type VolumeState struct {
-	Owned bool
+	Owned     bool
+	CreatedAt string
 }
 
 // Engine is intentionally bound to Nephos' fixed object names. Lifecycle code
@@ -75,7 +77,9 @@ type Engine interface {
 	Create(context.Context, Limits) error
 	Start(context.Context) error
 	Stop(context.Context) error
-	Remove(context.Context) error
+	// Remove deletes the appliance container by the ID a prior Inspect
+	// returned, so a container recreated under the same name is never hit.
+	Remove(ctx context.Context, id string) error
 	RemoveVolume(context.Context) error
 	CopyFile(context.Context) (io.ReadCloser, error)
 }

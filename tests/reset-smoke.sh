@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
-# Real-Docker soft reset (M1 slice 4C): populate the default workspace, run
-# `nephos reset`, and prove that the API is empty and that the appliance's
-# kernel and Podman state match the baseline taken right after `nephos up`.
+# Real-Docker reset (M1 slices 4C and 4D). Soft reset: populate the default
+# workspace, run `nephos reset`, and prove that the API is empty and that the
+# appliance's kernel and Podman state match the baseline taken right after
+# `nephos up`. Hard reset and purge: prove the old container, volume, data and
+# token are gone, the fresh appliance keeps the old limits, and purge leaves
+# no Nephos Docker object behind.
 set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_root"
@@ -70,7 +73,8 @@ expect_empty_api() {
     done
 }
 
-cli up
+# A non-default limit, so the hard reset below can prove it is preserved.
+cli up --pids-limit 5000
 container_id="$(docker inspect -f '{{.Id}}' nephos)"
 volume_created="$(docker volume inspect -f '{{.CreatedAt}}' nephos-data)"
 [ "$(cli status)" = ready ] || fail "appliance not ready"
@@ -114,3 +118,37 @@ appliance_state >"$test_home/after-second-reset"
 cmp -s "$test_home/baseline" "$test_home/after-second-reset" || fail "second reset left appliance state behind"
 [ "$(cli status)" = ready ] || fail "appliance not ready after reset"
 passed "reset is repeatable and the appliance stays ready"
+
+# Hard reset: a file in an instance root, the database and the token all go;
+# a new container and volume start with the old limits.
+vpc="$(cli vpc create keep --cidr-block 10.0.0.0/16 --wait -o json | jq -r .id)"
+subnet="$(cli subnet create keep --vpc "$vpc" --cidr-block 10.0.1.0/24 --availability-zone local-1a --wait -o json | jq -r .id)"
+cli instance run keeper --subnet "$subnet" --wait -o json | jq -e '.state == "running"' >/dev/null || fail "instance keeper not running"
+cli console keeper -- /bin/sh -c 'echo nephos-reset-marker > /root/marker' </dev/null || fail "could not write the marker file"
+old_token="$(cat "$test_home/.nephos/credentials")"
+old_container="$container_id"
+old_volume="$volume_created"
+cli reset --hard </dev/null >/dev/null 2>&1 && fail "non-interactive hard reset ran without --yes"
+[ "$(docker inspect -f '{{.Id}}' nephos)" = "$old_container" ] || fail "refused hard reset still touched the container"
+cli reset --hard --yes </dev/null >"$test_home/hard-reset.out" || fail "hard reset failed: $(cat "$test_home/hard-reset.out")"
+container_id="$(docker inspect -f '{{.Id}}' nephos)"
+volume_created="$(docker volume inspect -f '{{.CreatedAt}}' nephos-data)"
+[ "$container_id" != "$old_container" ] || fail "hard reset kept the old container"
+[ "$volume_created" != "$old_volume" ] || fail "hard reset kept the old volume"
+[ "$(cat "$test_home/.nephos/credentials")" != "$old_token" ] || fail "hard reset kept the old API token"
+[ "$(docker inspect -f '{{.HostConfig.PidsLimit}}' nephos)" = 5000 ] || fail "hard reset did not preserve the pids limit"
+[ "$(cli status)" = ready ] || fail "fresh appliance not ready"
+expect_empty_api
+appliance_state >"$test_home/after-hard-reset"
+cmp -s "$test_home/baseline" "$test_home/after-hard-reset" || fail "fresh appliance state differs from the first baseline"
+passed "reset --hard replaces the container, volume and token, keeps limits, and starts empty"
+
+# Purge: nothing Nephos-owned remains in Docker, and a second purge is a no-op.
+cli down --purge --yes </dev/null >/dev/null || fail "down --purge failed"
+container_id=""
+volume_created=""
+docker container inspect nephos >/dev/null 2>&1 && fail "purge left the container"
+docker volume inspect nephos-data >/dev/null 2>&1 && fail "purge left the volume"
+[ ! -e "$test_home/.nephos/credentials" ] || fail "purge left the API token"
+cli down --purge --yes </dev/null | grep -q 'No Nephos appliance' || fail "second purge was not a no-op"
+passed "down --purge removes the appliance, its volume and the token"

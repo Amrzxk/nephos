@@ -57,10 +57,3 @@ func TestUpInvalidLimitsFailBeforeDocker(t *testing.T) {
 		}
 	}
 }
-
-func TestDownRejectsPurgeUntilResetSlice(t *testing.T) {
-	code, _, _ := runCLI(t, "down", "--purge")
-	if code != exitUsage {
-		t.Fatalf("unexpected exit %d", code)
-	}
-}
