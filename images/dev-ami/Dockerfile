@@ -1,6 +1,6 @@
 # M1's locally built development AMI. M2 adds the published image pipeline and
 # the first-boot metadata/cloud-init path.
-FROM ubuntu:24.04
+FROM ubuntu:25.10
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV container=podman
