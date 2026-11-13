@@ -229,6 +229,20 @@ func TestUnexpectedRouterAddressFailsClosed(t *testing.T) {
 		!strings.Contains(err.Error(), "unmanaged router address") {
 		t.Fatalf("unexpected router address was silently accepted: %v", err)
 	}
+	if err := netns.WithHandle(ctx, name, func(h *netlink.Handle) error {
+		link, err := h.LinkByName("nxr0")
+		if err != nil {
+			return err
+		}
+		address, err := netlink.ParseAddr("192.0.2.9/32")
+		if err != nil {
+			return err
+		}
+		address.Label = "nxr0:other"
+		return h.AddrDel(link, address) // exact foreign fixture, after refusal assertion
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func applianceRootNetworkState(t *testing.T) string {

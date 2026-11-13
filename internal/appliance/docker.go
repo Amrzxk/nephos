@@ -152,7 +152,10 @@ func (d *dockerEngine) Start(ctx context.Context) error {
 }
 
 func (d *dockerEngine) Stop(ctx context.Context) error {
-	_, err := d.client.ContainerStop(ctx, containerName, client.ContainerStopOptions{})
+	// The daemon has 25 seconds for owned cleanup (15 within it for nested
+	// Stop); leave headroom for the entrypoint to join Podman afterwards.
+	timeout := 35
+	_, err := d.client.ContainerStop(ctx, containerName, client.ContainerStopOptions{Timeout: &timeout})
 	if err != nil {
 		return objectError("stop appliance container", err)
 	}

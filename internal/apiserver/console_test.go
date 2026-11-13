@@ -27,12 +27,13 @@ type consoleTestRuntime struct {
 	calls    int
 	session  *consoleTestSession
 	closeErr error
+	identity compute.Identity
 }
 
-func (r *consoleTestRuntime) Exec(_ context.Context, id compute.RuntimeID, req compute.ExecRequest) (compute.ExecSession, error) {
+func (r *consoleTestRuntime) Exec(_ context.Context, ref compute.Reference, req compute.ExecRequest) (compute.ExecSession, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if id != compute.RuntimeID(strings.Repeat("a", 64)) {
+	if ref.ID != compute.RuntimeID(strings.Repeat("a", 64)) || ref.Identity != r.identity {
 		return nil, fmt.Errorf("wrong runtime identity")
 	}
 	r.calls++
@@ -158,6 +159,7 @@ func consoleTestWorld(t *testing.T, runtime *consoleTestRuntime) (server *httpte
 	if err != nil {
 		t.Fatal(err)
 	}
+	runtime.identity = compute.Identity{WorkspaceID: "default", InstanceID: running.ID}
 	if err := s.RecordRuntimeID(ctx, running.ID, running.Generation, strings.Repeat("a", 64)); err != nil {
 		t.Fatal(err)
 	}

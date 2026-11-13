@@ -135,6 +135,25 @@ func (s *Store) RecordRuntimeID(ctx context.Context, instanceID string, generati
 	return nil
 }
 
+// RebindRuntimeID replaces a verified cache observation, never desired identity.
+// Generation, prior cache and live deletion intent are one compare-and-swap.
+func (s *Store) RebindRuntimeID(ctx context.Context, instanceID string, generation int64, oldID, newID string) error {
+	if newID == "" {
+		return fmt.Errorf("rebind instance %s runtime: empty ID", instanceID)
+	}
+	count, err := sqlc.New(s.db).RebindRuntimeID(ctx, sqlc.RebindRuntimeIDParams{
+		InstanceID: instanceID, Generation: generation, OldRuntimeID: sql.NullString{String: oldID, Valid: true},
+		NewRuntimeID: sql.NullString{String: newID, Valid: true},
+	})
+	if err != nil {
+		return fmt.Errorf("rebind instance %s runtime: %w", instanceID, err)
+	}
+	if count != 1 {
+		return ErrStaleSnapshot
+	}
+	return nil
+}
+
 func (tx *Tx) instanceFromRow(ctx context.Context, row sqlc.Instance) (model.Instance, error) {
 	eni, err := tx.q.GetPrimaryENI(ctx, sqlc.GetPrimaryENIParams{InstanceID: row.ID, WorkspaceID: row.WorkspaceID})
 	if err != nil {
@@ -155,6 +174,7 @@ func (tx *Tx) instanceFromRow(ctx context.Context, row sqlc.Instance) (model.Ins
 		Name: row.Name, InstanceType: "t3.micro", State: model.InstanceState(row.State), StateReason: row.StateReason,
 		Generation: row.Generation, ObservedGeneration: row.ObservedGeneration,
 		DeletionRequested: row.DeletionRequested != 0, RuntimeID: row.RuntimeID.String,
+		Provisioned: row.Provisioned != 0,
 		ENI: model.ENI{ID: eni.ID, WorkspaceID: eni.WorkspaceID, InstanceID: eni.InstanceID,
 			SubnetID: eni.SubnetID, ShortIndex: eni.ShortIndex, PrivateIP: address, MACAddress: eni.MacAddress,
 			Generation: eni.Generation, ObservedGeneration: eni.ObservedGeneration, State: model.State(eni.State), StateReason: eni.StateReason},

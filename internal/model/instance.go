@@ -28,6 +28,7 @@ type Instance struct {
 	ObservedGeneration int64
 	DeletionRequested  bool
 	RuntimeID          string
+	Provisioned        bool // internal preservation history, never a learner API option
 	ENI                ENI
 }
 

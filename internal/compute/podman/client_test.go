@@ -21,6 +21,7 @@ import (
 const testID = "i-00000000000000001"
 
 var testRuntimeID = compute.RuntimeID(strings.Repeat("a", 64))
+var testReference = compute.Reference{Identity: compute.Identity{WorkspaceID: "default", InstanceID: testID}, ID: testRuntimeID}
 
 func unixServer(t *testing.T, handler http.Handler) string {
 	t.Helper()
@@ -97,12 +98,12 @@ func TestPodmanCreateContract(t *testing.T) {
 	}))
 	c := New(socket)
 	ctx := context.Background()
-	for range 2 {
+	for attempt := range 2 {
 		id, err := c.Create(ctx, model.Instance{ID: testID, WorkspaceID: "default", InstanceType: "t3.micro"})
-		if err != nil || id != testRuntimeID {
-			t.Fatalf("create %q %v", id, err)
+		if err != nil || id.Reference != testReference || id.Created != (attempt == 0) {
+			t.Fatalf("create %+v %v", id, err)
 		}
-		if err := c.Start(ctx, id); err != nil {
+		if err := c.Start(ctx, id.Reference); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -128,11 +129,11 @@ func TestPodmanForeignContainer(t *testing.T) {
 			case "create":
 				_, err = c.Create(ctx, model.Instance{ID: testID, WorkspaceID: "default", InstanceType: "t3.micro"})
 			case "start":
-				err = c.Start(ctx, testRuntimeID)
+				err = c.Start(ctx, testReference)
 			case "delete":
-				err = c.Delete(ctx, testRuntimeID)
+				err = c.Delete(ctx, testReference)
 			case "exec":
-				_, err = c.Exec(ctx, testRuntimeID, compute.ExecRequest{Command: []string{"/bin/true"}})
+				_, err = c.Exec(ctx, testReference, compute.ExecRequest{Command: []string{"/bin/true"}})
 			}
 			if err == nil || !strings.Contains(err.Error(), "foreign") {
 				t.Fatalf("foreign %s: %v", operation, err)

@@ -147,7 +147,7 @@ func TestPodmanExecStreams(t *testing.T) {
 				req.Rows = 24
 				req.Cols = 80
 			}
-			s, err := c.Exec(ctx, testRuntimeID, req)
+			s, err := c.Exec(ctx, testReference, req)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -203,7 +203,7 @@ func TestPodmanExecExit(t *testing.T) {
 			c := New(execServer(t, f))
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()
-			s, err := c.Exec(ctx, testRuntimeID, compute.ExecRequest{Command: []string{"/bin/fixture", "literal $x"}})
+			s, err := c.Exec(ctx, testReference, compute.ExecRequest{Command: []string{"/bin/fixture", "literal $x"}})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -226,7 +226,7 @@ func TestPodmanExecCleanup(t *testing.T) {
 	c := New(execServer(t, execFixture{status: &code, cleanupError: true}))
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	s, err := c.Exec(ctx, testRuntimeID, compute.ExecRequest{Command: []string{"/bin/fixture", "literal $x"}})
+	s, err := c.Exec(ctx, testReference, compute.ExecRequest{Command: []string{"/bin/fixture", "literal $x"}})
 	if err != nil {
 		t.Fatal(err)
 	}

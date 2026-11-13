@@ -217,7 +217,7 @@ func TestFailureRecordsReasonAndRetryRecovers(t *testing.T) {
 	}
 }
 
-func TestSweepCollectsOnlyOwnedOrphans(t *testing.T) {
+func TestSweepCannotDeleteOrphansByNameOnly(t *testing.T) {
 	_, svc, f, c := setup(t)
 	vpc, _ := create(t, svc)
 	f.extra = []string{"foreign", "nx-vpc-98765", "nx-vpc-01"}
@@ -229,7 +229,7 @@ func TestSweepCollectsOnlyOwnedOrphans(t *testing.T) {
 	deletes := f.deletes
 	_, wanted := f.names[name]
 	f.mu.Unlock()
-	if deletes != 1 || !wanted {
+	if deletes != 0 || !wanted {
 		t.Fatalf("deletes=%d desired preserved=%v", deletes, wanted)
 	}
 }

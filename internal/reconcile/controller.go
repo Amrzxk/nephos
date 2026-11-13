@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Amrzxk/nephos/internal/lifecycle"
 	"github.com/Amrzxk/nephos/internal/model"
 	"github.com/Amrzxk/nephos/internal/store"
 )
@@ -36,6 +37,7 @@ type retryEntry struct {
 // Controller owns a bounded, deduplicated acceleration queue. SQLite remains
 // the source of truth; startup and periodic sweeps repair any dropped enqueue.
 type Controller struct {
+	gate     *lifecycle.Gate
 	store    *store.Store
 	network  NetworkEngine
 	interval time.Duration
@@ -47,12 +49,16 @@ type Controller struct {
 }
 
 // New wires durable state and the network engine.
-func New(s *store.Store, network NetworkEngine, interval time.Duration) *Controller {
+func New(s *store.Store, network NetworkEngine, interval time.Duration, gates ...*lifecycle.Gate) *Controller {
 	if interval <= 0 {
 		interval = defaultInterval
 	}
-	return &Controller{store: s, network: network, interval: interval,
+	c := &Controller{store: s, network: network, interval: interval,
 		pending: make(map[string]struct{}), retries: make(map[string]retryEntry), wake: make(chan struct{}, 1)}
+	if len(gates) > 0 {
+		c.gate = gates[0]
+	}
+	return c
 }
 
 // Enqueue hints that one VPC changed. A full resync remains authoritative.
@@ -159,6 +165,15 @@ func (c *Controller) reconcile(ctx context.Context, id string) error {
 }
 
 func (c *Controller) reconcileLocked(ctx context.Context, id string) error {
+	ctx, done, admitted, err := enterEffect(ctx, c.gate)
+	if err != nil {
+		return err
+	}
+	if !admitted {
+		c.retry(id)
+		return nil
+	}
+	defer done()
 	vpc, err := c.store.GetVPC(ctx, "default", id)
 	if errors.Is(err, sql.ErrNoRows) {
 		c.clearRetry(id)

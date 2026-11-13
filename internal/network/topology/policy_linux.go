@@ -21,8 +21,12 @@ type kernelPolicyRule struct {
 }
 
 func listKernelPolicyRules() ([]kernelPolicyRule, error) {
+	return listKernelPolicyRulesFor(netlink.FAMILY_V4)
+}
+
+func listKernelPolicyRulesFor(family int) ([]kernelPolicyRule, error) {
 	req := nl.NewNetlinkRequest(unix.RTM_GETRULE, unix.NLM_F_DUMP|unix.NLM_F_REQUEST)
-	req.AddData(nl.NewIfInfomsg(netlink.FAMILY_V4))
+	req.AddData(nl.NewIfInfomsg(family))
 	messages, err := req.Execute(unix.NETLINK_ROUTE, unix.RTM_NEWRULE)
 	if err != nil {
 		return nil, fmt.Errorf("query IPv4 policy rules: %w", err)
@@ -38,6 +42,9 @@ func listKernelPolicyRules() ([]kernelPolicyRule, error) {
 			return nil, fmt.Errorf("decode kernel policy-rule attributes: %w", err)
 		}
 		rule := kernelPolicyRule{table: int(msg.Table), action: msg.Type}
+		if msg.Flags != 0 || msg.Tos != 0 || msg.Src_len != 0 {
+			rule.extra = append(rule.extra, fmt.Sprintf("header:flags=%d,tos=%d,src=%d", msg.Flags, msg.Tos, msg.Src_len))
+		}
 		for _, attr := range attrs {
 			switch attr.Attr.Type {
 			case nl.FRA_PRIORITY:
@@ -51,11 +58,15 @@ func listKernelPolicyRules() ([]kernelPolicyRule, error) {
 				}
 				rule.table = int(nl.NativeEndian().Uint32(attr.Value))
 			case nl.FRA_DST:
-				if len(attr.Value) != 4 {
-					return nil, fmt.Errorf("invalid IPv4 policy-rule destination length %d", len(attr.Value))
+				size := 32
+				if family == netlink.FAMILY_V6 {
+					size = 128
+				}
+				if len(attr.Value) != size/8 {
+					return nil, fmt.Errorf("invalid policy-rule destination length %d", len(attr.Value))
 				}
 				rule.dst = &net.IPNet{
-					IP: net.IP(attr.Value), Mask: net.CIDRMask(int(msg.Dst_len), 32),
+					IP: net.IP(attr.Value), Mask: net.CIDRMask(int(msg.Dst_len), size),
 				}
 			case nl.FRA_SUPPRESS_PREFIXLEN:
 				// The kernel returns 0xffffffff for "not set".

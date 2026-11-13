@@ -13,6 +13,47 @@ Each entry names the milestone it belongs to; see [docs/ROADMAP.md](docs/ROADMAP
 
 ### Added
 
+- **M1 — runtime inventory and namespace ownership foundations (slice 4B
+  Tasks 4–5; local branch implementation).** Broad all-container list/inspect retains malformed
+  Nephos candidates and rejects incomplete inspection. The runtime-only
+  collector preserves desired owners with empty or stale cached IDs and
+  prevalidates all candidates before removing owned rowless roots. Namespace
+  operations reject root/cross-VPC aliases, symlinks and non-network NSFS
+  mounts. Unit and isolated-appliance evidence is recorded in the
+  [ownership/lifetime checkpoint](docs/tests/M1-slice4b-ownership-leak-local-verification.md).
+  Consistent SQLite snapshots and exclusive startup/resync GC remove strictly
+  proven runtime/ENI orphans children-first, preserving desired/foreign objects.
+  Non-destructive complete/clean results require actual exclusive authority,
+  empty desired resources and joined FD/socket/worker/effect lifetimes. Real
+  external FD/socket-only witnesses pin the observation limits; owned kernel
+  children are cleaned before namespace unlink. Reset and native platform QA
+  remain pending. These changes are local, not pushed or merged.
+- **M1 — lifecycle foundations (slice 4B Task 3; branch implementation).**
+  Daemon-owned effect/verified-hook-child leases and console references drain
+  before nested stop. Real PTY/non-PTY cleanup includes session-scoped exec
+  supervisors with pinned identity and reaping proof, preserving remote exit
+  codes and trailing output. Shared shutdown budgets are 25 seconds for the
+  daemon, 15 within that for nested stop, and 35 for Docker. Systemic runtime
+  inspection and uncertain submitted mutation/cleanup fail closed. Local
+  unit/race/cross-build, privileged lifecycle/adapter/hook tests and independent
+  review are recorded in the [checkpoint](docs/tests/M1-slice4b-lifecycle-local-verification.md).
+  Tasks 4–5 add ownership/GC/leak foundations below this published checkpoint;
+  reset and full M1 closure remain pending. This implementation (`1e8abe3`) is published on
+  `codex/m1-slice4-native`, not merged; native Ubuntu CI remains pending.
+- **M1 — retained-root recovery (slice 4A; local implementation).**
+  Runtime operations bind the expected workspace/instance and full container
+  ID; discovery carries creation provenance. Generation/old-ID/deletion CAS
+  repairs runtime caches without deleting rediscovered roots. Schema 5 adds
+  monotonic provisioning history, committed with the first running event;
+  missing provisioned roots fail visibly instead of booting a fresh AMI.
+  Private runroot, libpod and crun state are refreshed only on whole-appliance
+  startup, preserving graphroot. Running reconciliation verifies/repairs ENIs
+  in pinned instance namespaces; healthy observation preserves carrier state
+  and source-check counters. Local WSL2/Docker smoke proves four retained
+  markers/identities and real ping after restart and ENI drift repair. See the
+  [4A checkpoint](docs/tests/M1-slice4a-local-verification.md); native CI,
+  merge, reset and M1 closure remain pending. 4A is published through
+  `6c696ce` on `codex/m1-slice4-native`.
 - **M1 — recovery and reset planning (fourth delivery slice).**
   A [design](docs/superpowers/specs/2026-10-02-m1-slice-4-recovery-reset-design.md)
   and [implementation plan](docs/superpowers/plans/2026-10-02-m1-slice-4-recovery-reset.md)
@@ -121,7 +162,13 @@ Each entry names the milestone it belongs to; see [docs/ROADMAP.md](docs/ROADMAP
   closure remain in slice 4, whose
   [design](docs/superpowers/specs/2026-10-02-m1-slice-4-recovery-reset-design.md)
   and [plan](docs/superpowers/plans/2026-10-02-m1-slice-4-recovery-reset.md)
-  are approved for native execution. Slice-4 behavior is not implemented.
+  are approved for native execution. 4A is implemented and independently
+  reviewed locally and published on the dedicated branch. Task 3 lifecycle
+  is implemented/reviewed locally and published on the same branch; Tasks
+  4–5 ownership/GC/lifetime proof are implemented locally, not published.
+  4C–4E, merge and native CI remain outstanding. See the
+  [4A checkpoint](docs/tests/M1-slice4a-local-verification.md) and
+  [lifecycle checkpoint](docs/tests/M1-slice4b-lifecycle-local-verification.md).
   The milestone is not complete
   ([roadmap](docs/ROADMAP.md#m1-thinnest-end-to-end-slice-two-instances-ping)).
 - The spikes carry six findings into M1 and M2: nested cgroup v2 controllers must

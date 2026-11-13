@@ -1,8 +1,12 @@
 # M1 slice-4 verification plan
 
-Date: 2026-10-02. **Planned; no slice-4 checks have run.** This document is a
-test design, not a verification checkpoint or M1 sign-off. Slice 4 is not
-implemented; M1 roadmap acceptance boxes remain unchecked.
+Date: 2026-10-02. This document is the test contract, not M1 sign-off.
+4A has local implementation/evidence in its
+[checkpoint](M1-slice4a-local-verification.md). 4B Task 3 has a
+[local lifecycle checkpoint](M1-slice4b-lifecycle-local-verification.md);
+Tasks 4–5 have a [local ownership/lifetime checkpoint](M1-slice4b-ownership-leak-local-verification.md).
+4C–4E remain planned and native
+4A CI is pending. M1 roadmap acceptance boxes remain unchecked.
 
 Canonical inputs are the [slice-4 design](../superpowers/specs/2026-10-02-m1-slice-4-recovery-reset-design.md),
 [implementation plan](../superpowers/plans/2026-10-02-m1-slice-4-recovery-reset.md),
@@ -17,7 +21,9 @@ closure.
 
 ## Delivery and evidence map
 
-Every row below is **planned / not run**. Execution records must add the
+Rows below specify required behavior; the 4A and 4B lifecycle/ownership checkpoints
+record their checks actually run. Unrecorded rows remain **planned / not run**.
+Execution records must add the
 candidate commit, exact commands, platform, result and artifact links before
 claiming a pass. A skipped check must state its exact reason.
 
@@ -37,6 +43,13 @@ randomized `SIGKILL` chaos/soak and repeated 100-cycle reset testing remain M8.
 
 ## 4A/4B: recovery and graceful shutdown
 
+4A local execution results and the resolved independent-review finding are in
+the [4A checkpoint](M1-slice4a-local-verification.md). This document remains
+the verification contract, not evidence that every row below has run. Task 3
+has local console/supervisor/nested-stop and verified hook-child evidence;
+the remainder of 4B
+and native Ubuntu 4A CI are still outstanding.
+
 | Fixture | Required result |
 |---|---|
 | Down/up with two instances in different subnets | Write distinct file markers using authenticated console; capture VPC/subnet/instance IDs, ENI IDs, private IPs, MACs, Podman IDs and retained-root identity before shutdown. After fresh readiness, all identities and exact file bytes match, both instances run and bidirectional three-packet ping succeeds. |
@@ -46,8 +59,8 @@ randomized `SIGKILL` chaos/soak and repeated 100-cycle reset testing remain M8.
 | Wrong binding, foreign/incomplete labels, name collision, two owned candidates | Fail visibly and record the conflicting identities. Exercise inspect/start/stop/delete/exec, especially a cached ID belonging to another fully valid managed instance, and assert no wrong-instance mutation. Do not adopt, relabel, remove or recreate through the ambiguity. A friendly name or `nx-` prefix alone is insufficient. |
 | Provisioned instance loses its retained runtime/root | Report `failed` with an actionable missing-root reason; do not call fresh Create or silently erase the instance's data contract. Persist provisioned atomically with first observed running state/event; protect legacy running/observed rows through migration, and discover any legacy cached runtime identity before creation. An instance that never acquired a root remains a distinct creation case. |
 | Container already running during daemon resync | Validate pinned namespace ownership and current ENI identity, MAC, address, links, routes/rules and source checks. Repair only safe missing plumbing; conflicting namespace or identity fails visibly. Do not mark observed generation current based only on Podman running status. |
-| Whole-appliance startup with stale volatile files | Before any Podman invocation, validate the built configuration and initialize fresh private runroot at `/var/lib/nephos/runroot` and rootful libpod tmpdir at `/run/libpod`, without changing the paths recorded in Podman's database. Retain graphroot `/var/lib/nephos/containers`; assert retained container/root/AMI identity. Verify mount privacy and startup failure if directory initialization fails. |
-| Daemon-only restart while Podman and instances run | Preserve live runroot/tmpdir and runtime service; do not apply whole-appliance volatile-directory replacement. Recover via verified inspection/resync and retain console-capable instances. |
+| Whole-appliance startup with stale volatile files | Before any Podman invocation, validate the built configuration and initialize fresh private runroot at `/var/lib/nephos/runroot`, rootful libpod tmpdir at `/run/libpod`, and crun state at `/run/crun`, without changing the paths recorded in Podman's database. Retain graphroot `/var/lib/nephos/containers`; assert retained container/root/AMI identity. Verify mount privacy and startup failure if directory initialization fails. |
+| Daemon-only restart while Podman and instances run | Preserve live runroot/tmpdir/crun state and runtime service; do not apply whole-appliance volatile-directory replacement. Recover via verified inspection/resync and retain console-capable instances. |
 | Down with active PTY and non-PTY execs | Cover idle input, blocked stdout/stderr consumers, pending resize and trailing output. Close/cancel sessions and join workers/duplicated handles before nested Stop; restore local terminal state where applicable. A shutdown transport close must not become a fabricated successful remote exit. |
 | Down with nested instances and concurrent hook work | Close admission, cancel/join controllers, GC, hooks and consoles as designed; stop and join nested instances while Podman is still available, then stop runtime supervision. Assert no leftover owned exec/conmon descendants or populated instance cgroups, and preserve retained writable roots. Cover bounded stop failure and explicit error reporting. |
 | Start admitted before exclusive drain, hook arrives afterwards | Resolve the hook through an ephemeral pending-start lease plus existing peer/runtime/namespace validation. Admit that verified child while rejecting independent/forged effects; exclusivity waits for both parent and all children, even if parent ownership closes first. No hook timeout/deadlock is disguised as a completed drain. |
@@ -62,6 +75,14 @@ For the 4B shutdown fixtures, test the proposed shared daemon budget of 25
 seconds, with nested stop at most 15 seconds within it and Docker outer stop
 35 seconds. These are engineering constants to verify, not measured runtime
 guarantees or a separate timeout multiplied serially for each instance.
+Inspect independent process/cgroup witnesses before outer teardown: API
+exec absence alone does not prove conmon closure, and pidfd termination does
+not prove reaping. Preserve real pipe/PTY exit codes and trailing output under
+slow consumption. Cover another live session on the same instance, ambiguous
+supervisor arguments, executable transition, denied inspection/pidfd failure,
+fork-between-scans and exit-during-pinning with delayed reaping. An uncertain
+runtime removal response must authorize no process signal. The Task-3 report
+distinguishes deterministic models from actual privileged evidence.
 
 ## 4B: ownership, orphan collection and leak observation
 

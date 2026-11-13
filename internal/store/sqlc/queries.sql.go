@@ -147,7 +147,7 @@ func (q *Queries) GetIdempotency(ctx context.Context, arg GetIdempotencyParams) 
 }
 
 const getInstance = `-- name: GetInstance :one
-SELECT id, workspace_id, subnet_id, short_index, name, generation, observed_generation, state, state_reason, created_at, updated_at, deletion_requested, runtime_id FROM instances WHERE id = ? AND workspace_id = ?
+SELECT id, workspace_id, subnet_id, short_index, name, generation, observed_generation, state, state_reason, created_at, updated_at, deletion_requested, runtime_id, provisioned FROM instances WHERE id = ? AND workspace_id = ?
 `
 
 type GetInstanceParams struct {
@@ -172,12 +172,13 @@ func (q *Queries) GetInstance(ctx context.Context, arg GetInstanceParams) (Insta
 		&i.UpdatedAt,
 		&i.DeletionRequested,
 		&i.RuntimeID,
+		&i.Provisioned,
 	)
 	return i, err
 }
 
 const getInstanceByName = `-- name: GetInstanceByName :one
-SELECT id, workspace_id, subnet_id, short_index, name, generation, observed_generation, state, state_reason, created_at, updated_at, deletion_requested, runtime_id FROM instances WHERE workspace_id = ? AND name = ?
+SELECT id, workspace_id, subnet_id, short_index, name, generation, observed_generation, state, state_reason, created_at, updated_at, deletion_requested, runtime_id, provisioned FROM instances WHERE workspace_id = ? AND name = ?
 `
 
 type GetInstanceByNameParams struct {
@@ -202,6 +203,7 @@ func (q *Queries) GetInstanceByName(ctx context.Context, arg GetInstanceByNamePa
 		&i.UpdatedAt,
 		&i.DeletionRequested,
 		&i.RuntimeID,
+		&i.Provisioned,
 	)
 	return i, err
 }
@@ -539,7 +541,7 @@ func (q *Queries) ListENIAddresses(ctx context.Context, subnetID string) ([]stri
 }
 
 const listInstancePage = `-- name: ListInstancePage :many
-SELECT id, workspace_id, subnet_id, short_index, name, generation, observed_generation, state, state_reason, created_at, updated_at, deletion_requested, runtime_id FROM instances WHERE workspace_id = ? AND id > ? ORDER BY id LIMIT ?
+SELECT id, workspace_id, subnet_id, short_index, name, generation, observed_generation, state, state_reason, created_at, updated_at, deletion_requested, runtime_id, provisioned FROM instances WHERE workspace_id = ? AND id > ? ORDER BY id LIMIT ?
 `
 
 type ListInstancePageParams struct {
@@ -571,6 +573,7 @@ func (q *Queries) ListInstancePage(ctx context.Context, arg ListInstancePagePara
 			&i.UpdatedAt,
 			&i.DeletionRequested,
 			&i.RuntimeID,
+			&i.Provisioned,
 		); err != nil {
 			return nil, err
 		}
@@ -815,6 +818,33 @@ func (q *Queries) PutIdempotency(ctx context.Context, arg PutIdempotencyParams) 
 	return err
 }
 
+const rebindRuntimeID = `-- name: RebindRuntimeID :execrows
+UPDATE instances SET runtime_id = ?1
+WHERE id = ?2 AND generation = ?3
+    AND deletion_requested = 0
+    AND COALESCE(runtime_id, '') = ?4
+`
+
+type RebindRuntimeIDParams struct {
+	NewRuntimeID sql.NullString
+	InstanceID   string
+	Generation   int64
+	OldRuntimeID sql.NullString
+}
+
+func (q *Queries) RebindRuntimeID(ctx context.Context, arg RebindRuntimeIDParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, rebindRuntimeID,
+		arg.NewRuntimeID,
+		arg.InstanceID,
+		arg.Generation,
+		arg.OldRuntimeID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const recordRuntimeID = `-- name: RecordRuntimeID :execrows
 UPDATE instances SET runtime_id = ?
 WHERE id = ? AND generation = ? AND deletion_requested = 0
@@ -886,7 +916,7 @@ func (q *Queries) UpdateInstanceENIStatus(ctx context.Context, arg UpdateInstanc
 }
 
 const updateInstanceStatus = `-- name: UpdateInstanceStatus :exec
-UPDATE instances SET state = ?, state_reason = ?, observed_generation = ?, updated_at = ?
+UPDATE instances SET state = ?, state_reason = ?, observed_generation = ?, updated_at = ?, provisioned = ?
 WHERE id = ? AND workspace_id = ?
 `
 
@@ -895,6 +925,7 @@ type UpdateInstanceStatusParams struct {
 	StateReason        string
 	ObservedGeneration int64
 	UpdatedAt          int64
+	Provisioned        int64
 	ID                 string
 	WorkspaceID        string
 }
@@ -905,6 +936,7 @@ func (q *Queries) UpdateInstanceStatus(ctx context.Context, arg UpdateInstanceSt
 		arg.StateReason,
 		arg.ObservedGeneration,
 		arg.UpdatedAt,
+		arg.Provisioned,
 		arg.ID,
 		arg.WorkspaceID,
 	)

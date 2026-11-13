@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Amrzxk/nephos/internal/compute"
+	"github.com/Amrzxk/nephos/internal/lifecycle"
 	"github.com/Amrzxk/nephos/internal/model"
 	"github.com/Amrzxk/nephos/internal/store"
 )
@@ -17,11 +18,13 @@ import (
 // InstanceNetwork checks committed prerequisites and removes one owned ENI.
 type InstanceNetwork interface {
 	Ready(context.Context, model.Instance) (bool, error)
+	EnsureRunning(context.Context, model.Instance, compute.Reference, compute.Status) error
 	DeleteENI(context.Context, model.VPC, model.ENI) error
 }
 
 // InstanceController converges SQLite instance intent into local runtime state.
 type InstanceController struct {
+	gate     *lifecycle.Gate
 	store    *store.Store
 	network  InstanceNetwork
 	runtime  compute.Runtime
@@ -34,12 +37,16 @@ type InstanceController struct {
 }
 
 // NewInstances creates a bounded controller; the daemon calls Sweep at startup.
-func NewInstances(s *store.Store, network InstanceNetwork, runtime compute.Runtime, interval time.Duration) *InstanceController {
+func NewInstances(s *store.Store, network InstanceNetwork, runtime compute.Runtime, interval time.Duration, gates ...*lifecycle.Gate) *InstanceController {
 	if interval <= 0 {
 		interval = defaultInterval
 	}
-	return &InstanceController{store: s, network: network, runtime: runtime, interval: interval,
+	c := &InstanceController{store: s, network: network, runtime: runtime, interval: interval,
 		pending: make(map[string]struct{}), retries: make(map[string]retryEntry), wake: make(chan struct{}, 1)}
+	if len(gates) > 0 {
+		c.gate = gates[0]
+	}
+	return c
 }
 
 // Enqueue accelerates convergence without making the queue authoritative.
@@ -134,6 +141,14 @@ func (c *InstanceController) Run(ctx context.Context) error {
 
 // Sweep repairs dropped hints and converges every committed instance.
 func (c *InstanceController) Sweep(ctx context.Context) error {
+	ctx, done, admitted, err := enterEffect(ctx, c.gate)
+	if err != nil {
+		return err
+	}
+	if !admitted {
+		return nil
+	}
+	defer done()
 	c.workMu.Lock()
 	defer c.workMu.Unlock()
 	after := ""
@@ -159,6 +174,15 @@ func (c *InstanceController) reconcile(ctx context.Context, id string) error {
 	return c.reconcileLocked(ctx, id)
 }
 func (c *InstanceController) reconcileLocked(ctx context.Context, id string) error {
+	ctx, done, admitted, err := enterEffect(ctx, c.gate)
+	if err != nil {
+		return err
+	}
+	if !admitted {
+		c.retry(id)
+		return nil
+	}
+	defer done()
 	instance, err := c.store.GetInstance(ctx, "default", id)
 	if errors.Is(err, sql.ErrNoRows) {
 		c.clearRetry(id)
@@ -177,25 +201,13 @@ func (c *InstanceController) reconcileLocked(ctx context.Context, id string) err
 	if !ready {
 		return nil // the next hint or durable resync checks prerequisites again
 	}
-	if instance.State == model.InstanceRunning && instance.ObservedGeneration == instance.Generation && instance.RuntimeID != "" {
-		status, err := c.runtime.Inspect(ctx, compute.RuntimeID(instance.RuntimeID))
-		if err == nil && status.Running {
-			c.clearRetry(id)
-			return nil
-		}
-		if err != nil {
-			return c.fail(ctx, instance, err)
-		}
-	}
-	if err := c.runtime.EnsureImage(ctx, "nephos-ubuntu:dev"); err != nil {
-		return c.fail(ctx, instance, err)
-	}
-	runtimeID, err := c.runtime.Create(ctx, instance)
+	created, err := c.lookupOrCreate(ctx, instance)
 	if err != nil {
 		return c.fail(ctx, instance, err)
 	}
-	if err := c.store.RecordRuntimeID(ctx, instance.ID, instance.Generation, string(runtimeID)); err != nil {
-		return c.createdDuringStateChange(ctx, instance, runtimeID, err)
+	ref := created.Reference
+	if err := c.store.RebindRuntimeID(ctx, instance.ID, instance.Generation, instance.RuntimeID, string(ref.ID)); err != nil {
+		return c.createdDuringStateChange(ctx, instance, created, err)
 	}
 	// Read the committed runtime ID and desired generation again before Start;
 	// createRuntime then sees exactly this identity in SQLite.
@@ -203,19 +215,30 @@ func (c *InstanceController) reconcileLocked(ctx context.Context, id string) err
 	if err != nil {
 		return fmt.Errorf("reload instance %s after create: %w", id, err)
 	}
-	if instance.DeletionRequested {
+	if instance.DeletionRequested || instance.RuntimeID != string(ref.ID) {
 		c.Enqueue(id)
 		return nil
 	}
-	if err := c.runtime.Start(ctx, runtimeID); err != nil {
-		return c.fail(ctx, instance, err)
-	}
-	status, err := c.runtime.Inspect(ctx, runtimeID)
+	status, err := c.runtime.Inspect(ctx, ref)
 	if err != nil {
 		return c.fail(ctx, instance, err)
 	}
 	if !status.Running {
-		return c.fail(ctx, instance, fmt.Errorf("runtime did not report a running instance after start"))
+		if err := c.runtime.Start(ctx, ref); err != nil {
+			return c.fail(ctx, instance, err)
+		}
+		status, err = c.runtime.Inspect(ctx, ref)
+		if err != nil {
+			return c.fail(ctx, instance, err)
+		}
+		if !status.Running {
+			return c.fail(ctx, instance, fmt.Errorf("runtime did not report a running instance after start"))
+		}
+	}
+	// A running process is not proof of a converged ENI. Pin its observed
+	// namespace and repair the route/policy even on the old running fast path.
+	if err := c.network.EnsureRunning(ctx, instance, ref, status); err != nil {
+		return c.fail(ctx, instance, err)
 	}
 	if err := c.store.RecordInstance(ctx, instance, model.InstanceRunning, "", true); err != nil {
 		if errors.Is(err, store.ErrStaleSnapshot) {
@@ -228,12 +251,26 @@ func (c *InstanceController) reconcileLocked(ctx context.Context, id string) err
 	return nil
 }
 
-func (c *InstanceController) createdDuringStateChange(ctx context.Context, instance model.Instance, runtimeID compute.RuntimeID, recordErr error) error {
+func runtimeReference(instance model.Instance) compute.Reference {
+	return compute.Reference{Identity: compute.Identity{WorkspaceID: instance.WorkspaceID, InstanceID: instance.ID}, ID: compute.RuntimeID(instance.RuntimeID)}
+}
+
+func (c *InstanceController) createdDuringStateChange(ctx context.Context, instance model.Instance, created compute.CreateResult, recordErr error) error {
+	ref := created.Reference
+	if !created.Created {
+		// Discovery is not allocation: a failed cache write cannot authorize
+		// destroying a retained root. A later sweep reconciles current intent.
+		if !errors.Is(recordErr, store.ErrStaleSnapshot) {
+			return fmt.Errorf("record retained runtime %s: %w", instance.ID, recordErr)
+		}
+		c.Enqueue(instance.ID)
+		return nil
+	}
 	if errors.Is(recordErr, store.ErrStaleSnapshot) {
 		// A concurrent Terminate may have advanced the desired generation.
 		// Retain the owned ID so a failed immediate Delete is retryable.
-		if err := c.store.RetainTerminatingRuntimeID(ctx, instance.ID, string(runtimeID)); err == nil {
-			if err := c.runtime.Delete(ctx, runtimeID); err != nil {
+		if err := c.store.RetainTerminatingRuntimeID(ctx, instance.ID, string(ref.ID)); err == nil {
+			if err := c.runtime.Delete(ctx, ref); err != nil {
 				current, loadErr := c.store.GetInstance(ctx, "default", instance.ID)
 				if loadErr != nil {
 					return fmt.Errorf("cleanup raced runtime %s: %w (load: %w)", instance.ID, err, loadErr)
@@ -244,7 +281,7 @@ func (c *InstanceController) createdDuringStateChange(ctx context.Context, insta
 			return nil
 		}
 	}
-	if err := c.runtime.Delete(ctx, runtimeID); err != nil {
+	if err := c.runtime.Delete(ctx, ref); err != nil {
 		return fmt.Errorf("record runtime %s: %w; cleanup failed: %w", instance.ID, recordErr, err)
 	}
 	c.Enqueue(instance.ID)
@@ -252,10 +289,15 @@ func (c *InstanceController) createdDuringStateChange(ctx context.Context, insta
 }
 
 func (c *InstanceController) terminate(ctx context.Context, instance model.Instance) error {
-	if instance.RuntimeID != "" {
-		if err := c.runtime.Delete(ctx, compute.RuntimeID(instance.RuntimeID)); err != nil {
+	// Even NULL or stale caches may have a retained container. Resolve only
+	// the expected identity; never follow the cache into another managed root.
+	ref, err := c.runtime.Lookup(ctx, runtimeReference(instance).Identity)
+	if err == nil {
+		if err := c.runtime.Delete(ctx, ref); err != nil {
 			return c.fail(ctx, instance, err)
 		}
+	} else if !errors.Is(err, compute.ErrNotFound) {
+		return c.fail(ctx, instance, err)
 	}
 	subnet, err := c.store.GetSubnet(ctx, instance.WorkspaceID, instance.SubnetID)
 	if err != nil {

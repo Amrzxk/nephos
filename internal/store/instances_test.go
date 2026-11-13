@@ -50,8 +50,8 @@ func TestInstanceMigrationUpgrade(t *testing.T) {
 	if err := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM schema_migrations").Scan(&count); err != nil {
 		t.Fatal(err)
 	}
-	if version != 4 || count != 4 {
-		t.Fatalf("schema=%d migrations=%d, want 4", version, count)
+	if version != schemaVersion || count != schemaVersion {
+		t.Fatalf("schema=%d migrations=%d, want %d", version, count, schemaVersion)
 	}
 	subnet, err := s.GetSubnet(ctx, "default", "subnet-old")
 	if err != nil || subnet.Name != "old subnet" || subnet.VPCID != "vpc-old" {

@@ -9,9 +9,9 @@ This is the setup guide. For *what to build and why*, read
 
 | | |
 |---|---|
-| **Go** | The version pinned in `go.mod` (currently 1.27.1) |
+| **Go** | The version pinned in `go.mod` (currently 1.27.4) |
 | **Docker** | Docker Engine on Linux, or Docker Desktop on Windows/macOS. Must be **rootful** and on a **cgroup v2** host |
-| **golangci-lint** | v2.13.2, for `make lint` |
+| **golangci-lint** | v2.15.0, for `make lint` |
 | **Node 22** | Only from M6 onward, for the web console |
 
 Integration and end-to-end tests additionally need Docker and the ability to run
@@ -22,11 +22,11 @@ a **privileged** container.
 ```bash
 sudo apt-get install -y build-essential git jq
 # Go: use the official tarball, not the distribution package, which lags.
-curl -fsSLO https://go.dev/dl/go1.27.1.linux-amd64.tar.gz
-sudo rm -rf /usr/local/go && sudo tar -C /usr/local -xzf go1.27.1.linux-amd64.tar.gz
+curl -fsSLO https://go.dev/dl/go1.27.4.linux-amd64.tar.gz
+sudo rm -rf /usr/local/go && sudo tar -C /usr/local -xzf go1.27.4.linux-amd64.tar.gz
 echo 'export PATH="/usr/local/go/bin:$HOME/go/bin:$PATH"' >> ~/.bashrc && . ~/.bashrc
 
-go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2
+go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
 
 git clone https://github.com/Amrzxk/nephos.git ~/src/nephos
 cd ~/src/nephos && make ci
@@ -267,11 +267,22 @@ locally and copied only into the test-owned appliance; they are never shipped.
 Failure evidence stays in the printed `/tmp/nephos-instance-smoke.*` directory;
 cleanup verifies container identity and volume creation time/ownership labels.
 The [M1 connectivity matrix](tests/M1-connectivity-matrix.md) records the
-exact packet paths and keeps restart/reset cases assigned to slice 4.
+exact packet paths and distinguishes local 4A restart proof from pending reset.
 
-### Planned slice-4 recovery and reset workflow
+### Slice-4 recovery progress and planned reset workflow
 
-**Design only; not implemented or run.** The slice-4
+**4A and 4B Task 3 are published on `codex/m1-slice4-native`, not merged.** The
+[4A checkpoint](tests/M1-slice4a-local-verification.md) records unit/race,
+privileged integration, and WSL2/Docker Desktop retained-root/ENI/ping proof.
+4A is pushed through `6c696ce`, not merged; native Ubuntu CI is pending.
+The [lifecycle checkpoint](tests/M1-slice4b-lifecycle-local-verification.md)
+records Task 3's effect/console/hook ownership, graceful nested stop and
+process-level cleanup tests at `1e8abe3`. Tasks 4–5 now add strict orphan
+collection and complete leak accounting locally, not published or merged;
+the [ownership/lifetime checkpoint](tests/M1-slice4b-ownership-leak-local-verification.md)
+records commands and independent kernel/FD/socket witnesses. Native Ubuntu CI
+remains pending. Next is 4C durable soft reset, not M2 or milestone closure.
+The slice-4
 [design](superpowers/specs/2026-10-02-m1-slice-4-recovery-reset-design.md),
 [implementation plan](superpowers/plans/2026-10-02-m1-slice-4-recovery-reset.md),
 and [verification plan](tests/M1-slice4-verification-plan.md) describe the next
@@ -281,7 +292,7 @@ are future deliverables. The examples below specify future behavior and are
 not a runnable acceptance procedure for the current tree:
 
 ```text
-# Future slice-4 workflow; unavailable until implementation and review.
+# Full future acceptance workflow; reset/e2e are not yet implemented.
 make dev-ami
 make appliance
 make build
@@ -292,16 +303,22 @@ nephos reset --hard   # remove verified old container/volume, then start fresh
 make e2e             # replay the demo using freshly built images/binaries above
 ```
 
-The planned recovery keeps the original Podman container and writable root;
-it must fail the instance visibly if that root is missing, rather than boot
-an empty replacement. Fresh private Podman runtime directories at
-`/var/lib/nephos/runroot` and `/run/libpod` are prepared before the first
-Podman call on each whole-appliance start, after validating the built
-configuration, while graphroot is retained. A daemon-only restart must
+4A recovery keeps the original Podman container and writable root;
+it fails the instance visibly if a provisioned root is missing, rather than
+booting an empty replacement. Fresh private runtime directories at
+`/var/lib/nephos/runroot`, `/run/libpod`, and `/run/crun` are prepared before
+the first Podman call on each whole-appliance start. The configured durable
+and runroot paths are validated before serving the daemon; graphroot is
+retained. A daemon-only restart must
 preserve the live runtime directories.
 An already-running instance needs verified ENI plumbing before it is reported
-running. Shutdown must join console cleanup and gracefully stop nested
-instances before stopping Podman.
+running; healthy observation must not flap links or reset source-check counters.
+Task 3 joins console cleanup and gracefully stops nested instances before
+stopping Podman. Daemon cleanup has a shared 25-second budget, with at most
+15 seconds within it for all nested stops; Docker allows 35 seconds. The
+Task 3 fixture proves supervisor/init disappearance and empty instance
+cgroups before outer teardown; the historical 4A restart smoke alone does
+not prove this. No new learner stop/start command or console protocol exists.
 
 Soft reset is planned as a durable SQLite operation. Its transaction fences
 resource creation, and its worker deletes instances before subnets before

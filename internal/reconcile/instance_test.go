@@ -35,6 +35,9 @@ func (n *instanceTestNetwork) DeleteENI(context.Context, model.VPC, model.ENI) e
 	n.deletes++
 	return n.deleteErr
 }
+func (n *instanceTestNetwork) EnsureRunning(context.Context, model.Instance, compute.Reference, compute.Status) error {
+	return nil
+}
 
 type instanceTestRuntime struct {
 	mu         sync.Mutex
@@ -46,20 +49,43 @@ type instanceTestRuntime struct {
 	createHook func()
 	startHook  func()
 	running    map[compute.RuntimeID]bool
+	references map[compute.Identity]compute.Reference
 }
 
 func (r *instanceTestRuntime) EnsureImage(context.Context, string) error { return nil }
-func (r *instanceTestRuntime) Create(_ context.Context, instance model.Instance) (compute.RuntimeID, error) {
+func (r *instanceTestRuntime) Inventory(context.Context) ([]compute.ObservedContainer, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	items := make([]compute.ObservedContainer, 0, len(r.references))
+	for _, ref := range r.references {
+		items = append(items, compute.ObservedContainer{Reference: ref, Name: ref.Identity.InstanceID, Managed: true})
+	}
+	return items, nil
+}
+func (r *instanceTestRuntime) Lookup(_ context.Context, identity compute.Identity) (compute.Reference, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if ref, ok := r.references[identity]; ok {
+		return ref, nil
+	}
+	return compute.Reference{}, compute.ErrNotFound
+}
+func (r *instanceTestRuntime) Create(_ context.Context, instance model.Instance) (compute.CreateResult, error) {
 	r.mu.Lock()
 	r.creates++
+	ref := compute.Reference{Identity: compute.Identity{WorkspaceID: instance.WorkspaceID, InstanceID: instance.ID}, ID: compute.RuntimeID(fmt.Sprintf("%064x", instance.ShortIndex))}
+	if r.references == nil {
+		r.references = make(map[compute.Identity]compute.Reference)
+	}
+	r.references[ref.Identity] = ref
 	hook := r.createHook
 	r.mu.Unlock()
 	if hook != nil {
 		hook()
 	}
-	return compute.RuntimeID(fmt.Sprintf("%064x", instance.ShortIndex)), nil
+	return compute.CreateResult{Reference: ref, Created: true}, nil
 }
-func (r *instanceTestRuntime) Start(_ context.Context, id compute.RuntimeID) error {
+func (r *instanceTestRuntime) Start(_ context.Context, ref compute.Reference) error {
 	r.mu.Lock()
 	r.starts++
 	hook := r.startHook
@@ -75,25 +101,29 @@ func (r *instanceTestRuntime) Start(_ context.Context, id compute.RuntimeID) err
 	if r.running == nil {
 		r.running = make(map[compute.RuntimeID]bool)
 	}
-	r.running[id] = true
+	r.running[ref.ID] = true
 	return nil
 }
-func (r *instanceTestRuntime) Delete(_ context.Context, id compute.RuntimeID) error {
+func (r *instanceTestRuntime) Delete(_ context.Context, ref compute.Reference) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.deletes++
 	if r.deleteErr != nil {
 		return r.deleteErr
 	}
-	delete(r.running, id)
+	delete(r.running, ref.ID)
+	delete(r.references, ref.Identity)
 	return nil
 }
-func (r *instanceTestRuntime) Inspect(_ context.Context, id compute.RuntimeID) (compute.Status, error) {
+func (r *instanceTestRuntime) Inspect(_ context.Context, ref compute.Reference) (compute.Status, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return compute.Status{Running: r.running[id]}, nil
+	return compute.Status{Running: r.running[ref.ID]}, nil
 }
-func (r *instanceTestRuntime) Exec(context.Context, compute.RuntimeID, compute.ExecRequest) (compute.ExecSession, error) {
+func (r *instanceTestRuntime) Stop(context.Context, compute.Reference, time.Duration) error {
+	return nil
+}
+func (r *instanceTestRuntime) Exec(context.Context, compute.Reference, compute.ExecRequest) (compute.ExecSession, error) {
 	return nil, errors.New("not used by reconciler")
 }
 

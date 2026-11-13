@@ -111,6 +111,13 @@ func ensureTestENI(ctx context.Context, t *testing.T, engine *Engine, vpc model.
 	if err := engine.EnsureENI(ctx, vpc, subnet, instance.eni, instance.target); err != nil {
 		t.Fatal(err)
 	}
+	// Model product teardown order instead of relying on runtime removal to
+	// discard veths while leaving their nft set entries behind.
+	t.Cleanup(func() {
+		if err := engine.DeleteENI(context.Background(), vpc, instance.eni); err != nil {
+			t.Error(err)
+		}
+	})
 }
 
 func witnessStart(t *testing.T, instance eniTestInstance) {

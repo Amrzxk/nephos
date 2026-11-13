@@ -82,7 +82,31 @@ func (e *Engine) DeleteVPC(ctx context.Context, vpc model.VPC) error {
 	if err != nil {
 		return err
 	}
-	if err := netns.Delete(ctx, name); err != nil {
+	observed, err := netns.Inventory(ctx)
+	if err != nil {
+		return err
+	}
+	var inode uint64
+	for _, item := range observed {
+		if item.Name == name {
+			if !item.Owned || item.OwnershipError != "" {
+				return fmt.Errorf("refuse ambiguous VPC namespace %s: %s", name, item.OwnershipError)
+			}
+			inode = item.Inode
+		}
+	}
+	if inode == 0 {
+		return nil
+	}
+	if err := netns.WithIdentityHandle(ctx, name, inode, func(h *netlink.Handle) error {
+		if err := validateOrphanRouter(ctx, h, false); err != nil {
+			return err
+		}
+		return validateOrphanRouter(ctx, h, true)
+	}); err != nil {
+		return fmt.Errorf("clean VPC %s before unlink: %w", vpc.ID, err)
+	}
+	if err := netns.DeleteIdentity(ctx, name, inode); err != nil {
 		return fmt.Errorf("delete VPC %s namespace %s: %w", vpc.ID, name, err)
 	}
 	return nil

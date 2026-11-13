@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Real-Docker slice-3 path; all observers and faults live in this test appliance.
+# Real-Docker packet/restart path; observers and faults stay in this appliance.
 set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_root"
@@ -180,6 +180,50 @@ docker exec nephos cat "/run/nephos/hook-proofs/$failed_id.failed" | jq -e --arg
 cli instance terminate "$failed_id" --wait >/dev/null
 docker exec nephos rm /run/nephos/force-hook-failure
 passed "hook failure refuses PID 1 and records failed reason"
+
+# Retained roots and stable desired identities survive a whole-appliance stop.
+# Runtime/network observers are test-only; learner access remains the console.
+identity_witness() {
+    local id="$1" item="$2" runtime mac
+    runtime="$(docker exec nephos podman inspect --format '{{.Id}}' "$id")"
+    mac="$(command_console "$id" -- cat /sys/class/net/eth0/address)"
+    jq -cS --arg runtime "$runtime" --arg mac "$mac" '{id,eni_id,private_ip,runtime:$runtime,mac:$mac}' <<<"$item"
+}
+for id in "$one_id" "$two_id" "$overlap_id" "$remote_id"; do
+    item="$(cli instance describe "$id" -o json)"
+    identity_witness "$id" "$item" >"$test_home/$id.before"
+    command_console "$id" -- /bin/sh -c 'printf retained-root-marker > /root/m1-retained-marker'
+done
+cli down
+cli up
+[ "$(docker inspect -f '{{.Id}}' nephos)" = "$container_id" ] || fail "ordinary restart replaced the appliance"
+for id in "$one_id" "$two_id" "$overlap_id" "$remote_id"; do
+    item="$(cli instance describe "$id" -o json)"
+    jq -e '.state == "running" and .observed_generation == .generation' <<<"$item" >/dev/null || fail "restart did not restore running state"
+    after="$(identity_witness "$id" "$item")"
+    [ "$after" = "$(<"$test_home/$id.before")" ] || fail "restart changed instance/ENI/IP/MAC/runtime identity"
+    [ "$(command_console "$id" -- cat /root/m1-retained-marker)" = retained-root-marker ] || fail "restart lost writable root marker"
+    printf 'instance-ping-smoke: preserved %s\n' "$after"
+done
+command_console one -- ping -c 3 -W 2 10.0.2.4
+command_console two -- ping -c 1 -W 2 10.0.1.4
+passed "down/up preserves four roots, identities, addresses and bidirectional ping"
+
+# Already-running drift cannot be hidden by a running-only fast path. Remove
+# only this owned router veth; the normal durable resync must restore it.
+one_eni="$(jq -r .eni_id <<<"$one")"
+one_link="$(docker exec nephos ip -j -n "$vpc_a_ns" link show | jq -r --arg prefix "nephos:eni:$one_eni " '.[] | select(.ifalias // "" | startswith($prefix)) | .ifname')"
+[[ "$one_link" =~ ^ve[1-9][0-9]*$ ]] || fail "owned drift target is ambiguous"
+docker exec nephos ip -n "$vpc_a_ns" link delete "$one_link"
+drift_deadline=$((SECONDS+75))
+while ! docker exec nephos ip -n "$vpc_a_ns" link show "$one_link" >/dev/null 2>&1; do
+    [ "$SECONDS" -lt "$drift_deadline" ] || fail "running ENI drift was not repaired by resync"
+    sleep 1
+done
+[ "$(command_console one -- cat /root/m1-retained-marker)" = retained-root-marker ] || fail "running repair replaced root"
+[ "$(identity_witness "$one_id" "$(cli instance describe "$one_id" -o json)")" = "$(<"$test_home/$one_id.before")" ] || fail "running repair changed identity"
+command_console one -- ping -c 3 -W 2 10.0.2.4
+passed "already-running missing ENI repaired with preserved root and real ping"
 
 for id in "$one_id" "$two_id" "$overlap_id" "$remote_id"; do cli instance terminate "$id" --wait >/dev/null; done
 [ "$(cli instance list -o json | jq '.items | length')" -eq 0 ] || fail "instance rows remain"

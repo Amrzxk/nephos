@@ -31,3 +31,62 @@ func TestAppliancePrivatePodmanService(t *testing.T) {
 		}
 	}
 }
+
+func TestApplianceWaitsDaemonBeforeStoppingRuntime(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "images", "appliance", "entrypoint.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	start := strings.Index(text, "cleanup() {")
+	if start < 0 {
+		t.Fatal("supervisor cleanup missing")
+	}
+	end := strings.Index(text[start:], "\n}\n")
+	if end < 0 {
+		t.Fatal("supervisor cleanup missing")
+	}
+	cleanup := text[start : start+end]
+	daemonWait := strings.Index(cleanup, `wait "$daemon_pid"`)
+	runtimeStop := strings.Index(cleanup, `kill "$podman_pid"`)
+	if daemonWait < 0 || runtimeStop < 0 || daemonWait > runtimeStop {
+		t.Fatal("Podman stopped before daemon joined nested stop")
+	}
+}
+
+func TestApplianceFreshRuntimePreservesGraphroot(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "images", "appliance", "entrypoint.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	firstPodman := strings.Index(text, "podman ")
+	for _, path := range []string{"/var/lib/nephos/runroot", "/run/libpod", "/run/crun"} {
+		mount := strings.Index(text, "tmpfs "+path)
+		if mount < 0 || mount > firstPodman {
+			t.Errorf("fresh private tmpfs at %s must precede every Podman command", path)
+		}
+		if !strings.Contains(text, "mount --make-private "+path) {
+			t.Errorf("runtime tmpfs at %s must be private", path)
+		}
+	}
+	storage, err := os.ReadFile(filepath.Join("..", "images", "appliance", "storage.conf"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, line := range []string{`runroot = "/var/lib/nephos/runroot"`, `graphroot = "/var/lib/nephos/containers"`} {
+		if !strings.Contains(string(storage), line) {
+			t.Errorf("changed stored runtime path: %s", line)
+		}
+	}
+	if strings.Contains(text, "tmpfs /var/lib/nephos/containers") {
+		t.Fatal("persistent graphroot hidden by ephemeral mount")
+	}
+	containers, err := os.ReadFile(filepath.Join("..", "images", "appliance", "containers.conf"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(containers), `tmp_dir = "/run/libpod"`) {
+		t.Fatal("libpod temp path must remain pinned to validated rootful default")
+	}
+}

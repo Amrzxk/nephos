@@ -12,9 +12,9 @@ import (
 	"time"
 
 	"github.com/Amrzxk/nephos/internal/compute"
-	"github.com/Amrzxk/nephos/internal/compute/podman"
 	"github.com/Amrzxk/nephos/internal/model"
 	"github.com/Amrzxk/nephos/internal/network/netns"
+	"github.com/Amrzxk/nephos/internal/network/topology"
 	"github.com/Amrzxk/nephos/internal/service"
 	"github.com/Amrzxk/nephos/internal/store"
 	"github.com/Amrzxk/nephos/internal/version"
@@ -43,6 +43,12 @@ func (b *blockingNetwork) EnsureENI(context.Context, model.VPC, model.Subnet, mo
 }
 func (b *blockingNetwork) DeleteENI(context.Context, model.VPC, model.ENI) error { return nil }
 func (b *blockingNetwork) ListVPCNames(context.Context) ([]string, error)        { return nil, nil }
+func (b *blockingNetwork) Inventory(context.Context) (topology.Inventory, error) {
+	return topology.Inventory{}, nil
+}
+func (b *blockingNetwork) CollectOrphans(context.Context, []model.VPC, []model.Subnet, []model.ENI) error {
+	return nil
+}
 
 type blockingInstanceRuntime struct {
 	entered chan struct{}
@@ -50,24 +56,33 @@ type blockingInstanceRuntime struct {
 }
 
 func (r *blockingInstanceRuntime) EnsureImage(context.Context, string) error { return nil }
-func (r *blockingInstanceRuntime) Create(ctx context.Context, _ model.Instance) (compute.RuntimeID, error) {
+func (r *blockingInstanceRuntime) Inventory(context.Context) ([]compute.ObservedContainer, error) {
+	return []compute.ObservedContainer{}, nil
+}
+func (r *blockingInstanceRuntime) Lookup(context.Context, compute.Identity) (compute.Reference, error) {
+	return compute.Reference{}, compute.ErrNotFound
+}
+func (r *blockingInstanceRuntime) Create(ctx context.Context, instance model.Instance) (compute.CreateResult, error) {
 	select {
 	case r.entered <- struct{}{}:
 	default:
 	}
 	select {
 	case <-r.release:
-		return compute.RuntimeID(strings.Repeat("a", 64)), nil
+		return compute.CreateResult{Reference: compute.Reference{Identity: compute.Identity{WorkspaceID: instance.WorkspaceID, InstanceID: instance.ID}, ID: compute.RuntimeID(strings.Repeat("a", 64))}, Created: true}, nil
 	case <-ctx.Done():
-		return "", ctx.Err()
+		return compute.CreateResult{}, ctx.Err()
 	}
 }
-func (r *blockingInstanceRuntime) Start(context.Context, compute.RuntimeID) error  { return nil }
-func (r *blockingInstanceRuntime) Delete(context.Context, compute.RuntimeID) error { return nil }
-func (r *blockingInstanceRuntime) Inspect(context.Context, compute.RuntimeID) (compute.Status, error) {
+func (r *blockingInstanceRuntime) Start(context.Context, compute.Reference) error { return nil }
+func (r *blockingInstanceRuntime) Stop(context.Context, compute.Reference, time.Duration) error {
+	return nil
+}
+func (r *blockingInstanceRuntime) Delete(context.Context, compute.Reference) error { return nil }
+func (r *blockingInstanceRuntime) Inspect(context.Context, compute.Reference) (compute.Status, error) {
 	return compute.Status{Running: true}, nil
 }
-func (r *blockingInstanceRuntime) Exec(context.Context, compute.RuntimeID, compute.ExecRequest) (compute.ExecSession, error) {
+func (r *blockingInstanceRuntime) Exec(context.Context, compute.Reference, compute.ExecRequest) (compute.ExecSession, error) {
 	return nil, nil
 }
 
@@ -168,7 +183,7 @@ func TestServeReportsStartingUntilInitialSweepCompletes(t *testing.T) {
 	defer cancel()
 	done := make(chan error, 1)
 	go func() {
-		done <- serve(runCtx, ln, filepath.Join(t.TempDir(), "api-token"), dbPath, filepath.Join(t.TempDir(), "hook.sock"), version.Get(), engine, podman.New(filepath.Join(t.TempDir(), "podman.sock")))
+		done <- serve(runCtx, ln, filepath.Join(t.TempDir(), "api-token"), dbPath, filepath.Join(t.TempDir(), "hook.sock"), version.Get(), engine, &blockingInstanceRuntime{})
 	}()
 	select {
 	case <-engine.entered:
@@ -230,7 +245,7 @@ func TestServeCreatesTokenAndShutsDown(t *testing.T) {
 	done := make(chan error, 1)
 	engine := &blockingNetwork{entered: make(chan struct{}, 1), release: make(chan struct{})}
 	go func() {
-		done <- serve(ctx, ln, path, dbPath, filepath.Join(t.TempDir(), "hook.sock"), version.Get(), engine, podman.New(filepath.Join(t.TempDir(), "podman.sock")))
+		done <- serve(ctx, ln, path, dbPath, filepath.Join(t.TempDir(), "hook.sock"), version.Get(), engine, &blockingInstanceRuntime{})
 	}()
 
 	client := newTestHTTPClient(t)
