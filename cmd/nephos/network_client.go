@@ -54,6 +54,12 @@ func (cfg resourceConfig) normalized() (resourceConfig, error) {
 func loadCredential(path string) (string, error) { return appliance.LoadCredential(path) }
 
 func newResourceClient(cfg resourceConfig) (*client.ClientWithResponses, resourceConfig, error) {
+	return newResourceClientWithTimeout(cfg, 10*time.Second)
+}
+
+// newResourceClientWithTimeout is for the few long synchronous calls, such as
+// reset, whose server-side budget exceeds the default request timeout.
+func newResourceClientWithTimeout(cfg resourceConfig, timeout time.Duration) (*client.ClientWithResponses, resourceConfig, error) {
 	cfg, err := cfg.normalized()
 	if err != nil {
 		return nil, cfg, err
@@ -62,7 +68,7 @@ func newResourceClient(cfg resourceConfig) (*client.ClientWithResponses, resourc
 	if err != nil {
 		return nil, cfg, err
 	}
-	httpClient := &http.Client{Timeout: 10 * time.Second,
+	httpClient := &http.Client{Timeout: timeout,
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	api, err := client.NewClientWithResponses(cfg.endpoint, client.WithHTTPClient(httpClient),
 		client.WithRequestEditorFn(func(_ context.Context, req *http.Request) error {

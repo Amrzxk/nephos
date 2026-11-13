@@ -557,18 +557,20 @@ proc can enumerate external socket-only holds. See the
 [ownership/lifetime checkpoint](tests/M1-slice4b-ownership-leak-local-verification.md).
 These changes are local, not merged; reset integration and native QA remain planned.
 
-Option A uses a SQLite reset operation and creation fence, with atomic
-instance→subnet→VPC phase decisions, automatic continuation after
-interruption, and synchronous HTTP waiting. Request cancellation after
-commit only detaches the waiter. Terminal ownership/incomplete-inspection or
-leak failure keeps the fence until explicit retry of that operation. The
-reset-specific status endpoint is diagnostic, not a general asynchronous
-operation API. Completed keyed reset replay cannot delete later resources.
-Soft reset preserves durable events, create replay snapshots and index
-allocation history as well as the AMI/token/default workspace.
-Terminal failure pauses coordinator phase advancement/new-layer intents and
-success, not already committed deletion intent or proven periodic orphan GC;
-those may progress, but the failed status/fence needs explicit retry.
+Soft reset (slice 4C, simplified on 2026-11-13; see the
+[plan](superpowers/plans/2026-11-13-m1-slice-4cd-simplified-reset.md)) is a
+synchronous `POST /v1/workspaces/default/reset`. An in-memory guard refuses
+creates for the duration of the request and is never persisted. The
+coordinator in `internal/service` marks instances, then subnets, then VPCs
+for deletion through the ordinary delete paths, so the reconcilers remain the
+only code that touches the kernel and Podman. Once a snapshot shows the
+workspace empty, it runs exclusive orphan collection and the leak checker,
+and succeeds only when the check is complete and clean. A timeout leaves
+resources marked for deletion; rerunning continues. A daemon crash
+mid-reset loses only the guard, and rerunning recovers. A crash-safe resumable
+reset with durable phases is deferred to M8. Soft reset preserves durable
+events, create replay snapshots and index allocation history as well as the
+AMI/token/default workspace.
 
 Graceful appliance shutdown drains upgraded consoles, workers and hooks,
 then stops nested containers while Podman remains alive, retaining their

@@ -142,20 +142,23 @@ increments:
 2. **4B:** console/session and graceful shutdown lifecycle, ownership
    inventory, orphan collection, and leak-check foundations. In review in
    [PR #7](https://github.com/Amrzxk/nephos/pull/7).
-3. **4C:** durable SQLite soft-reset coordination and API/CLI wait behavior.
-4. **4D:** hard reset through validated Docker container/volume purge and
-   fresh startup.
+3. **4C:** soft reset (`POST /v1/workspaces/default/reset`, `nephos reset`)
+   through the normal delete paths, verified by the leak checker.
+4. **4D:** `nephos down --purge` and `nephos reset --hard` through validated
+   Docker container/volume purge and fresh startup.
 5. **4E:** replayable demo, e2e CI, native Linux and WSL2/Docker Desktop QA,
    and evidence-based milestone closure.
 
-Soft reset atomically fences resource creation and continues after an
-interruption. It removes instances before subnets and VPCs, then performs
-quiescent orphan collection and verifies zero Nephos leaks before succeeding.
-Canceling a caller's wait does not cancel a committed reset. Transient errors
-retry with backoff; ownership, leak, or inspection failures keep the fence
-and require explicit continuation of the same operation. Events, the
-24-hour create-idempotency replay window, and kernel-index history survive
-soft reset. Runtime identity checks protect retained roots; a missing root
+**Reset contract (simplified on 2026-11-13,
+[plan](superpowers/plans/2026-11-13-m1-slice-4cd-simplified-reset.md)).** Soft
+reset refuses creates while it runs, removes instances before subnets and
+VPCs through the normal delete paths, then performs exclusive orphan
+collection and succeeds only when the leak check is complete and clean. It is
+synchronous and idempotent: after a timeout, resources stay marked for
+deletion and rerunning the reset continues. A crash-safe, resumable reset
+(durable phases and fences) is deferred to M8. Events, the 24-hour
+create-idempotency replay window, and kernel-index history survive soft
+reset. Runtime identity checks protect retained roots; a missing root
 for a previously provisioned instance is a visible failure, not a fresh AMI.
 Hard reset bypasses the API and SQLite so damaged state can be purged, but
 validates both Docker objects and their identity before deletion and preserves
@@ -403,6 +406,7 @@ nephos explain --from app-1 --to internet --port tcp/443
   - SBOMs and a third-party license report.
 - **Operations:** a complete `nephos doctor`; default quotas and capacity; resource flags on `nephos up`.
 - **Reliability:**
+  - Crash-safe soft reset that resumes from durable phases after a daemon restart (deferred from M1 slice 4C).
   - Chaos test: 50 runs of `SIGKILL` during operations.
   - Leak test: 100 randomized create/delete cycles followed by reset.
   - 24-hour soak test.

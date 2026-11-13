@@ -28,6 +28,7 @@ type server struct {
 	console         consoleRuntime
 	admitConsole    func(context.Context, model.Instance) (context.Context, func() error, error)
 	references      *lifecycle.Registry
+	reset           *service.Reset
 }
 
 type consoleRuntime interface {

@@ -24,6 +24,7 @@ import (
 	"github.com/Amrzxk/nephos/internal/compute/podman"
 	"github.com/Amrzxk/nephos/internal/credentials"
 	"github.com/Amrzxk/nephos/internal/hook"
+	"github.com/Amrzxk/nephos/internal/leakcheck"
 	"github.com/Amrzxk/nephos/internal/lifecycle"
 	"github.com/Amrzxk/nephos/internal/model"
 	"github.com/Amrzxk/nephos/internal/network/topology"
@@ -126,9 +127,15 @@ func serve(ctx context.Context, ln net.Listener, tokenPath, dbPath, hookPath str
 	controller.OnConverged(instances.WakeWaiting)
 	resources := service.NewNetwork(s, controller.Enqueue, nil)
 	instanceService := service.NewInstances(s, instances.Enqueue, nil)
+	resetGuard := &service.ResetGuard{}
+	resources.GuardResets(resetGuard)
+	instanceService.GuardResets(resetGuard)
+	checker := &leakcheck.Checker{Store: s, Runtime: runtime, Network: network, Registry: refs, Gate: gate, Processes: leakcheck.LinuxProcesses{}}
+	reset := service.NewReset(s, resources, instanceService, resetGuard,
+		newResetVerifier(lifetime, gate, s, runtime, network, checker, mutationFailure))
 	var ready atomic.Bool
 	h := apiserver.New(token, build, func() bool { return ready.Load() && !starts.failed.Load() }, resources, instanceService, s, starts, apiserver.WithConsoleLifecycle(consoleAdmission(gate), refs),
-		apiserver.WithDegraded(func() bool { return controller.Degraded() || instances.Degraded() }))
+		apiserver.WithDegraded(func() bool { return controller.Degraded() || instances.Degraded() }), apiserver.WithReset(reset))
 	srv := &http.Server{Handler: h, ReadHeaderTimeout: 5 * time.Second, BaseContext: func(net.Listener) context.Context { return lifetime }}
 	serverDone := make(chan error, 1)
 	go func() { serverDone <- srv.Serve(ln) }()

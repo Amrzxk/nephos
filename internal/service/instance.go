@@ -26,6 +26,7 @@ type Instances struct {
 	store   *store.Store
 	enqueue func(string)
 	now     func() time.Time
+	resets  *ResetGuard
 }
 
 // NewInstances wires persistence and optional post-commit acceleration.
@@ -36,8 +37,14 @@ func NewInstances(s *store.Store, enqueue func(string), now func() time.Time) *I
 	return &Instances{store: s, enqueue: enqueue, now: now}
 }
 
+// GuardResets makes Run fail with ResetInProgress while guard is held.
+func (s *Instances) GuardResets(guard *ResetGuard) { s.resets = guard }
+
 // Run atomically reserves the primary ENI, private IP, indexes, event and replay.
 func (s *Instances) Run(ctx context.Context, input RunInstanceInput, key string) (model.Instance, error) {
+	if err := s.resets.check(); err != nil {
+		return model.Instance{}, err
+	}
 	name, err := ValidateName(input.Name)
 	if err != nil {
 		return model.Instance{}, err

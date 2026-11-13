@@ -39,7 +39,7 @@ func runWithConfig(ctx context.Context, args []string, stdout, stderr *os.File, 
 	fs.SetOutput(stderr)
 	asJSON := fs.Bool("json", false, "print the version as JSON")
 	fs.Usage = func() {
-		fmt.Fprintf(stderr, "nephos %s\n\nUsage:\n  nephos version [--json]\n  nephos up [--memory=4g] [--cpus=2] [--pids-limit=4096]\n  nephos down\n  nephos status\n  nephos vpc create|list|describe|delete ...\n  nephos subnet create|list|describe|delete ...\n  nephos instance run|list|describe|terminate ...\n  nephos console <name-or-id> [-- command ...]\n", version.Get().Version)
+		fmt.Fprintf(stderr, "nephos %s\n\nUsage:\n  nephos version [--json]\n  nephos up [--memory=4g] [--cpus=2] [--pids-limit=4096]\n  nephos down\n  nephos status\n  nephos vpc create|list|describe|delete ...\n  nephos subnet create|list|describe|delete ...\n  nephos instance run|list|describe|terminate ...\n  nephos console <name-or-id> [-- command ...]\n  nephos reset [--timeout=5m]\n", version.Get().Version)
 	}
 
 	if err := fs.Parse(args); err != nil {
@@ -74,6 +74,8 @@ func runWithConfig(ctx context.Context, args []string, stdout, stderr *os.File, 
 		return runInstance(ctx, fs.Args()[1:], stdout, stderr, cfg)
 	case "console":
 		return runConsole(ctx, fs.Args()[1:], os.Stdin, stdout, stderr, cfg, nil)
+	case "reset":
+		return runReset(ctx, fs.Args()[1:], stdout, stderr, cfg)
 	default:
 		fmt.Fprintf(stderr, "nephos: unknown command %q\n", cmd)
 		fs.Usage()

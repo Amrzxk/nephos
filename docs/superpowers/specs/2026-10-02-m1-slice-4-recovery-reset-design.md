@@ -1,5 +1,10 @@
 # M1 Slice 4: Recovery, Reset, and Zero-Leak Closure
 
+> **Superseded in part (2026-11-13).** The durable soft-reset coordinator,
+> creation fence and hard-reset sections (Tasks 6–9) are replaced by the
+> [simplified reset plan](../plans/2026-11-13-m1-slice-4cd-simplified-reset.md). The crash-safe reset moves to M8. 4A and 4B
+> are unchanged.
+
 **Status:** Recommendations accepted on 2026-10-02: option A and the
 recommended delivery order. This document and its companion plan are the
 requested written elaboration, approved for native execution with independent
