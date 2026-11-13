@@ -3,6 +3,7 @@ package reconcile
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/Amrzxk/nephos/internal/lifecycle"
 )
@@ -21,7 +22,11 @@ func enterEffect(ctx context.Context, gate *lifecycle.Gate) (effectCtx context.C
 		return ctx, func() {}, false, nil
 	}
 	if err != nil {
-		return ctx, func() {}, false, err
+		if ctx.Err() != nil {
+			return ctx, func() {}, false, ctx.Err()
+		}
+		// An invalid or unregistered parent lease is a programming error.
+		return ctx, func() {}, false, fmt.Errorf("%w: %w", errInvariant, err)
 	}
 	return lifecycle.WithLease(ctx, lease), func() { _ = lease.Close() }, true, nil
 }

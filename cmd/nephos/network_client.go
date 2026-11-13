@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Amrzxk/nephos/internal/appliance"
 	"github.com/Amrzxk/nephos/pkg/client"
 )
 
@@ -50,24 +51,7 @@ func (cfg resourceConfig) normalized() (resourceConfig, error) {
 	return cfg, nil
 }
 
-func loadCredential(path string) (string, error) {
-	info, err := os.Lstat(path)
-	if err != nil {
-		return "", fmt.Errorf("read ~/.nephos/credentials: %w", err)
-	}
-	if !info.Mode().IsRegular() || info.Mode().Perm()&0o077 != 0 || info.Size() > 128 {
-		return "", fmt.Errorf("credential file must be a private regular file")
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return "", fmt.Errorf("read credential file: %w", err)
-	}
-	raw, err := base64.RawURLEncoding.DecodeString(string(data))
-	if err != nil || len(raw) != 32 || base64.RawURLEncoding.EncodeToString(raw) != string(data) {
-		return "", fmt.Errorf("credential file is malformed")
-	}
-	return string(data), nil
-}
+func loadCredential(path string) (string, error) { return appliance.LoadCredential(path) }
 
 func newResourceClient(cfg resourceConfig) (*client.ClientWithResponses, resourceConfig, error) {
 	cfg, err := cfg.normalized()

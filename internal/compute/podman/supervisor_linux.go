@@ -15,6 +15,7 @@ import (
 	"golang.org/x/sys/unix"
 
 	"github.com/Amrzxk/nephos/internal/compute"
+	"github.com/Amrzxk/nephos/internal/procfs"
 )
 
 type procSupervisor struct {
@@ -76,7 +77,7 @@ func (p *procSupervisor) gone() (bool, error) {
 		return false, err
 	}
 	_, birth, _, err := procStat(p.pid)
-	if os.IsNotExist(err) {
+	if procfs.Gone(err) {
 		return exited, nil
 	}
 	if err != nil {
@@ -167,7 +168,7 @@ func (p *procSupervisor) terminate(ctx context.Context) (result error) {
 	defer ticker.Stop()
 	for {
 		state, birth, _, err := procStat(p.pid)
-		if os.IsNotExist(err) {
+		if procfs.Gone(err) {
 			return nil
 		}
 		if err != nil {
@@ -220,7 +221,7 @@ func scanExecSupervisors(ctx context.Context, ref compute.Reference, id string) 
 			continue
 		}
 		comm, err := os.ReadFile(filepath.Join(procRoot, entry.Name(), "comm"))
-		if os.IsNotExist(err) {
+		if procfs.Gone(err) {
 			continue
 		}
 		if err != nil {
@@ -230,7 +231,7 @@ func scanExecSupervisors(ctx context.Context, ref compute.Reference, id string) 
 			continue
 		}
 		raw, err := os.ReadFile(filepath.Join(procRoot, entry.Name(), "cmdline"))
-		if os.IsNotExist(err) {
+		if procfs.Gone(err) {
 			continue
 		}
 		if err != nil {
@@ -280,7 +281,7 @@ func pinExecSupervisorUsing(pid int, ref compute.Reference, id string, probe sup
 		return nil, err
 	}
 	_, birth, parent, err := probe.stat(pid)
-	if os.IsNotExist(err) {
+	if procfs.Gone(err) {
 		return nil, nil
 	}
 	if err != nil {
@@ -290,10 +291,10 @@ func pinExecSupervisorUsing(pid int, ref compute.Reference, id string, probe sup
 		return nil, fmt.Errorf("candidate exited before identity binding but is not reaped")
 	}
 	match, err := probe.identity(pid, ref, id)
-	if os.IsNotExist(err) {
+	if procfs.Gone(err) {
 		// exe/ns disappearance can mean an unreaped zombie. Only disappearance
 		// of stat proves reaping; otherwise identity cannot be safely bound.
-		if _, _, _, statErr := probe.stat(pid); os.IsNotExist(statErr) {
+		if _, _, _, statErr := probe.stat(pid); procfs.Gone(statErr) {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("candidate identity vanished before reaping: %w", err)

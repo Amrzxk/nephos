@@ -13,6 +13,18 @@ Each entry names the milestone it belongs to; see [docs/ROADMAP.md](docs/ROADMAP
 
 ### Added
 
+- **M1 — hardening before reset.** `make test-integration` runs every
+  `integration`-tagged package inside a throwaway privileged appliance, and the
+  native-Docker CI job now runs it on every pull request. `make dev-up`
+  rebuilds and restarts a Nephos-owned appliance on the new image. `make ci`
+  now matches CI (generated-code, tidiness and a pinned `govulncheck`). A
+  portability job runs the CLI's unit tests on Windows and macOS runners.
+  Dependabot watches Go modules, actions and base images. `CLAUDE.md`
+  imports `AGENTS.md`, and AGENTS.md no longer carries a progress log.
+- **M1 — `degraded` health and session limits.** `/v1/health` reports
+  `degraded` (HTTP 200) while reconciliation retries transient failures, and
+  `nephos status` shows it. Console sessions (16) and event streams (32) are
+  capped, with `429 RequestLimitExceeded` beyond the limit.
 - **M1 — runtime inventory and namespace ownership foundations (slice 4B
   Tasks 4–5; local branch implementation).** Broad all-container list/inspect retains malformed
   Nephos candidates and rejects incomplete inspection. The runtime-only
@@ -27,7 +39,8 @@ Each entry names the milestone it belongs to; see [docs/ROADMAP.md](docs/ROADMAP
   empty desired resources and joined FD/socket/worker/effect lifetimes. Real
   external FD/socket-only witnesses pin the observation limits; owned kernel
   children are cleaned before namespace unlink. Reset and native platform QA
-  remain pending. These changes are local, not pushed or merged.
+  remain pending. Published for review in
+  [PR #7](https://github.com/Amrzxk/nephos/pull/7).
 - **M1 — lifecycle foundations (slice 4B Task 3; branch implementation).**
   Daemon-owned effect/verified-hook-child leases and console references drain
   before nested stop. Real PTY/non-PTY cleanup includes session-scoped exec
@@ -118,6 +131,7 @@ Each entry names the milestone it belongs to; see [docs/ROADMAP.md](docs/ROADMAP
   - [SP4](docs/spikes/SP4-cloud-init-imds.md) (16/16): stock cloud-init accepts a
     Nephos metadata service, including the IMDSv2 token flow.
 
+
 ### Changed
 
 - **M1 — planning clarified.** The first runnable slice uses one implicit
@@ -139,6 +153,28 @@ Each entry names the milestone it belongs to; see [docs/ROADMAP.md](docs/ROADMAP
   the text. ADR-0003 and ADR-0005 record their validation results.
 
 ### Fixed
+
+- **M1 — reconcilers no longer stop the daemon on transient errors.** A
+  SQLite busy timeout or failed query is retried with backoff for that one
+  resource, and the rest of the sweep continues. Only broken invariants stop
+  the daemon.
+- **M1 — readiness means the startup sweeps actually ran.** A sweep refused by
+  the effect gate is retried before `ready` is reported.
+- **M1 — instances launch as soon as their VPC converges.** They no longer
+  wait up to 60 seconds for the next resync.
+- **M1 — periodic orphan collection never blocks consoles.** It runs only
+  when the workspace is idle. Before, while it waited, new consoles and
+  reconciles were refused for up to 5 seconds every minute.
+- **M1 — native Windows CLI.** Credentials are protected with an owner-only
+  ACL on Windows instead of Unix mode bits, which Windows does not have, so
+  `nephos.exe up` and API commands no longer reject their own credential
+  file. The CLI also follows the active Docker context (Colima, OrbStack,
+  Docker Desktop for Linux), and Ctrl-C cancels `nephos up`, `down` and
+  `status`.
+- **Security — Go 1.27.4.** The toolchain moves from 1.27.1 to 1.27.4 for
+  standard-library fixes in `net/http`, HTTP/2 and `crypto/x509`.
+- **Build — the appliance binaries report their version and build date**, and
+  the Docker build context no longer uploads `dist/` cross-build output.
 
 - **M1 — interrupted console backpressure.** Local stdout/stderr pipe and
   terminal writes now observe cancellation and a bounded write deadline, so

@@ -2,7 +2,6 @@ package leakcheck
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -12,6 +11,7 @@ import (
 
 	"github.com/Amrzxk/nephos/internal/lifecycle"
 	"github.com/Amrzxk/nephos/internal/network/netns"
+	"github.com/Amrzxk/nephos/internal/procfs"
 )
 
 // LinuxProcesses observes known retired identities, never generic libpod
@@ -87,7 +87,7 @@ func (p LinuxProcesses) Observe(ctx context.Context, known []lifecycle.Reference
 		}
 		base := filepath.Join(proc, process.Name())
 		tasks, err := os.ReadDir(filepath.Join(base, "task"))
-		if errors.Is(err, os.ErrNotExist) {
+		if procfs.Gone(err) {
 			continue
 		}
 		if err != nil {
@@ -96,7 +96,7 @@ func (p LinuxProcesses) Observe(ctx context.Context, known []lifecycle.Reference
 		for _, task := range tasks {
 			path := filepath.Join(base, "task", task.Name(), "cgroup")
 			data, err := os.ReadFile(path)
-			if errors.Is(err, os.ErrNotExist) {
+			if procfs.Gone(err) {
 				continue
 			}
 			if err != nil {
@@ -110,7 +110,7 @@ func (p LinuxProcesses) Observe(ctx context.Context, known []lifecycle.Reference
 			}
 		}
 		data, err := os.ReadFile(filepath.Join(base, "cmdline"))
-		if errors.Is(err, os.ErrNotExist) {
+		if procfs.Gone(err) {
 			continue
 		}
 		if err != nil {

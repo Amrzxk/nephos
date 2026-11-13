@@ -47,6 +47,11 @@ func (s *server) GetEvents(w http.ResponseWriter, r *http.Request, params genera
 		}
 		cursor = parsed
 	}
+	releaseSlot, ok := s.eventStreams.acquire(w, "event stream", "")
+	if !ok {
+		return
+	}
+	defer releaseSlot()
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		writeAPIError(w, http.StatusInternalServerError, "InternalError", "event stream cannot flush", "")

@@ -708,7 +708,7 @@ After the MVP (M11): VPC flow logs (nftables log group → NFLOG → `nephosd`, 
 | **Unit** | Validators, IPAM, ID and name allocation, CEL helpers, lab schema, reconcilers against fake engines | Any OS: `go test ./...` |
 | **Golden** | nftables renderer and routing-table renderer: desired state in, exact text out (`testdata/*.golden`, updated with `-update`) | Any OS |
 | **Explain tables** | Table-driven cases for the static analyzer (every row of [§5.5](#55-aws-fidelity-and-known-deviations)) | Any OS |
-| **Integration** (`//go:build integration`) | `internal/network` against a real kernel (namespaces, veth, nft); Podman client against real Podman | Linux, privileged container (CI and WSL2) |
+| **Integration** (`//go:build integration`) | `internal/network` against a real kernel (namespaces, veth, nft); Podman client against real Podman | Inside a throwaway privileged appliance, never on the host: `make test-integration` (every PR in the native-Docker CI job, and WSL2) |
 | **End-to-end** (`//go:build e2e`) | Full appliance: connectivity matrices for SGs, NACLs, routes, IGW, and NAT; lifecycle; restart persistence; reset leak checks | Linux with Docker (CI and WSL2) |
 | **Differential** | For every matrix case, `explain` verdict equals probe verdict | Part of e2e |
 | **Lab tests** | `nephos lab test` on every built-in lab ([LABS.md](LABS.md)) | Part of e2e |
@@ -717,17 +717,16 @@ After the MVP (M11): VPC flow logs (nftables log group → NFLOG → `nephosd`, 
 
 **CI plan (GitHub Actions, `ubuntu-24.04` runners):**
 
-- **Every pull request:** lint (`golangci-lint`, ESLint), unit and golden tests, generated-code freshness, CGO-disabled cross-builds, DCO sign-off check.
+- **Every pull request:** lint (`golangci-lint` with depguard enforcing §13 layering, ESLint), unit and golden tests, generated-code freshness, `go.mod` tidiness, a pinned `govulncheck`, CGO-disabled cross-builds, CLI unit tests on Windows and macOS runners, DCO sign-off check, and the native-Docker job (appliance smokes plus `make test-integration`).
 - **Pull requests touching `internal/network`, `internal/compute`, `images/`, or `labs/`:** also integration, e2e, and lab tests.
 - **Nightly:** the full e2e and lab suites; chaos tests from M8.
 - **Release checklist** (manual until automated): quickstart on Windows with WSL2 + Docker Desktop, and on macOS with Docker Desktop and OrbStack.
 
 **M1 slice-4 subset:** 4A identity/retained-root and running ENI fixtures are
-implemented with local unit/race, privileged integration and smoke evidence;
-native CI is pending. Task 3 adds local shutdown, session/supervisor and
-verified hook-child drain fixtures. The remaining planned fixtures cover
-reset phase/fence/replay, namespace-reference, foreign-
-ownership and partial-purge fixtures. The full local-build demo/e2e must pass
+implemented, and the native-Docker smoke passed in CI on the slice-4 branch.
+4B adds shutdown, session/supervisor, verified hook-child drain,
+namespace-reference and foreign-ownership fixtures; `make test-integration`
+now runs all of them in CI. Reset and hard-reset fixtures arrive with 4C/4D. The full local-build demo/e2e must pass
 on native Ubuntu 24.04 and manually on Windows 10/WSL2/Docker Desktop; no
 SG/NACL, lab, explain, or M8 random-chaos coverage is implied. Verify leaks
 inside the live appliance before outer teardown, save redacted artifacts
@@ -740,8 +739,8 @@ requirements; `make e2e` remains a placeholder until implementation.
 | Platform | MVP status | Notes |
 |---|---|---|
 | Linux (amd64, arm64) with Docker Engine, cgroup v2, kernel 5.15+ | **Supported** (primary, tested in CI) | A 6.x kernel is recommended: ID-mapped overlay mounts make instance creation faster |
-| Windows 10/11 with WSL2 and Docker Desktop | **Supported** | The maintainer's development platform; manual release QA |
-| macOS (Apple silicon, Intel) with Docker Desktop or OrbStack | **Best effort** until v0.1 release QA | Same multi-arch appliance image |
+| Windows 10/11 with WSL2 and Docker Desktop | **Supported** | The maintainer's development platform (Windows 10); manual milestone QA. The CLI is supported both natively (`nephos.exe` in PowerShell, talking to Docker Desktop's named pipe) and inside a WSL2 distribution. CI runs the CLI's unit tests on Windows. WSL cannot inspect host nftables, so that hygiene check is reported as not applicable there. |
+| macOS (Apple silicon, Intel) with Docker Desktop, OrbStack or Colima | **Best effort, unvalidated** until a Mac is available for QA | Same multi-arch appliance image. The CLI follows the active Docker context, and CI runs its unit tests on macOS, but no appliance spike has run on a Mac yet. |
 | Rootless Docker; cgroup v1 hosts; Podman or containerd as the *host* engine; policies that block privileged containers | **Not supported** in the MVP | `nephos doctor` says why |
 
 **Resources and quotas (defaults):**
@@ -761,7 +760,8 @@ requirements; `make e2e` remains a placeholder until implementation.
 
 ```text
 nephos/
-├── AGENTS.md                    # repository guidance for Codex and contributors
+├── AGENTS.md                    # repository guidance for AI agents and contributors
+├── CLAUDE.md                    # imports AGENTS.md for Claude Code
 ├── README.md
 ├── LICENSE, NOTICE              # Apache-2.0 (added in M0)
 ├── CONTRIBUTING.md, SECURITY.md, CODE_OF_CONDUCT.md   # added in M0
@@ -832,7 +832,7 @@ nephos/
 - `explain` and the `firewall` renderer are **pure**: they import only `model` and `semantics`. No I/O, no clock, no randomness.
 - Only `internal/network/netns` calls `setns`.
 - Engines (`network`, `compute`) never import `service` or `apiserver`.
-- Planned `lifecycle` is ephemeral admission/reference accounting, not a
+- `lifecycle` is ephemeral admission/reference accounting, not a
   durable desired-state store; `leakcheck` consumes narrow observation
   interfaces and engine-independent model DTOs, not API/service decisions.
 - The CLI talks to `nephosd` only through `pkg/client`.

@@ -66,11 +66,28 @@ from inside WSL.
 If you lose the password for your WSL user, `wsl -d Ubuntu-24.04 -u root` gets
 you a root shell without one.
 
+**Using the CLI from PowerShell.** Building and testing happen inside WSL, but
+learners can also run the native Windows CLI. `make cross` produces
+`dist/nephos_windows_amd64.exe`; it talks to Docker Desktop through its
+named pipe and keeps its credential in `%USERPROFILE%\.nephos\credentials`,
+restricted to your user with an owner-only ACL. The WSL CLI and the Windows
+CLI keep separate credential files; each one refreshes its copy on
+`nephos up`. You can sanity-check Windows behavior from WSL, because WSL can run
+Windows executables:
+
+```bash
+GOOS=windows go test -c -o /mnt/c/Users/Public/nephos-cli.test.exe ./cmd/nephos
+/mnt/c/Users/Public/nephos-cli.test.exe -test.count=1
+```
+
 ## macOS
 
-Docker Desktop or OrbStack, then the Linux instructions with Homebrew in place of
-apt. macOS is **best effort** until v0.1 release QA
-([ARCHITECTURE §12](ARCHITECTURE.md#12-platform-support)).
+Docker Desktop, OrbStack or Colima, then the Linux instructions with Homebrew in
+place of apt. The CLI follows the active Docker context (`docker context show`),
+so it reaches the same daemon as `docker` without setting `DOCKER_HOST`.
+macOS is **best effort and not yet validated**: no appliance spike has run on a
+Mac ([ARCHITECTURE §12](ARCHITECTURE.md#12-platform-support)). Reports from
+Mac users are very welcome.
 
 ## The build targets
 
@@ -84,13 +101,29 @@ make fmt-check    # fail if anything is unformatted
 make cross        # all six release targets, CGO_ENABLED=0
 make dev-ami      # local Ubuntu 24.04 development AMI OCI archive
 make appliance    # local appliance image, after make dev-ami
-make generate     # generated API server and Go client
-make ci           # everything a pull request runs
+make dev-up       # dev-ami + appliance + build, then (re)start the appliance on the new image
+make test-integration  # privileged kernel/Podman tests in a throwaway appliance (after make appliance)
+make generate     # generated API server, Go client and sqlc store code
+make generate-check    # fail if generated code is stale
+make tidy-check   # fail if go.mod/go.sum are not tidy
+make vuln         # govulncheck at the version pinned in the Makefile
+make ci           # every Go check a pull request runs (the Docker jobs are separate)
 make clean
 ```
 
-`make generate`, `make dev-ami`, and `make appliance` now work. `make web` and
-`make e2e` remain placeholders until their owning slices are implemented.
+`make web` and `make e2e` remain placeholders until their owning slices are
+implemented. `make ci` matches the Go jobs in CI; the native-Docker job also
+runs the appliance smokes in `tests/*.sh` and `make test-integration`.
+
+**Integration tests never run on your host.** Files tagged
+`//go:build linux && integration` create real namespaces, veths, nftables state
+and Podman containers. `make test-integration` compiles them on the host, copies
+them into a fresh privileged fixture appliance (production entrypoint,
+`sleep infinity` instead of `nephosd`, labelled `io.nephos.test=true`), runs
+them there with `NEPHOS_IN_APPLIANCE=1`, and removes the fixture afterwards.
+The leak-checker package runs last because its final test proves that the
+appliance holds no Nephos-owned state. Pass package paths to the script to run
+a subset: `bash tests/integration-in-appliance.sh ./internal/network/netns`.
 
 ## M1 local appliance workflow
 
@@ -131,7 +164,13 @@ bin/nephos up        # reuses the same container, volume, and token
 ```
 
 `make dev-ami` uses a dedicated `docker-container` Buildx builder, not the
-user's default builder. `make appliance` deliberately refuses to build if
+user's default builder. Docker Desktop sometimes hangs while it creates that
+builder's BuildKit container. If the builder does not start within 90
+seconds (`DEV_AMI_BOOTSTRAP_TIMEOUT`), the target falls back to the built-in
+`default` builder. That builder writes the same OCI archive, but only when
+Docker's containerd image store is enabled (the Docker Desktop default since
+4.34). Run `make dev-ami DEV_AMI_BUILDER=default` to skip the wait.
+`make appliance` deliberately refuses to build if
 the AMI archive is absent; rebuild both after changing the AMI definition.
 The CLI does not download or build either image. Publishing the AMI belongs
 to M2. M1 provides VPC, subnet and instance commands. The sole workspace is
@@ -200,8 +239,9 @@ blocking filesystem I/O is not a poller-cancellable stream.
 An existing Docker container keeps the image it was created from. Ordinary
 `nephos down && nephos up` deliberately restarts that same container, so
 rebuilding `nephos-appliance:dev` alone does not activate new daemon code.
-For an **appliance-only** change, build first, then replace only the stopped
-Nephos-owned container. The data volume and API token remain intact:
+For an **appliance-only** change, `make dev-up` rebuilds everything and replaces
+only a Nephos-owned container, keeping the data volume and API token. By hand,
+that is:
 
 ```bash
 make appliance
@@ -235,7 +275,7 @@ manual; they are not available in this slice.
 
 The API token lives in the `nephos-data` volume. On first startup, the
 CLI copies it through Docker's archive API to
-`~/.nephos/credentials` with mode `0600`. Keep that file private; do
+`~/.nephos/credentials` with mode `0600` (an owner-only ACL on Windows). Keep that file private; do
 not paste its contents into an issue or put the token in an environment
 variable or command argument. The API binds only to
 `127.0.0.1:7788`; only `/v1/health` is public.
@@ -367,7 +407,8 @@ between network namespaces) gets caught. Do not "fix" this by dropping `-race`.
 ## Running the spikes
 
 M0's spikes are throwaway experiments that validate the riskiest assumptions
-before M1 starts. They live on `spike/*` branches; their **reports** are the
+before M1 starts. Their code lives under `spikes/` as separate Go modules
+(root `go test ./...` does not cover them); their **reports** are the
 deliverable and live in [docs/spikes/](spikes/).
 
 ```bash

@@ -63,11 +63,11 @@ func runWithConfig(ctx context.Context, args []string, stdout, stderr *os.File, 
 		}
 		return printVersion(stdout, stderr, *asJSON)
 	case "up":
-		return runUp(fs.Args()[1:], stdout, stderr)
+		return runUp(ctx, fs.Args()[1:], stdout, stderr)
 	case "down":
-		return runDown(fs.Args()[1:], stdout, stderr)
+		return runDown(ctx, fs.Args()[1:], stdout, stderr)
 	case "status":
-		return runStatus(fs.Args()[1:], stdout, stderr)
+		return runStatus(ctx, fs.Args()[1:], stdout, stderr)
 	case "vpc", "subnet":
 		return runResource(ctx, cmd, fs.Args()[1:], stdout, stderr, cfg)
 	case "instance":

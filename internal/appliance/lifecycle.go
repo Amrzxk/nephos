@@ -21,6 +21,7 @@ const (
 	StatusStopped   Status = "stopped"
 	StatusStarting  Status = "starting"
 	StatusReady     Status = "ready"
+	StatusDegraded  Status = "degraded"
 	StatusUnhealthy Status = "unhealthy"
 )
 
@@ -31,6 +32,7 @@ type HealthState string
 const (
 	HealthStarting  HealthState = "starting"
 	HealthReady     HealthState = "ready"
+	HealthDegraded  HealthState = "degraded"
 	HealthUnhealthy HealthState = "unhealthy"
 )
 
@@ -178,6 +180,8 @@ func (m Manager) Status(ctx context.Context) (Status, error) {
 	switch state {
 	case HealthReady:
 		return StatusReady, nil
+	case HealthDegraded:
+		return StatusDegraded, nil
 	case HealthStarting:
 		return StatusStarting, nil
 	default:
@@ -270,7 +274,9 @@ func (m Manager) waitReady(ctx context.Context) error {
 	defer ticker.Stop()
 	for {
 		state, err := m.Health.Check(readyCtx)
-		if err == nil && state == HealthReady {
+		// A degraded appliance is serving; it is retrying some reconcile
+		// work, which `nephos status` and the daemon logs report.
+		if err == nil && (state == HealthReady || state == HealthDegraded) {
 			return nil
 		}
 		select {
@@ -323,6 +329,8 @@ func (p HTTPHealthProbe) Check(ctx context.Context) (HealthState, error) {
 	switch {
 	case resp.StatusCode == http.StatusOK && body.Status == "ready":
 		return HealthReady, nil
+	case resp.StatusCode == http.StatusOK && body.Status == "degraded":
+		return HealthDegraded, nil
 	case resp.StatusCode == http.StatusServiceUnavailable && body.Status == "starting":
 		return HealthStarting, nil
 	default:

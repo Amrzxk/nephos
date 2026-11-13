@@ -22,6 +22,7 @@ import (
 	"github.com/Amrzxk/nephos/internal/compute/podman"
 	"github.com/Amrzxk/nephos/internal/model"
 	"github.com/Amrzxk/nephos/internal/network/topology"
+	"github.com/Amrzxk/nephos/internal/procfs"
 	"github.com/Amrzxk/nephos/internal/service"
 	"github.com/Amrzxk/nephos/internal/store"
 	"github.com/Amrzxk/nephos/internal/tunnel/console"
@@ -250,13 +251,31 @@ func TestConsoleRealShutdownRetainsStoppedRoots(t *testing.T) {
 		}
 		t.Logf("retained root %s (%s), stopped PID=0, exec inventory=0; Podman still alive", ref.Identity.InstanceID, ref.ID)
 	}
-	if supervisors := ownedConmons(t, refs); len(supervisors) != 0 {
-		t.Fatalf("owned supervisors remained before outer teardown: %v", supervisors)
+	// Podman reports a container stopped while its conmon may still be in
+	// the last moments of exit (state D, already reparented to PID 1). Give
+	// exit and reaping one bounded window; a supervisor that never goes away
+	// still fails.
+	reapDeadline := time.Now().Add(10 * time.Second)
+	for {
+		supervisors := ownedConmons(t, refs)
+		if len(supervisors) == 0 {
+			break
+		}
+		if time.Now().After(reapDeadline) {
+			t.Fatalf("owned supervisors remained 10s after shutdown: %v", supervisors)
+		}
+		time.Sleep(50 * time.Millisecond)
 	}
 	for _, witness := range append(supervisors, initWitnesses...) {
-		raw, err := os.ReadFile(witness)
-		if !os.IsNotExist(err) {
-			t.Fatalf("supervisor not reaped (%s): %q %v", witness, raw, err)
+		for {
+			raw, err := os.ReadFile(witness)
+			if procfs.Gone(err) {
+				break
+			}
+			if time.Now().After(reapDeadline) {
+				t.Fatalf("supervisor not reaped within 10s (%s): %q %v", witness, raw, err)
+			}
+			time.Sleep(50 * time.Millisecond)
 		}
 	}
 	for _, witness := range cgroupWitnesses {
@@ -285,7 +304,7 @@ func ownedConmons(t *testing.T, refs []compute.Reference) []string {
 		}
 		const procRoot = "/proc"
 		raw, err := os.ReadFile(filepath.Join(procRoot, entry.Name(), "cmdline"))
-		if os.IsNotExist(err) {
+		if procfs.Gone(err) {
 			continue // An exited process is not residue.
 		}
 		if err != nil {
@@ -321,7 +340,7 @@ func assertNoApplianceZombies(t *testing.T) {
 		}
 		const procRoot = "/proc"
 		raw, err := os.ReadFile(filepath.Join(procRoot, entry.Name(), "stat"))
-		if os.IsNotExist(err) {
+		if procfs.Gone(err) {
 			continue
 		}
 		if err != nil {
