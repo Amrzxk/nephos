@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -253,10 +255,20 @@ func TestConsoleRealShutdownRetainsStoppedRoots(t *testing.T) {
 	if supervisors := ownedConmons(t, refs); len(supervisors) != 0 {
 		t.Fatalf("owned supervisors remained before outer teardown: %v", supervisors)
 	}
+	// Podman reports a container stopped while its conmon may still be in
+	// the last moments of exit (state D, already reparented to PID 1). Give
+	// reaping a bounded window; a supervisor that never goes away still fails.
+	reapDeadline := time.Now().Add(10 * time.Second)
 	for _, witness := range append(supervisors, initWitnesses...) {
-		raw, err := os.ReadFile(witness)
-		if !os.IsNotExist(err) {
-			t.Fatalf("supervisor not reaped (%s): %q %v", witness, raw, err)
+		for {
+			raw, err := os.ReadFile(witness)
+			if os.IsNotExist(err) || errors.Is(err, syscall.ESRCH) {
+				break
+			}
+			if time.Now().After(reapDeadline) {
+				t.Fatalf("supervisor not reaped within 10s (%s): %q %v", witness, raw, err)
+			}
+			time.Sleep(50 * time.Millisecond)
 		}
 	}
 	for _, witness := range cgroupWitnesses {
