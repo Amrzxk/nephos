@@ -63,7 +63,7 @@ func TestPodmanCreateContract(t *testing.T) {
 				"userns": map[string]any{"nsmode": "auto", "value": "size=65536"}, "netns": map[string]any{"nsmode": "none"},
 				"idmappings": map[string]any{"HostUIDMapping": false, "HostGIDMapping": false, "AutoUserNs": true, "AutoUserNsOpts": map[string]any{"Size": float64(65536)}},
 				"cap_add":    []any{"NET_ADMIN"}, "sysctl": map[string]any{"net.ipv4.ping_group_range": "0 65535"},
-				"resource_limits": map[string]any{"memory": map[string]any{"limit": float64(1 << 30)}, "cpu": map[string]any{"quota": float64(200000), "period": float64(100000)}, "pids": map[string]any{"limit": float64(512)}}}
+				"resource_limits": map[string]any{"memory": map[string]any{"limit": float64(1 << 30), "swap": float64(1 << 30)}, "cpu": map[string]any{"quota": float64(200000), "period": float64(100000)}, "pids": map[string]any{"limit": float64(512)}}}
 			for key, want := range expected {
 				if !reflect.DeepEqual(body[key], want) {
 					t.Errorf("%s=%#v want %#v", key, body[key], want)

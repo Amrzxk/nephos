@@ -90,8 +90,12 @@ WHERE id = ? AND workspace_id = ? AND deletion_requested = 0;
 SELECT COUNT(*) FROM instances WHERE subnet_id = ?;
 
 -- name: InsertInstance :exec
-INSERT INTO instances(id, workspace_id, subnet_id, short_index, name, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?);
+INSERT INTO instances(id, workspace_id, subnet_id, short_index, name, instance_type, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+
+-- name: ListInstanceTypesForCapacity :many
+SELECT instance_type FROM instances
+WHERE workspace_id = ? AND state IN ('pending', 'running', 'stopping', 'shutting-down');
 
 -- name: InsertENI :exec
 INSERT INTO enis(id, workspace_id, instance_id, subnet_id, short_index, private_ip, mac_address, created_at, updated_at)

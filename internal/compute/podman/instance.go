@@ -100,8 +100,9 @@ func (c *Client) EnsureImage(ctx context.Context, ref string) error {
 // Create creates or rediscovers one Nephos-owned instance container.
 func (c *Client) Create(ctx context.Context, instance model.Instance) (compute.CreateResult, error) {
 	identity := compute.Identity{WorkspaceID: instance.WorkspaceID, InstanceID: instance.ID}
-	if !instanceIDPattern.MatchString(instance.ID) || instance.WorkspaceID != "default" || instance.InstanceType != "t3.micro" {
-		return compute.CreateResult{}, fmt.Errorf("invalid M1 instance runtime request")
+	instanceType, known := model.LookupInstanceType(instance.InstanceType)
+	if !instanceIDPattern.MatchString(instance.ID) || instance.WorkspaceID != "default" || !known {
+		return compute.CreateResult{}, fmt.Errorf("invalid instance runtime request")
 	}
 	if ref, err := c.Lookup(ctx, identity); err == nil {
 		return compute.CreateResult{Reference: ref}, nil
@@ -119,8 +120,7 @@ func (c *Client) Create(ctx context.Context, instance model.Instance) (compute.C
 		"sysctl":      map[string]string{"net.ipv4.ping_group_range": "0 65535"},
 		"labels":      map[string]string{"io.nephos.managed": "true", instanceLabel: instance.ID, "io.nephos.workspace-id": "default"},
 		"annotations": map[string]string{instanceLabel: instance.ID},
-		"resource_limits": map[string]any{"memory": map[string]int64{"limit": 1 << 30},
-			"cpu": map[string]int64{"quota": 200000, "period": 100000}, "pids": map[string]int64{"limit": 512}},
+		"resource_limits": resourceLimits(instanceType),
 	}
 	var response struct {
 		ID string `json:"Id"`
@@ -211,4 +211,18 @@ func (c *Client) Inspect(ctx context.Context, ref compute.Reference) (compute.St
 		return compute.Status{}, err
 	}
 	return compute.Status{Running: doc.State.Running, PID: doc.State.PID}, nil
+}
+
+// resourceLimits maps an instance type onto cgroup v2 limits. Swap equals
+// the memory limit (no swap), so exceeding the type's memory OOM-kills a
+// process inside the instance instead of paging, and the appliance is
+// unaffected. The vCPU count is a hard CFS quota; burst credits are not
+// simulated.
+func resourceLimits(spec model.InstanceTypeSpec) map[string]any {
+	const period = 100000
+	return map[string]any{
+		"memory": map[string]int64{"limit": spec.MemoryBytes, "swap": spec.MemoryBytes},
+		"cpu":    map[string]int64{"quota": spec.VCPUs * period, "period": period},
+		"pids":   map[string]int64{"limit": spec.Tasks},
+	}
 }

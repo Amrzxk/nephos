@@ -109,7 +109,7 @@ func TestOpenUpgradesVersionOneWithoutLosingEvents(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := tx.ExecContext(ctx, initialMigration); err != nil {
+	if _, err := tx.ExecContext(ctx, migrationSQL(1)); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := tx.ExecContext(ctx, "PRAGMA user_version = 1"); err != nil {
@@ -160,10 +160,10 @@ func TestOpenUpgradesVersionTwoAndPreservesDeleteIntent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := tx.ExecContext(ctx, initialMigration); err != nil {
+	if _, err := tx.ExecContext(ctx, migrationSQL(1)); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := tx.ExecContext(ctx, idempotencyResultMigration); err != nil {
+	if _, err := tx.ExecContext(ctx, migrationSQL(2)); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := tx.ExecContext(ctx, "PRAGMA user_version = 2"); err != nil {

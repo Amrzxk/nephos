@@ -46,7 +46,7 @@ func TestMigrationProvisioningHistory(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			for _, migration := range []string{initialMigration, idempotencyResultMigration, deletionIntentMigration, instanceDeletionMigration} {
+			for _, migration := range []string{migrationSQL(1), migrationSQL(2), migrationSQL(3), migrationSQL(4)} {
 				if _, err := db.ExecContext(ctx, migration); err != nil {
 					t.Fatal(err)
 				}

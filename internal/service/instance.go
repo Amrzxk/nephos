@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"errors"
+	"fmt"
 	"net"
 	"time"
 
@@ -13,7 +14,26 @@ import (
 )
 
 // RunInstanceInput is the fixed M1 instance launch request.
-type RunInstanceInput struct{ Name, SubnetID string }
+// RunInstanceInput is one run request. An empty InstanceType selects
+// model.DefaultInstanceType.
+type RunInstanceInput struct{ Name, SubnetID, InstanceType string }
+
+// Capacity bounds what the appliance accepts (ARCHITECTURE §5.1). Zero
+// values disable the matching check, which only unit tests rely on.
+type Capacity struct {
+	// MemoryBytes is the appliance's own memory limit.
+	MemoryBytes int64
+	// ReserveBytes stays free for nephosd, Podman and the kernel.
+	ReserveBytes int64
+	// MaxInstances caps instances that hold capacity (AWS: InstanceLimitExceeded).
+	MaxInstances int
+}
+
+// DefaultCapacityReserve and DefaultMaxInstances are the M2 defaults.
+const (
+	DefaultCapacityReserve = 512 << 20
+	DefaultMaxInstances    = 20
+)
 
 // InstancePage is one ID-ordered page of current instance snapshots.
 type InstancePage struct {
@@ -27,6 +47,7 @@ type Instances struct {
 	enqueue func(string)
 	now     func() time.Time
 	resets  *ResetGuard
+	limits  Capacity
 }
 
 // NewInstances wires persistence and optional post-commit acceleration.
@@ -40,6 +61,9 @@ func NewInstances(s *store.Store, enqueue func(string), now func() time.Time) *I
 // GuardResets makes Run fail with ResetInProgress while guard is held.
 func (s *Instances) GuardResets(guard *ResetGuard) { s.resets = guard }
 
+// LimitCapacity enables the capacity and quota checks on Run.
+func (s *Instances) LimitCapacity(limits Capacity) { s.limits = limits }
+
 // Run atomically reserves the primary ENI, private IP, indexes, event and replay.
 func (s *Instances) Run(ctx context.Context, input RunInstanceInput, key string) (model.Instance, error) {
 	if err := s.resets.check(); err != nil {
@@ -52,7 +76,22 @@ func (s *Instances) Run(ctx context.Context, input RunInstanceInput, key string)
 	if err := validateIdempotencyKey(key); err != nil {
 		return model.Instance{}, err
 	}
-	hash, err := hashPayload(name, input.SubnetID)
+	instanceType := input.InstanceType
+	if instanceType == "" {
+		instanceType = model.DefaultInstanceType
+	}
+	spec, ok := model.LookupInstanceType(instanceType)
+	if !ok {
+		return model.Instance{}, &Error{Code: "InvalidParameterValue", Status: 400,
+			Message: fmt.Sprintf("instance type %q is not supported; choose t3.nano, t3.micro, t3.small or t3.medium", instanceType)}
+	}
+	// The default type keeps the pre-M2 two-field hash, so replays recorded
+	// before the upgrade still match.
+	hashFields := []string{name, input.SubnetID}
+	if instanceType != model.DefaultInstanceType {
+		hashFields = append(hashFields, instanceType)
+	}
+	hash, err := hashPayload(hashFields...)
 	if err != nil {
 		return model.Instance{}, err
 	}
@@ -91,6 +130,9 @@ func (s *Instances) Run(ctx context.Context, input RunInstanceInput, key string)
 		} else if !errors.Is(err, sql.ErrNoRows) {
 			return err
 		}
+		if err := s.checkCapacity(ctx, tx, spec); err != nil {
+			return err
+		}
 		used, err := tx.ENIAddresses(ctx, subnet.ID)
 		if err != nil {
 			return err
@@ -116,7 +158,7 @@ func (s *Instances) Run(ctx context.Context, input RunInstanceInput, key string)
 		eni := model.ENI{ID: eniID, WorkspaceID: defaultWorkspace, InstanceID: id, SubnetID: subnet.ID,
 			ShortIndex: eniIndex, PrivateIP: address, MACAddress: mac.String(), Generation: 1, State: model.StatePending}
 		result = model.Instance{ID: id, WorkspaceID: defaultWorkspace, SubnetID: subnet.ID, Name: name, ShortIndex: index,
-			InstanceType: "t3.micro", State: model.InstancePending, Generation: 1, ENI: eni}
+			InstanceType: spec.Name, State: model.InstancePending, Generation: 1, ENI: eni}
 		if err := tx.InsertInstanceWithENI(ctx, result, eni, now); err != nil {
 			return err
 		}
@@ -221,4 +263,37 @@ func instanceNotFound(id string) error {
 
 func incorrectInstanceState(id, message string) error {
 	return &Error{Code: "IncorrectState", Message: message, ResourceID: id, Status: 409}
+}
+
+// checkCapacity runs inside the run transaction, so concurrent launches see
+// each other's reservations and can never jointly overcommit the appliance.
+func (s *Instances) checkCapacity(ctx context.Context, tx *store.Tx, spec model.InstanceTypeSpec) error {
+	if s.limits.MemoryBytes == 0 && s.limits.MaxInstances == 0 {
+		return nil
+	}
+	types, err := tx.CapacityInstanceTypes(ctx, defaultWorkspace)
+	if err != nil {
+		return err
+	}
+	if s.limits.MaxInstances > 0 && len(types) >= s.limits.MaxInstances {
+		return &Error{Code: "InstanceLimitExceeded", Status: 400,
+			Message: fmt.Sprintf("you have reached the limit of %d instances; stop or terminate one first", s.limits.MaxInstances)}
+	}
+	if s.limits.MemoryBytes == 0 {
+		return nil
+	}
+	used := spec.MemoryBytes
+	for _, name := range types {
+		held, ok := model.LookupInstanceType(name)
+		if !ok {
+			return fmt.Errorf("stored instance has unknown type %q", name)
+		}
+		used += held.MemoryBytes
+	}
+	if available := s.limits.MemoryBytes - s.limits.ReserveBytes; used > available {
+		return &Error{Code: "InsufficientInstanceCapacity", Status: 503,
+			Message: fmt.Sprintf("the appliance has %d MiB for instances and %d MiB is in use; a %s needs %d MiB. Stop an instance, choose a smaller type, or run nephos reset --hard with a larger --memory",
+				available>>20, (used-spec.MemoryBytes)>>20, spec.Name, spec.MemoryBytes>>20)}
+	}
+	return nil
 }

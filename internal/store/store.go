@@ -4,32 +4,51 @@ package store
 import (
 	"context"
 	"database/sql"
-	_ "embed"
+	"embed"
 	"fmt"
+	"io/fs"
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	_ "modernc.org/sqlite"
 )
 
-//go:embed migrations/0001_initial.sql
-var initialMigration string
+//go:embed migrations/*.sql
+var migrationFiles embed.FS
 
-//go:embed migrations/0002_idempotency_result.sql
-var idempotencyResultMigration string
+// migrations are the embedded schema steps, ordered by their NNNN_ prefix.
+// Each file inserts its own schema_migrations row; versions must be 1..N.
+var migrations = mustLoadMigrations()
 
-//go:embed migrations/0003_deletion_intent.sql
-var deletionIntentMigration string
+// schemaVersion is the newest schema this binary understands.
+var schemaVersion = len(migrations)
 
-//go:embed migrations/0004_instance_deletion.sql
-var instanceDeletionMigration string
+func mustLoadMigrations() []string {
+	entries, err := fs.ReadDir(migrationFiles, "migrations")
+	if err != nil {
+		panic(fmt.Sprintf("read embedded migrations: %v", err)) // impossible: embedded at build time
+	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].Name() < entries[j].Name() })
+	out := make([]string, 0, len(entries))
+	for i, entry := range entries {
+		var version int
+		if _, err := fmt.Sscanf(entry.Name(), "%04d_", &version); err != nil || version != i+1 {
+			panic(fmt.Sprintf("embedded migration %q is out of sequence (want version %d)", entry.Name(), i+1))
+		}
+		raw, err := migrationFiles.ReadFile("migrations/" + entry.Name())
+		if err != nil {
+			panic(fmt.Sprintf("read embedded migration %q: %v", entry.Name(), err))
+		}
+		out = append(out, string(raw))
+	}
+	return out
+}
 
-//go:embed migrations/0005_instance_provisioned.sql
-var instanceProvisionedMigration string
-
-const schemaVersion = 5
+// migrationSQL returns the SQL of one schema version (1-based).
+func migrationSQL(version int) string { return migrations[version-1] }
 
 // Store is the sole durable authority for resource state. One connection at a
 // time serializes SQLite writes; the DSN reapplies connection-local PRAGMAs
@@ -120,46 +139,25 @@ func Open(ctx context.Context, path string) (*Store, error) {
 	if err := tx.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil {
 		return nil, fmt.Errorf("read state schema version: %w", err)
 	}
-	switch version {
-	case 0:
-		if _, err := tx.ExecContext(ctx, initialMigration); err != nil {
-			return nil, fmt.Errorf("apply state migration 1: %w", err)
-		}
-		fallthrough
-	case 1:
-		if _, err := tx.ExecContext(ctx, idempotencyResultMigration); err != nil {
-			return nil, fmt.Errorf("apply state migration 2: %w", err)
-		}
-		fallthrough
-	case 2:
-		if _, err := tx.ExecContext(ctx, deletionIntentMigration); err != nil {
-			return nil, fmt.Errorf("apply state migration 3: %w", err)
-		}
-		fallthrough
-	case 3:
-		if _, err := tx.ExecContext(ctx, instanceDeletionMigration); err != nil {
-			return nil, fmt.Errorf("apply state migration 4: %w", err)
-		}
-		fallthrough
-	case 4:
-		if _, err := tx.ExecContext(ctx, instanceProvisionedMigration); err != nil {
-			return nil, fmt.Errorf("apply state migration 5: %w", err)
-		}
-		fallthrough
-	case schemaVersion:
-		// All migration records must agree with the advertised schema.
-		var count int
-		if err := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM schema_migrations WHERE version IN (1, 2, 3, 4, 5)").Scan(&count); err != nil {
-			return nil, fmt.Errorf("verify state migrations: %w", err)
-		}
-		if count != schemaVersion {
-			return nil, fmt.Errorf("state migration metadata incomplete: %d of %d", count, schemaVersion)
-		}
-	default:
+	if version < 0 || version > schemaVersion {
 		return nil, fmt.Errorf("unsupported state schema version %d (supported: %d)", version, schemaVersion)
 	}
+	for next := version + 1; next <= schemaVersion; next++ {
+		if _, err := tx.ExecContext(ctx, migrationSQL(next)); err != nil {
+			return nil, fmt.Errorf("apply state migration %d: %w", next, err)
+		}
+	}
+	// All migration records must agree with the advertised schema.
+	var count int
+	if err := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM schema_migrations WHERE version BETWEEN 1 AND ?", schemaVersion).Scan(&count); err != nil {
+		return nil, fmt.Errorf("verify state migrations: %w", err)
+	}
+	if count != schemaVersion {
+		return nil, fmt.Errorf("state migration metadata incomplete: %d of %d", count, schemaVersion)
+	}
 	if version != schemaVersion {
-		if _, err := tx.ExecContext(ctx, "PRAGMA user_version = 5"); err != nil {
+		// PRAGMA takes no bind parameters; schemaVersion is a compile-time count.
+		if _, err := tx.ExecContext(ctx, fmt.Sprintf("PRAGMA user_version = %d", schemaVersion)); err != nil {
 			return nil, fmt.Errorf("record state schema version: %w", err)
 		}
 	}

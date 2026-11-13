@@ -20,7 +20,7 @@ func TestInstanceMigrationUpgrade(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, migration := range []string{initialMigration, idempotencyResultMigration, deletionIntentMigration} {
+	for _, migration := range []string{migrationSQL(1), migrationSQL(2), migrationSQL(3)} {
 		if _, err := db.ExecContext(ctx, migration); err != nil {
 			t.Fatal(err)
 		}

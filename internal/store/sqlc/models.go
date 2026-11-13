@@ -62,6 +62,7 @@ type Instance struct {
 	DeletionRequested  int64
 	RuntimeID          sql.NullString
 	Provisioned        int64
+	InstanceType       string
 }
 
 type KernelIndex struct {

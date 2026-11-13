@@ -147,7 +147,7 @@ func (q *Queries) GetIdempotency(ctx context.Context, arg GetIdempotencyParams) 
 }
 
 const getInstance = `-- name: GetInstance :one
-SELECT id, workspace_id, subnet_id, short_index, name, generation, observed_generation, state, state_reason, created_at, updated_at, deletion_requested, runtime_id, provisioned FROM instances WHERE id = ? AND workspace_id = ?
+SELECT id, workspace_id, subnet_id, short_index, name, generation, observed_generation, state, state_reason, created_at, updated_at, deletion_requested, runtime_id, provisioned, instance_type FROM instances WHERE id = ? AND workspace_id = ?
 `
 
 type GetInstanceParams struct {
@@ -173,12 +173,13 @@ func (q *Queries) GetInstance(ctx context.Context, arg GetInstanceParams) (Insta
 		&i.DeletionRequested,
 		&i.RuntimeID,
 		&i.Provisioned,
+		&i.InstanceType,
 	)
 	return i, err
 }
 
 const getInstanceByName = `-- name: GetInstanceByName :one
-SELECT id, workspace_id, subnet_id, short_index, name, generation, observed_generation, state, state_reason, created_at, updated_at, deletion_requested, runtime_id, provisioned FROM instances WHERE workspace_id = ? AND name = ?
+SELECT id, workspace_id, subnet_id, short_index, name, generation, observed_generation, state, state_reason, created_at, updated_at, deletion_requested, runtime_id, provisioned, instance_type FROM instances WHERE workspace_id = ? AND name = ?
 `
 
 type GetInstanceByNameParams struct {
@@ -204,6 +205,7 @@ func (q *Queries) GetInstanceByName(ctx context.Context, arg GetInstanceByNamePa
 		&i.DeletionRequested,
 		&i.RuntimeID,
 		&i.Provisioned,
+		&i.InstanceType,
 	)
 	return i, err
 }
@@ -423,18 +425,19 @@ func (q *Queries) InsertEvent(ctx context.Context, arg InsertEventParams) error 
 }
 
 const insertInstance = `-- name: InsertInstance :exec
-INSERT INTO instances(id, workspace_id, subnet_id, short_index, name, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?)
+INSERT INTO instances(id, workspace_id, subnet_id, short_index, name, instance_type, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type InsertInstanceParams struct {
-	ID          string
-	WorkspaceID string
-	SubnetID    string
-	ShortIndex  int64
-	Name        string
-	CreatedAt   int64
-	UpdatedAt   int64
+	ID           string
+	WorkspaceID  string
+	SubnetID     string
+	ShortIndex   int64
+	Name         string
+	InstanceType string
+	CreatedAt    int64
+	UpdatedAt    int64
 }
 
 func (q *Queries) InsertInstance(ctx context.Context, arg InsertInstanceParams) error {
@@ -444,6 +447,7 @@ func (q *Queries) InsertInstance(ctx context.Context, arg InsertInstanceParams) 
 		arg.SubnetID,
 		arg.ShortIndex,
 		arg.Name,
+		arg.InstanceType,
 		arg.CreatedAt,
 		arg.UpdatedAt,
 	)
@@ -541,7 +545,7 @@ func (q *Queries) ListENIAddresses(ctx context.Context, subnetID string) ([]stri
 }
 
 const listInstancePage = `-- name: ListInstancePage :many
-SELECT id, workspace_id, subnet_id, short_index, name, generation, observed_generation, state, state_reason, created_at, updated_at, deletion_requested, runtime_id, provisioned FROM instances WHERE workspace_id = ? AND id > ? ORDER BY id LIMIT ?
+SELECT id, workspace_id, subnet_id, short_index, name, generation, observed_generation, state, state_reason, created_at, updated_at, deletion_requested, runtime_id, provisioned, instance_type FROM instances WHERE workspace_id = ? AND id > ? ORDER BY id LIMIT ?
 `
 
 type ListInstancePageParams struct {
@@ -574,10 +578,39 @@ func (q *Queries) ListInstancePage(ctx context.Context, arg ListInstancePagePara
 			&i.DeletionRequested,
 			&i.RuntimeID,
 			&i.Provisioned,
+			&i.InstanceType,
 		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listInstanceTypesForCapacity = `-- name: ListInstanceTypesForCapacity :many
+SELECT instance_type FROM instances
+WHERE workspace_id = ? AND state IN ('pending', 'running', 'stopping', 'shutting-down')
+`
+
+func (q *Queries) ListInstanceTypesForCapacity(ctx context.Context, workspaceID string) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, listInstanceTypesForCapacity, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var instance_type string
+		if err := rows.Scan(&instance_type); err != nil {
+			return nil, err
+		}
+		items = append(items, instance_type)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err

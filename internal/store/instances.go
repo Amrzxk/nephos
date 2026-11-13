@@ -25,7 +25,7 @@ func (tx *Tx) InsertInstanceWithENI(ctx context.Context, instance model.Instance
 	}
 	if err := tx.q.InsertInstance(ctx, sqlc.InsertInstanceParams{
 		ID: instance.ID, WorkspaceID: instance.WorkspaceID, SubnetID: instance.SubnetID,
-		ShortIndex: instance.ShortIndex, Name: instance.Name, CreatedAt: now.Unix(), UpdatedAt: now.Unix(),
+		ShortIndex: instance.ShortIndex, Name: instance.Name, InstanceType: instance.InstanceType, CreatedAt: now.Unix(), UpdatedAt: now.Unix(),
 	}); err != nil {
 		return fmt.Errorf("insert instance %s: %w", instance.ID, err)
 	}
@@ -171,7 +171,7 @@ func (tx *Tx) instanceFromRow(ctx context.Context, row sqlc.Instance) (model.Ins
 	}
 	return model.Instance{
 		ID: row.ID, WorkspaceID: row.WorkspaceID, SubnetID: row.SubnetID, ShortIndex: row.ShortIndex,
-		Name: row.Name, InstanceType: "t3.micro", State: model.InstanceState(row.State), StateReason: row.StateReason,
+		Name: row.Name, InstanceType: row.InstanceType, State: model.InstanceState(row.State), StateReason: row.StateReason,
 		Generation: row.Generation, ObservedGeneration: row.ObservedGeneration,
 		DeletionRequested: row.DeletionRequested != 0, RuntimeID: row.RuntimeID.String,
 		Provisioned: row.Provisioned != 0,
@@ -190,4 +190,16 @@ func validENIMAC(raw string) (net.HardwareAddr, error) {
 		return nil, fmt.Errorf("ENI MAC %q must be locally administered unicast", raw)
 	}
 	return mac, nil
+}
+
+// CapacityInstanceTypes lists the instance types that hold appliance memory:
+// pending, running, stopping and shutting-down instances. A shutting-down
+// container still exists until termination finishes; stopped, terminated and
+// failed instances run nothing.
+func (tx *Tx) CapacityInstanceTypes(ctx context.Context, workspaceID string) ([]string, error) {
+	types, err := tx.q.ListInstanceTypesForCapacity(ctx, workspaceID)
+	if err != nil {
+		return nil, fmt.Errorf("list instance capacity: %w", err)
+	}
+	return types, nil
 }
