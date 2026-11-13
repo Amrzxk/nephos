@@ -5,7 +5,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -14,7 +13,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
 	"testing"
 	"time"
 
@@ -24,6 +22,7 @@ import (
 	"github.com/Amrzxk/nephos/internal/compute/podman"
 	"github.com/Amrzxk/nephos/internal/model"
 	"github.com/Amrzxk/nephos/internal/network/topology"
+	"github.com/Amrzxk/nephos/internal/procfs"
 	"github.com/Amrzxk/nephos/internal/service"
 	"github.com/Amrzxk/nephos/internal/store"
 	"github.com/Amrzxk/nephos/internal/tunnel/console"
@@ -262,7 +261,7 @@ func TestConsoleRealShutdownRetainsStoppedRoots(t *testing.T) {
 	for _, witness := range append(supervisors, initWitnesses...) {
 		for {
 			raw, err := os.ReadFile(witness)
-			if os.IsNotExist(err) || errors.Is(err, syscall.ESRCH) {
+			if procfs.Gone(err) {
 				break
 			}
 			if time.Now().After(reapDeadline) {
@@ -297,7 +296,7 @@ func ownedConmons(t *testing.T, refs []compute.Reference) []string {
 		}
 		const procRoot = "/proc"
 		raw, err := os.ReadFile(filepath.Join(procRoot, entry.Name(), "cmdline"))
-		if os.IsNotExist(err) {
+		if procfs.Gone(err) {
 			continue // An exited process is not residue.
 		}
 		if err != nil {
@@ -333,7 +332,7 @@ func assertNoApplianceZombies(t *testing.T) {
 		}
 		const procRoot = "/proc"
 		raw, err := os.ReadFile(filepath.Join(procRoot, entry.Name(), "stat"))
-		if os.IsNotExist(err) {
+		if procfs.Gone(err) {
 			continue
 		}
 		if err != nil {
