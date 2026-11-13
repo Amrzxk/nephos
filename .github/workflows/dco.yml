@@ -12,7 +12,7 @@ jobs:
     name: Sign-off present on every commit
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           # The DCO check needs the whole range of the pull request, so the
           # default shallow clone is not enough.
